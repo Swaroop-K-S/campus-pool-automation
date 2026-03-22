@@ -4,10 +4,12 @@ import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { 
   ArrowLeft, AlignLeft, AlignJustify, Hash,
-  ChevronDown, Circle, CheckSquare, Calendar, FileText, 
-  Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, MessageCircle, Mail
+  ChevronDown, ChevronRight, Circle, CheckSquare, Calendar, FileText, 
+  Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, MessageCircle, Mail,
+  Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
+import { useSocket } from '../../hooks/use-socket';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -106,7 +108,16 @@ export default function DriveDetailPage() {
   const [rooms, setRooms] = useState<any[]>([]);
   const [showAddRoom, setShowAddRoom] = useState<string | null>(null);
   const [newRoom, setNewRoom] = useState({ name: '', floor: '', capacity: 0, panelists: '' });
-  const [liveStats, setLiveStats] = useState({ invited: 0, checkedIn: 0, activeRound: '' });
+  const [liveStats, setLiveStats] = useState({ invited: 0, checkedIn: 0, activeRound: '', roomsOpen: 0 });
+  const [expandedRounds, setExpandedRounds] = useState<Record<string, boolean>>({});
+  const [newExpertiseTags, setNewExpertiseTags] = useState<string[]>([]);
+  const [expertiseInput, setExpertiseInput] = useState('');
+  const [scheduleState, setScheduleState] = useState<Record<string, { startTime: string; duration: number }>>({});
+
+  // Applications tab state
+  const [appStatusFilter, setAppStatusFilter] = useState('all');
+
+  const socket = useSocket();
 
   // Dropzone
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -152,25 +163,31 @@ export default function DriveDetailPage() {
   }, [activeTab, driveId]);
 
   useEffect(() => {
-    // Socket Connection for Notifications Progress
-    let socketInstance: any;
-    import('socket.io-client').then(({ io }) => {
-       socketInstance = io(import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000', {
-         auth: { token: localStorage.getItem('token') }
-       });
-       socketInstance.emit('join:drive', driveId);
-       socketInstance.on('notify:progress', (data: { sent: number, total: number }) => {
-         setNotifyProgress(data);
-         if (data.sent >= data.total) {
-            toast.success('Notifications blast completed!');
-            setTimeout(() => setNotifyProgress(null), 3000);
-         }
-       });
-       socketInstance.on('event:stats', (data: any) => {
-         setLiveStats(prev => ({ ...prev, ...data }));
-       });
+    // Socket Connection
+    socket.emit('join:drive', driveId);
+    socket.on('notify:progress', (data: { sent: number, total: number }) => {
+      setNotifyProgress(data);
+      if (data.sent >= data.total) {
+        toast.success('Notifications blast completed!');
+        setTimeout(() => setNotifyProgress(null), 3000);
+      }
     });
-    return () => { if(socketInstance) socketInstance.disconnect(); }
+    socket.on('round:status_changed', (data: any) => {
+      fetchDriveDetails();
+      toast.success(`${data.roundType} is now ${data.status}!`);
+    });
+    socket.on('student:verified', (data: any) => {
+      setLiveStats(prev => ({ ...prev, checkedIn: data.count }));
+    });
+    socket.on('event:stats', (data: any) => {
+      setLiveStats(prev => ({ ...prev, ...data }));
+    });
+    return () => {
+      socket.off('notify:progress');
+      socket.off('round:status_changed');
+      socket.off('student:verified');
+      socket.off('event:stats');
+    };
   }, [driveId]);
 
   const fetchDriveDetails = async () => {
@@ -232,55 +249,111 @@ export default function DriveDetailPage() {
       if ((res as any).success) {
         const d = (res as any).data;
         if(d.eventDate) setEventDate(new Date(d.eventDate).toISOString().split('T')[0]);
+        if(d.reportTime) setReportTime(d.reportTime);
         if(d.venueDetails) {
           setHallName(d.venueDetails.hallName || '');
           setCapacity(d.venueDetails.capacity || 0);
         }
+        if (d.schedule) {
+          const sMap: Record<string, {startTime: string; duration: number}> = {};
+          d.schedule.forEach((s: any) => { sMap[s.roundType] = { startTime: s.startTime || '', duration: s.duration || 90 }; });
+          setScheduleState(sMap);
+        }
       }
-    } catch (err) {}
+    } catch {}
+  };
+
+  const fetchRooms = async () => {
+    try {
+      const res = await api.get(`/drives/${driveId}/rooms`);
+      if ((res as any).success) setRooms((res as any).data);
+    } catch {}
   };
 
   useEffect(() => {
-    if (activeTab === 'Event Day') fetchEventSetup();
+    if (activeTab === 'Event Day') { fetchEventSetup(); fetchRooms(); }
   }, [activeTab, driveId]);
 
-  const saveEventSetup = async () => {
+  const saveVenueDetails = async () => {
     try {
-      await api.post(`/drives/${driveId}/event-setup`, {
-        hallName,
-        capacity,
-        eventDate,
-        schedule: [{ roundType: 'report', startTime: reportTime, duration: 60 }]
-      });
+      await api.post(`/drives/${driveId}/event-setup`, { hallName, capacity, eventDate, reportTime });
       toast.success('Venue details saved!');
     } catch { toast.error('Failed to save venue'); }
   };
 
+  const saveSchedule = async () => {
+    try {
+      const schedule = Object.entries(scheduleState).map(([roundType, v]) => ({
+        roundType, startTime: v.startTime, duration: v.duration
+      }));
+      await api.post(`/drives/${driveId}/event-setup`, { hallName, capacity, eventDate, reportTime, schedule });
+      toast.success('Schedule saved!');
+    } catch { toast.error('Failed to save schedule'); }
+  };
+
   const saveRoom = async (roundName: string) => {
     try {
-      const payload = {
-        ...newRoom,
-        round: roundName,
-        panelists: newRoom.panelists.split(',').map(p => ({ name: p.trim(), expertise: [] }))
-      };
+      const panelists = newRoom.panelists
+        ? newRoom.panelists.split(',').map(p => ({ name: p.trim(), expertise: [...newExpertiseTags] }))
+        : [];
+      const payload = { name: newRoom.name, floor: newRoom.floor, capacity: newRoom.capacity, round: roundName, panelists };
       const res = await api.post(`/drives/${driveId}/rooms`, payload);
       if((res as any).success) {
          setRooms([...rooms, (res as any).data]);
          setShowAddRoom(null);
          setNewRoom({ name: '', floor: '', capacity: 0, panelists: '' });
+         setNewExpertiseTags([]);
+         setExpertiseInput('');
          toast.success('Room added!');
       }
     } catch { toast.error('Failed to add room'); }
   };
 
+  const deleteRoomById = async (roomId: string) => {
+    if (!confirm('Delete this room?')) return;
+    try {
+      await api.delete(`/drives/${driveId}/rooms/${roomId}`);
+      setRooms(rooms.filter(r => r._id !== roomId));
+      toast.success('Room deleted');
+    } catch { toast.error('Failed to delete room'); }
+  };
+
   const activateRound = async (roundType: string) => {
     try {
       await api.put(`/drives/${driveId}/rounds/${roundType}/activate`);
-      toast.success(`${roundType} is now active!`);
-      // Update local drive state to reflect new statuses
+      toast.success(`${roundType.replace('_',' ')} Round is now ACTIVE`);
       fetchDriveDetails();
     } catch { toast.error('Failed to activate round'); }
   };
+
+  const completeRound = async (roundType: string) => {
+    try {
+      await api.put(`/drives/${driveId}/rounds/${roundType}/complete`);
+      toast.success(`${roundType.replace('_',' ')} Round marked as done!`);
+      fetchDriveDetails();
+    } catch { toast.error('Failed to complete round'); }
+  };
+
+  const startEventDay = async () => {
+    try {
+      await api.patch(`/drives/${driveId}/start-event`);
+      toast.success('Event Day started! QR system is now active');
+      fetchDriveDetails();
+    } catch { toast.error('Failed to start event'); }
+  };
+
+  const ROUND_ICONS: Record<string, any> = {
+    ppt: Presentation, aptitude: PenTool, coding: Code2,
+    gd: Users, technical_interview: Cpu, hr_interview: UserCheck
+  };
+
+  const toggleAccordion = (roundType: string) => {
+    setExpandedRounds(prev => ({ ...prev, [roundType]: !prev[roundType] }));
+  };
+
+  const filteredApplications = appStatusFilter === 'all'
+    ? applications
+    : applications.filter(a => a.status === appStatusFilter);
 
   const Sensors = useSensors(
     useSensor(PointerSensor),
@@ -592,36 +665,86 @@ export default function DriveDetailPage() {
 
         {activeTab === 'Applications' && (
           <div className="p-8 h-full overflow-y-auto">
-            <h3 className="text-xl font-bold text-slate-800 mb-6">Student Applications</h3>
-            {applications.length === 0 ? (
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-slate-800">Student Applications</h3>
+              <button
+                onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/export/applications`, '_blank')}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-indigo-300 text-indigo-600 font-bold text-sm rounded-lg hover:bg-indigo-50 transition-colors"
+              >
+                <Download size={16} /> Download XLSX
+              </button>
+            </div>
+
+            {/* Status Filter Chips */}
+            <div className="flex gap-2 mb-6">
+              {['all', 'applied', 'shortlisted', 'attended', 'selected'].map(status => (
+                <button
+                  key={status}
+                  onClick={() => setAppStatusFilter(status)}
+                  className={`px-4 py-1.5 rounded-full text-sm font-bold transition-colors border ${
+                    appStatusFilter === status
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'
+                  }`}
+                >
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {filteredApplications.length === 0 ? (
               <div className="text-center p-12 bg-white rounded-xl border border-slate-200 text-slate-500 font-bold">
-                No applications yet. Share the form link to start collecting!
+                {applications.length === 0 ? 'No applications yet. Share the form link to start collecting!' : 'No applications match this filter.'}
               </div>
             ) : (
               <div className="bg-white border text-sm border-slate-200 rounded-xl overflow-hidden">
                  <table className="w-full text-left border-collapse">
                    <thead>
                      <tr className="bg-slate-50 border-b border-slate-200">
+                       <th className="px-5 py-3 font-bold text-slate-600">Photo</th>
                        <th className="px-5 py-3 font-bold text-slate-600">Candidate</th>
                        <th className="px-5 py-3 font-bold text-slate-600">USN & Branch</th>
                        <th className="px-5 py-3 font-bold text-slate-600">CGPA</th>
                        <th className="px-5 py-3 font-bold text-slate-600">Status</th>
-                       <th className="px-5 py-3 font-bold text-slate-600">Files</th>
+                       <th className="px-5 py-3 font-bold text-slate-600">Resume</th>
                      </tr>
                    </thead>
                    <tbody>
-                      {/* Apps will ideally be rendered here. This is a basic mapping based on typical payload. */}
-                      {applications.map(app => (
-                        <tr key={app._id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                          <td className="px-5 py-3 font-bold text-slate-800">{app.data?.fullName || 'N/A'}</td>
-                          <td className="px-5 py-3 font-medium text-slate-600">{app.data?.usn} - {app.data?.branch}</td>
-                          <td className="px-5 py-3 font-bold text-slate-700">{app.data?.cgpa}</td>
-                          <td className="px-5 py-3"><span className="px-2 py-1 rounded bg-indigo-100 text-indigo-700 font-bold text-xs uppercase">{app.status}</span></td>
-                          <td className="px-5 py-3 font-bold text-indigo-600 hover:underline cursor-pointer">
-                            <a href={`/api/v1/drives/${driveId}/applications/${app._id}/resume`} target="_blank" rel="noreferrer">View PDF</a>
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredApplications.map(app => {
+                        const initials = (app.data?.fullName || 'NA').split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
+                        return (
+                          <tr key={app._id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                            <td className="px-5 py-3">
+                              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-black overflow-hidden">
+                                <img
+                                  src={`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/applications/${app._id}/photo`}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.textContent = initials; }}
+                                />
+                              </div>
+                            </td>
+                            <td className="px-5 py-3 font-bold text-slate-800">{app.data?.fullName || 'N/A'}</td>
+                            <td className="px-5 py-3 font-medium text-slate-600">{app.data?.usn} - {app.data?.branch}</td>
+                            <td className="px-5 py-3 font-bold text-slate-700">{app.data?.cgpa}</td>
+                            <td className="px-5 py-3">
+                              <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
+                                app.status === 'shortlisted' ? 'bg-green-100 text-green-700' :
+                                app.status === 'selected' ? 'bg-emerald-100 text-emerald-700' :
+                                app.status === 'attended' ? 'bg-blue-100 text-blue-700' :
+                                'bg-indigo-100 text-indigo-700'
+                              }`}>{app.status}</span>
+                            </td>
+                            <td className="px-5 py-3">
+                              <a
+                                href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/applications/${app._id}/resume`}
+                                target="_blank" rel="noreferrer"
+                                className="text-indigo-600 font-bold text-sm hover:underline"
+                              >View Resume</a>
+                            </td>
+                          </tr>
+                        );
+                      })}
                    </tbody>
                  </table>
               </div>
@@ -727,112 +850,300 @@ export default function DriveDetailPage() {
         )}
 
         {activeTab === 'Event Day' && (
-          <div className="p-8 h-full overflow-y-auto w-full max-w-5xl mx-auto space-y-8 pb-32">
-            {/* SECTION 1: Venue Setup */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3 mb-5">Venue & Seminar Details</h3>
-              <div className="grid grid-cols-2 gap-6 mb-5">
+          <div className="p-8 h-full overflow-y-auto w-full max-w-5xl mx-auto space-y-6 pb-32">
+
+            {/* ═══ SECTION 1: Venue Setup ═══ */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <h3 className="text-lg font-semibold text-slate-800 border-b border-slate-100 pb-3 mb-5">Venue & Seminar Details</h3>
+              <div className="grid grid-cols-2 gap-4 mb-5">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Seminar Hall Name</label>
-                  <input type="text" value={hallName} onChange={e => setHallName(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800" />
+                  <input type="text" value={hallName} onChange={e => setHallName(e.target.value)}
+                    placeholder="Main Auditorium"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Hall Capacity</label>
-                  <input type="number" value={capacity} onChange={e => setCapacity(Number(e.target.value))} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800" />
+                  <input type="number" value={capacity || ''} onChange={e => setCapacity(Number(e.target.value))}
+                    placeholder="500"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Event Date</label>
-                  <input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800" />
+                  <input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Report Time</label>
-                  <input type="time" value={reportTime} onChange={e => setReportTime(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800" />
+                  <input type="time" value={reportTime} onChange={e => setReportTime(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800" />
                 </div>
               </div>
-              <div className="flex justify-end">
-                <button onClick={saveEventSetup} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm">Save Venue Details</button>
-              </div>
+              <button onClick={saveVenueDetails}
+                className="w-full mt-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition-colors">
+                Save Venue Details
+              </button>
             </div>
 
-            {/* SECTION 2: Round Schedule & Rooms */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+            {/* ═══ SECTION 2: Round Schedule ═══ */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">
-                 <h3 className="text-lg font-bold text-slate-800">Event Schedule & Rooms</h3>
+                <h3 className="text-lg font-semibold text-slate-800">Event Schedule</h3>
+                <button onClick={saveSchedule}
+                  className="px-4 py-2 border border-indigo-300 text-indigo-600 font-bold text-sm rounded-lg hover:bg-indigo-50 transition-colors">
+                  Save Schedule
+                </button>
               </div>
-              
-              <div className="space-y-6">
-                {drive.rounds?.map((r: any, idx: number) => (
-                  <div key={idx} className="border border-slate-200 rounded-xl overflow-hidden">
-                    {/* Header */}
-                    <div className={`px-5 py-4 flex items-center justify-between ${r.status === 'active' ? 'bg-indigo-50 border-b border-indigo-100' : 'bg-slate-50 border-b border-slate-200'}`}>
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-full bg-white border border-slate-200 text-slate-600 flex items-center justify-center font-bold">{idx + 1}</span>
-                        <h4 className="font-bold text-slate-800">{r.type.replace('_', ' ').toUpperCase()}</h4>
-                        {r.status === 'active' && <span className="flex items-center gap-2 px-2.5 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full animate-pulse"><div className="w-1.5 h-1.5 rounded-full bg-indigo-600"></div> LIVE</span>}
+
+              <div className="divide-y divide-slate-100">
+                {drive.rounds?.map((r: any) => {
+                  const RoundIcon = ROUND_ICONS[r.type] || Circle;
+                  const sched = scheduleState[r.type] || { startTime: '', duration: 90 };
+                  return (
+                    <div key={r.type} className="flex items-center gap-4 py-3">
+                      {/* Left: icon + name */}
+                      <div className="flex items-center gap-3 w-48">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                          <RoundIcon size={16} />
+                        </div>
+                        <span className="font-medium text-slate-800 text-sm">{r.type.replace('_', ' ').toUpperCase()}</span>
                       </div>
-                      <div className="flex items-center gap-4 text-sm font-medium">
-                        <div className="flex items-center gap-2"><Calendar size={16} className="text-slate-400"/> --:--</div>
-                        <div className="flex flex-col gap-2">
-                          {r.status !== 'active' && (
-                             <button onClick={() => activateRound(r.type)} className="px-3 py-1.5 bg-white border border-slate-300 hover:border-indigo-400 hover:text-indigo-600 rounded text-xs font-bold text-slate-600 transition-colors shadow-sm">Activate This Round</button>
-                          )}
+
+                      {/* Center: time + duration */}
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className="flex items-center gap-1">
+                          <Clock size={14} className="text-slate-400" />
+                          <input type="time" value={sched.startTime}
+                            onChange={e => setScheduleState(prev => ({ ...prev, [r.type]: { ...sched, startTime: e.target.value } }))}
+                            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-1 focus:ring-indigo-500 outline-none" />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <input type="number" placeholder="90" value={sched.duration || ''}
+                            onChange={e => setScheduleState(prev => ({ ...prev, [r.type]: { ...sched, duration: Number(e.target.value) } }))}
+                            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-20 focus:ring-1 focus:ring-indigo-500 outline-none" />
+                          <span className="text-slate-400 text-sm">mins</span>
                         </div>
                       </div>
+
+                      {/* Right: status badge + action */}
+                      <div className="flex items-center gap-2">
+                        {r.status === 'pending' && (
+                          <>
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-full">Pending</span>
+                            <button onClick={() => activateRound(r.type)}
+                              className="text-xs text-indigo-600 border border-indigo-300 rounded-lg px-3 py-1 hover:bg-indigo-50 ml-2 font-bold">
+                              Activate
+                            </button>
+                          </>
+                        )}
+                        {r.status === 'active' && (
+                          <>
+                            <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full animate-pulse flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" /> Active
+                            </span>
+                            <button onClick={() => completeRound(r.type)}
+                              className="text-xs text-green-600 border border-green-300 rounded-lg px-3 py-1 hover:bg-green-50 ml-2 font-bold">
+                              Mark Done
+                            </button>
+                          </>
+                        )}
+                        {r.status === 'completed' && (
+                          <span className="px-2.5 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">✓ Done</span>
+                        )}
+                      </div>
                     </div>
-
-                    {/* Rooms */}
-                    <div className="p-5 bg-white space-y-4">
-                       <div className="flex justify-between items-center mb-2">
-                         <h5 className="font-bold text-slate-700 text-sm uppercase tracking-wider">{r.type.replace('_',' ')} Rooms</h5>
-                         <button onClick={() => setShowAddRoom(r.type)} className="text-sm font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"><Plus size={16} /> Add Room</button>
-                       </div>
-
-                       {showAddRoom === r.type && (
-                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4 grid grid-cols-5 gap-3 items-center">
-                           <input type="text" placeholder="Room Name*" value={newRoom.name} onChange={e => setNewRoom({...newRoom, name: e.target.value})} className="px-3 py-2 text-sm border border-slate-300 rounded outline-none focus:border-indigo-500" />
-                           <input type="text" placeholder="Floor" value={newRoom.floor} onChange={e => setNewRoom({...newRoom, floor: e.target.value})} className="px-3 py-2 text-sm border border-slate-300 rounded outline-none focus:border-indigo-500" />
-                           <input type="number" placeholder="Capacity*" value={newRoom.capacity || ''} onChange={e => setNewRoom({...newRoom, capacity: Number(e.target.value)})} className="px-3 py-2 text-sm border border-slate-300 rounded outline-none focus:border-indigo-500" />
-                           <input type="text" placeholder="Panelists (csv)" value={newRoom.panelists} onChange={e => setNewRoom({...newRoom, panelists: e.target.value})} className="px-3 py-2 text-sm border border-slate-300 rounded outline-none focus:border-indigo-500" />
-                           <button onClick={() => saveRoom(r.type)} className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm rounded py-2 transition-colors cursor-pointer text-center">Save Room</button>
-                         </div>
-                       )}
-
-                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                         {rooms.filter(rm => rm.round === r.type).map(rm => (
-                           <div key={rm._id} className="border border-slate-200 rounded-lg p-4 relative group hover:border-indigo-400 transition-colors">
-                             <div className="flex justify-between items-start mb-2">
-                               <h6 className="font-bold text-slate-800 tracking-wide">{rm.name} <span className="text-xs font-normal text-slate-500 bg-slate-100 px-1 py-0.5 rounded ml-1">Floor {rm.floor}</span></h6>
-                               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                 <button className="text-slate-400 hover:text-red-500"><Trash2 size={14}/></button>
-                               </div>
-                             </div>
-                             <div className="flex flex-wrap gap-1 mb-3">
-                               {rm.panelists?.map((p: any, i: number) => <span key={i} className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-medium rounded-full">{p.name || p}</span>)}
-                             </div>
-                             <div className="text-xs font-bold text-slate-500 flex items-center justify-between bg-slate-50 p-2 rounded">
-                               <span>Assigned capacity</span> <span className="text-slate-800 font-black">0 / {rm.capacity}</span>
-                             </div>
-                           </div>
-                         ))}
-                         {rooms.filter(rm => rm.round === r.type).length === 0 && !showAddRoom && (
-                           <p className="text-sm text-slate-400 italic font-medium p-4 bg-slate-50 rounded-lg border border-slate-200 border-dashed text-center">No rooms configured for this round.</p>
-                         )}
-                       </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            {/* SECTION 4: Live Stats */}
-            {drive.status === 'event_day' || drive.status === 'active' && (
-              <div className="fixed bottom-0 left-64 right-0 bg-slate-900 text-white p-5 flex justify-around items-center z-50 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.5)] border-t border-slate-800 backdrop-blur-md bg-opacity-95">
-                 <div className="text-center"><p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center justify-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-slate-500"></div> Total Invited</p><p className="text-3xl font-black text-indigo-400">{liveStats.invited || 0}</p></div>
-                 <div className="w-px h-12 bg-slate-800"></div>
-                 <div className="text-center"><p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center justify-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div> Checked In</p><p className="text-3xl font-black text-green-400">{liveStats.checkedIn || 0}</p></div>
-                 <div className="w-px h-12 bg-slate-800"></div>
-                 <div className="text-center"><p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-1.5 flex items-center justify-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></div> Active Round</p><p className="text-xl font-bold text-white mt-1 border px-3 py-1 border-slate-700 bg-slate-800 rounded">{liveStats.activeRound || 'PENDING'}</p></div>
+            {/* ═══ SECTION 3: Room Configuration (Accordion) ═══ */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <h3 className="text-lg font-semibold text-slate-800 border-b border-slate-100 pb-3 mb-5">Room Configuration</h3>
+
+              <div className="divide-y divide-slate-100">
+                {drive.rounds?.map((r: any) => {
+                  const RoundIcon = ROUND_ICONS[r.type] || Circle;
+                  const isExpanded = expandedRounds[r.type] || false;
+                  const roundRooms = rooms.filter(rm => rm.round === r.type);
+
+                  return (
+                    <div key={r.type}>
+                      {/* Accordion Header */}
+                      <div
+                        onClick={() => toggleAccordion(r.type)}
+                        className="flex justify-between items-center py-3 cursor-pointer hover:bg-slate-50 px-2 rounded transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded bg-indigo-50 flex items-center justify-center text-indigo-600">
+                            <RoundIcon size={14} />
+                          </div>
+                          <span className="font-medium text-slate-800">{r.type.replace('_', ' ').toUpperCase()}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-full">{roundRooms.length} rooms</span>
+                          {isExpanded ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
+                        </div>
+                      </div>
+
+                      {/* Accordion Body */}
+                      {isExpanded && (
+                        <div className="pt-4 pb-6 pl-4">
+                          {/* Add Room Button */}
+                          <button
+                            onClick={() => setShowAddRoom(showAddRoom === r.type ? null : r.type)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-indigo-300 text-indigo-600 font-bold text-xs rounded-lg hover:bg-indigo-50 mb-4 transition-colors"
+                          >
+                            <Plus size={14} /> Add New Room
+                          </button>
+
+                          {/* Inline Add Room Form */}
+                          {showAddRoom === r.type && (
+                            <div className="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-200">
+                              <div className="grid grid-cols-2 gap-3 mb-3">
+                                <input type="text" placeholder="Room A201" value={newRoom.name}
+                                  onChange={e => setNewRoom({...newRoom, name: e.target.value})}
+                                  className="px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-medium" />
+                                <input type="text" placeholder="2nd Floor" value={newRoom.floor}
+                                  onChange={e => setNewRoom({...newRoom, floor: e.target.value})}
+                                  className="px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-medium" />
+                                <input type="number" placeholder="30" value={newRoom.capacity || ''}
+                                  onChange={e => setNewRoom({...newRoom, capacity: Number(e.target.value)})}
+                                  className="px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-medium" />
+                                <input type="text" placeholder="Panelist Name" value={newRoom.panelists}
+                                  onChange={e => setNewRoom({...newRoom, panelists: e.target.value})}
+                                  className="px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-medium" />
+                              </div>
+
+                              {/* Expertise Tags */}
+                              <div className="mb-3">
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Panelist Expertise Tags</label>
+                                <input type="text" value={expertiseInput}
+                                  onChange={e => setExpertiseInput(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter' && expertiseInput.trim()) {
+                                      e.preventDefault();
+                                      setNewExpertiseTags([...newExpertiseTags, expertiseInput.trim()]);
+                                      setExpertiseInput('');
+                                    }
+                                  }}
+                                  placeholder="e.g. Computer Science, AI/ML - press Enter"
+                                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-indigo-500 font-medium" />
+                                {newExpertiseTags.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {newExpertiseTags.map((tag, i) => (
+                                      <span key={i} className="bg-indigo-100 text-indigo-700 rounded-full px-3 py-1 text-xs font-medium flex items-center gap-1">
+                                        {tag}
+                                        <button onClick={() => setNewExpertiseTags(newExpertiseTags.filter((_, idx) => idx !== i))} className="text-indigo-400 hover:text-indigo-700">
+                                          <X size={12} />
+                                        </button>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex gap-2 justify-end">
+                                <button onClick={() => { setShowAddRoom(null); setNewRoom({name:'',floor:'',capacity:0,panelists:''}); setNewExpertiseTags([]); }}
+                                  className="px-4 py-2 text-sm text-slate-600 font-bold hover:bg-slate-100 rounded-lg transition-colors">
+                                  Cancel
+                                </button>
+                                <button onClick={() => saveRoom(r.type)}
+                                  className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors">
+                                  Save Room
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Existing Room Cards Grid */}
+                          <div className="grid grid-cols-3 gap-3">
+                            {roundRooms.map(rm => (
+                              <div key={rm._id} className="bg-white border border-slate-200 rounded-xl p-4 relative group hover:border-indigo-300 transition-colors">
+                                {/* Top row */}
+                                <div className="flex justify-between items-start mb-2">
+                                  <span className="font-semibold text-slate-800">{rm.name}</span>
+                                  <div className="hidden group-hover:flex items-center gap-1">
+                                    <button className="p-1 text-slate-400 hover:text-indigo-600"><Edit2 size={13} /></button>
+                                    <button onClick={() => deleteRoomById(rm._id)} className="p-1 text-slate-400 hover:text-red-500"><Trash2 size={13} /></button>
+                                  </div>
+                                </div>
+
+                                {/* Floor */}
+                                <span className="text-slate-400 text-xs">Floor: {rm.floor}</span>
+
+                                {/* Capacity bar */}
+                                <div className="mt-2">
+                                  <div className="flex justify-between text-xs text-slate-500 mb-1">
+                                    <span>Capacity</span>
+                                    <span>{rm.assignedStudents?.length || 0} / {rm.capacity} seats</span>
+                                  </div>
+                                  <div className="h-1.5 bg-slate-100 rounded-full">
+                                    <div className="h-1.5 bg-indigo-400 rounded-full transition-all"
+                                      style={{width: `${Math.min(100, ((rm.assignedStudents?.length || 0) / rm.capacity) * 100)}%`}} />
+                                  </div>
+                                </div>
+
+                                {/* Panelist chips */}
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {rm.panelists?.map((p: any, i: number) => (
+                                    <span key={i} className="inline-flex items-center gap-1">
+                                      <span className="bg-indigo-50 text-indigo-600 text-xs px-2 py-0.5 rounded-full border border-indigo-200">{p.name}</span>
+                                      {p.expertise?.length > 0 && (
+                                        <span className="bg-slate-100 text-slate-500 text-xs px-2 py-0.5 rounded-full">{p.expertise.join(', ')}</span>
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                            {roundRooms.length === 0 && (
+                              <p className="text-sm text-slate-400 italic p-4 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-center col-span-3">
+                                No rooms configured for this round.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+            </div>
+
+            {/* ═══ SECTION 4: Live Event Dashboard ═══ */}
+            {drive.status === 'event_day' && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-6">
+                <h3 className="text-indigo-700 font-semibold text-lg flex items-center gap-2 mb-4">
+                  <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" /> Live Event Dashboard
+                </h3>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="bg-white rounded-xl p-4 text-center border border-slate-200">
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Total Invited</p>
+                    <p className="text-3xl font-black text-indigo-600">{liveStats.invited || 0}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 text-center border border-slate-200">
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Checked In</p>
+                    <p className="text-3xl font-black text-green-600">{liveStats.checkedIn || 0}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 text-center border border-slate-200">
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Active Round</p>
+                    <p className="text-lg font-bold text-indigo-700 mt-1">{liveStats.activeRound || 'PENDING'}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 text-center border border-slate-200">
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Rooms Open</p>
+                    <p className="text-3xl font-black text-amber-600">{liveStats.roomsOpen || rooms.length}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Start Event Day button (only when drive is 'active') */}
+            {drive.status === 'active' && (
+              <button onClick={startEventDay}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-xl text-base transition-colors shadow-md">
+                🚀 Start Event Day
+              </button>
             )}
           </div>
         )}

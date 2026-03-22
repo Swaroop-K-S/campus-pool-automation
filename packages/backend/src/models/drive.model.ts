@@ -19,6 +19,7 @@ const driveSchema = new Schema({
   formToken: { type: String, unique: true, sparse: true },
   status: { type: String, enum: Object.values(DriveStatusEnum.enum), default: 'draft' },
   eventDate: { type: Date },
+  reportTime: { type: String },
   venueDetails: {
     hallName: String,
     capacity: Number
