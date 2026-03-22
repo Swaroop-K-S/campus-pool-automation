@@ -29,8 +29,9 @@ export const upsertFormFields = async (req: Request, res: Response) => {
 
     const publicUrl = `${env.FRONTEND_URL}/apply/${formToken}`;
     return res.json({ success: true, data: { formToken, publicUrl } });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: message });
   }
 };
 
@@ -39,8 +40,9 @@ export const getFormFields = async (req: Request, res: Response) => {
     const { driveId } = req.params;
     const formConfig = await FormFieldModel.findOne({ driveId, collegeId: req.user?.collegeId });
     return res.json({ success: true, data: formConfig?.fields || [] });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: message });
   }
 };
 
@@ -62,8 +64,9 @@ export const getPublicFormConfig = async (req: Request, res: Response) => {
       ctc: drive.ctc,
       fields: formConfig?.fields || []
     }});
-  } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: message });
   }
 };
 
@@ -108,8 +111,9 @@ export const submitApplication = async (req: Request, res: Response) => {
     });
 
     return res.status(201).json({ success: true, data: { referenceNumber, message: 'Application submitted' } });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: message });
   }
 };
 
@@ -125,7 +129,7 @@ export const streamResume = async (req: Request, res: Response) => {
     res.set('Content-Type', 'application/pdf');
     bucket.openDownloadStream(fileId).pipe(res)
       .on('error', () => res.status(500).send('File stream error'));
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).send('Error');
   }
 };
@@ -142,7 +146,7 @@ export const streamPhoto = async (req: Request, res: Response) => {
     res.set('Content-Type', 'image/jpeg');
     bucket.openDownloadStream(fileId).pipe(res)
       .on('error', () => res.status(500).send('File stream error'));
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(500).send('Error');
   }
 };

@@ -24,7 +24,7 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      const response: any = await api.post('/auth/login', data);
+      const response = await api.post('/auth/login', data) as { success: boolean, data: { accessToken: string, refreshToken: string } };
       
       if (response.success && response.data) {
         const { accessToken, refreshToken } = response.data;
@@ -46,8 +46,9 @@ export default function LoginPage() {
           default: navigate('/');
         }
       }
-    } catch (err: any) {
-      toast.error(err.error || 'Login failed. Please verify credentials.');
+    } catch (err: unknown) {
+      const ae = err as { error?: string };
+      toast.error(ae.error || 'Login failed. Please verify credentials.');
     }
   };
 

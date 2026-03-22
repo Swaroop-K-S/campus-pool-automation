@@ -1,9 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { GraduationCap, FileText, CheckCircle, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+
+interface FormFieldConfig {
+  id: string;
+  type: string;
+  label: string;
+  placeholder?: string;
+  required: boolean;
+  options?: string[];
+}
 
 export default function PublicApplyPage() {
   const { formToken } = useParams();
@@ -14,7 +23,7 @@ export default function PublicApplyPage() {
   
   const [successData, setSuccessData] = useState<any>(null);
 
-  const { register, handleSubmit, control, formState: { errors } } = useForm();
+  const { register, handleSubmit, formState: { errors } } = useForm();
 
   useEffect(() => {
     fetchForm();
@@ -24,24 +33,26 @@ export default function PublicApplyPage() {
     try {
       const res = await api.get(`/form/${formToken}`);
       if (res.data?.success) setConfig(res.data.data);
-    } catch (err: any) {
-      if (err.response?.status === 403) setErrorState('Applications for this drive are closed.');
-      else if (err.response?.status === 404) setErrorState('This form link is invalid or expired.');
+    } catch (err: unknown) {
+      const ae = err as { response?: { status: number } };
+      if (ae.response?.status === 403) setErrorState('Applications for this drive are closed.');
+      else if (ae.response?.status === 404) setErrorState('This form link is invalid or expired.');
       else setErrorState('Failed to load form. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: Record<string, string | FileList>) => {
     try {
       setSubmitting(true);
       const formData = new FormData();
       Object.keys(data).forEach(key => {
         if (key === 'resume' || key === 'photo') {
-           if (data[key]?.[0]) formData.append(key, data[key][0]);
+           const fileList = data[key] as FileList;
+           if (fileList?.[0]) formData.append(key, fileList[0]);
         } else {
-           formData.append(key, data[key]);
+           formData.append(key, data[key] as string);
         }
       });
 
@@ -51,11 +62,13 @@ export default function PublicApplyPage() {
       if (res.data?.success) {
         setSuccessData({ referenceNumber: res.data.data.referenceNumber, ...config });
       }
-    } catch (err: any) {
-      if (err.response?.status === 409) {
-        setErrorState(`You have already applied for this drive. Ref: ${err.response.data.referenceNumber}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      const ae = err as { response?: { status: number, data?: { referenceNumber: string, error: string } } };
+      if (ae.response?.status === 409) {
+        setErrorState(`You have already applied for this drive. Ref: ${ae.response.data?.referenceNumber}`);
       } else {
-        toast.error(err.response?.data?.error || 'Failed to submit application');
+        toast.error(ae.response?.data?.error || message);
       }
     } finally {
       setSubmitting(false);
@@ -131,7 +144,7 @@ export default function PublicApplyPage() {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-6">
             <h3 className="text-xl font-black text-slate-800 border-b border-slate-100 pb-4">Application Details</h3>
 
-            {config?.fields?.map((field: any) => (
+            {config?.fields?.map((field: FormFieldConfig) => (
               <div key={field.id}>
                 <label className="block text-sm font-bold text-slate-700 mb-2">
                   {field.label} {field.required && <span className="text-red-500">*</span>}

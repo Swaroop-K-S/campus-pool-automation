@@ -21,7 +21,7 @@ async function seed() {
   const hashedPassword = await bcrypt.hash('password123', 10);
   const user = await UserModel.create({
     email: 'admin@college.edu',
-    password: hashedPassword,
+    passwordHash: hashedPassword,
     name: 'College Admin Test',
     role: 'college_admin',
     collegeId: college._id,

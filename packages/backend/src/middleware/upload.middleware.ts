@@ -1,6 +1,7 @@
 import multer from 'multer';
 import { GridFsStorage } from 'multer-gridfs-storage';
 import { env } from '../config/env';
+import { Request } from 'express';
 import crypto from 'crypto';
 import path from 'path';
 
@@ -21,13 +22,13 @@ const storage = new GridFsStorage({
   }
 });
 
-const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   if (file.fieldname === 'resume') {
     if (file.mimetype === 'application/pdf') cb(null, true);
-    else cb(new Error('Only PDF allowed for resume') as any, false);
+    else cb(new Error('Only PDF allowed for resume'));
   } else if (file.fieldname === 'photo') {
     if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png') cb(null, true);
-    else cb(new Error('Only JPG/PNG allowed for photo') as any, false);
+    else cb(new Error('Only JPG/PNG allowed for photo'));
   } else {
     cb(null, true);
   }

@@ -7,7 +7,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   try {
     const tokens = await authService.login(credentials);
     res.status(200).json({ success: true, data: tokens });
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(401).json({ success: false, error: 'Invalid credentials' });
   }
 });
@@ -22,7 +22,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
   try {
     const tokens = await authService.refresh(refreshToken);
     res.status(200).json({ success: true, data: tokens });
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(401).json({ success: false, error: 'Invalid or expired refresh token' });
   }
 });
