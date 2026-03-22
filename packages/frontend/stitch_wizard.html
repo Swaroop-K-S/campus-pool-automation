@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CampusPool - New Placement Drive</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#5048e5",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#121121",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
+<!-- Top Navigation Bar -->
+<header class="sticky top-0 z-50 w-full border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3">
+<div class="max-w-7xl mx-auto flex items-center justify-between">
+<div class="flex items-center gap-8">
+<div class="flex items-center gap-2 text-primary">
+<span class="material-symbols-outlined text-3xl font-bold" data-icon="rocket_launch">rocket_launch</span>
+<h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">CampusPool</h1>
+</div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary" href="#">Dashboard</a>
+<a class="text-sm font-medium text-primary border-b-2 border-primary pb-1" href="#">Drives</a>
+<a class="text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary" href="#">Students</a>
+<a class="text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary" href="#">Analytics</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
+<input class="pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary w-64" placeholder="Search drives..." type="text"/>
+</div>
+<button class="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold overflow-hidden border border-primary/20">
+<img alt="Admin Avatar" data-alt="University Placement Administrator Profile Photo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4GfTPIHFLUK7jUUa6TvLiw1kajJ3CSxub4ADwHgjpHSTr1d1Te1jrRk0wzpPMUn4_lpQ8Bhfrx5Aoyz4bOQzD012EJ3dQ3JcldshdwlUK9bcXq4lFvbWa9PeD-fTGMupnMTMsAg1bfxQFxtYDeaq1VW8U29WBKI8JIsyoSXbFiDNiZcXChYHepswRbV1Bw8nZmsLJI8W08JUF9jpQ_DZMlfwSrgIy93UOiVgtGG6Iq79LYbroPChcBGiAXftZiihdbSGTKgeYYS0"/>
+</div>
+</div>
+</div>
+</header>
+<main class="max-w-4xl mx-auto px-6 py-12">
+<!-- Wizard Header -->
+<div class="mb-10 text-center">
+<h2 class="text-3xl font-bold text-slate-900 dark:text-white mb-2">Create New Placement Drive</h2>
+<p class="text-slate-600 dark:text-slate-400">Set up a new recruitment opportunity for your students</p>
+</div>
+<!-- Progress Stepper -->
+<div class="relative mb-12">
+<div class="absolute top-5 left-0 w-full h-0.5 bg-slate-200 dark:bg-slate-800 -z-10"></div>
+<div class="flex justify-between items-start">
+<!-- Step 1: Active -->
+<div class="flex flex-col items-center gap-2 group">
+<div class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold ring-4 ring-primary/20">
+                        1
+                    </div>
+<span class="text-sm font-semibold text-primary">Company Details</span>
+</div>
+<!-- Step 2 -->
+<div class="flex flex-col items-center gap-2 group">
+<div class="w-10 h-10 rounded-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 text-slate-400 flex items-center justify-center font-bold">
+                        2
+                    </div>
+<span class="text-sm font-medium text-slate-400">Eligibility</span>
+</div>
+<!-- Step 3 -->
+<div class="flex flex-col items-center gap-2 group">
+<div class="w-10 h-10 rounded-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 text-slate-400 flex items-center justify-center font-bold">
+                        3
+                    </div>
+<span class="text-sm font-medium text-slate-400">Rounds</span>
+</div>
+<!-- Step 4 -->
+<div class="flex flex-col items-center gap-2 group">
+<div class="w-10 h-10 rounded-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 text-slate-400 flex items-center justify-center font-bold">
+                        4
+                    </div>
+<span class="text-sm font-medium text-slate-400">Finish</span>
+</div>
+</div>
+</div>
+<!-- Form Card -->
+<div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+<div class="p-8">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- Company Name -->
+<div class="col-span-2 md:col-span-1">
+<label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Company Name</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">corporate_fare</span>
+<input class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="e.g. Google, Atlassian" type="text"/>
+</div>
+</div>
+<!-- Job Role -->
+<div class="col-span-2 md:col-span-1">
+<label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Job Role</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">work</span>
+<input class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="e.g. Software Engineer Intern" type="text"/>
+</div>
+</div>
+<!-- CTC -->
+<div class="col-span-2 md:col-span-1">
+<label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">CTC (Annual Salary)</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">payments</span>
+<input class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="e.g. 12,00,000" type="text"/>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 uppercase">INR</span>
+</div>
+</div>
+<!-- Job Locations -->
+<div class="col-span-2 md:col-span-1">
+<label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Job Locations</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">location_on</span>
+<input class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="e.g. Bangalore, Remote" type="text"/>
+</div>
+</div>
+<!-- Job Description (Textarea) -->
+<div class="col-span-2">
+<label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Brief Description (Optional)</label>
+<textarea class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all resize-none" placeholder="Briefly describe the role and key requirements..." rows="4"></textarea>
+</div>
+</div>
+</div>
+<!-- Action Buttons -->
+<div class="px-8 py-6 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between border-t border-slate-200 dark:border-slate-800">
+<button class="flex items-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-slate-400 cursor-not-allowed" disabled="">
+<span class="material-symbols-outlined text-xl">arrow_back</span>
+                    Back
+                </button>
+<div class="flex items-center gap-4">
+<button class="px-6 py-2.5 rounded-lg font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
+                        Save as Draft
+                    </button>
+<button class="flex items-center gap-2 px-8 py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-white font-semibold shadow-lg shadow-primary/20 transition-all active:scale-95">
+                        Next Step
+                        <span class="material-symbols-outlined text-xl">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Helper Info -->
+<div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="flex gap-4 p-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary">info</span>
+</div>
+<div>
+<h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Visibility</h4>
+<p class="text-sm text-slate-600 dark:text-slate-400">This information will be visible to all eligible students immediately after publishing.</p>
+</div>
+</div>
+<div class="flex gap-4 p-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary">security</span>
+</div>
+<div>
+<h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Confidentiality</h4>
+<p class="text-sm text-slate-600 dark:text-slate-400">CTC details can be hidden from the public portal if required in Step 4.</p>
+</div>
+</div>
+<div class="flex gap-4 p-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary">auto_awesome</span>
+</div>
+<div>
+<h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">AI Assist</h4>
+<p class="text-sm text-slate-600 dark:text-slate-400">Our system will auto-match students based on the job role and your eligibility criteria.</p>
+</div>
+</div>
+</div>
+</main>
+<footer class="mt-12 py-8 border-t border-slate-200 dark:border-slate-800 text-center">
+<p class="text-sm text-slate-500 dark:text-slate-500">
+            © 2024 CampusPool Placement Portal. All rights reserved.
+        </p>
+</footer>
+</body></html>

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CampusPool Admin Dashboard Overview</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#5048e5",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#121121",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen">
+<div class="flex h-screen overflow-hidden">
+<!-- Side Navigation -->
+<aside class="w-64 bg-slate-900 text-white flex flex-col shrink-0">
+<div class="p-6 flex items-center gap-3">
+<div class="size-10 bg-primary rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-white">school</span>
+</div>
+<div>
+<h1 class="text-lg font-bold leading-none">CampusPool</h1>
+<p class="text-xs text-slate-400 mt-1 uppercase tracking-wider">Placement Admin</p>
+</div>
+</div>
+<nav class="flex-1 px-4 space-y-2 mt-4">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary text-white" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-sm font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined">work</span>
+<span class="text-sm font-medium">Drives</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="text-sm font-medium">Users</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+<span class="text-sm font-medium">Analytics</span>
+</a>
+<div class="pt-4 mt-4 border-t border-slate-800">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-sm font-medium">Settings</span>
+</a>
+</div>
+</nav>
+<div class="p-4 bg-slate-800/50 m-4 rounded-xl">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+<img alt="Admin" class="size-full" data-alt="Admin user profile avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNvKJfU80aVA0915kcj7G40yFPK-FR28QpUhRQBHroY0D9Cpy0_emyZ-uDLWVA8gxr2CuoAHNQErhlEx7mBoerD6caLqm_evs__660rOnhoQzik-r9D9d0leJx7-9FPjoDiBpEDxwHdv0vgRMVkJmUV692DMwnK1wTWFzhP7q4ZujdYiRXtzFxCEgBGrRW5osnu4tBWthIorSzoxteiK7lzHKdGi9HnNEcxMCPfEqjBLI4QGQPdxpgwvcIk7dit1dliiWPMz4ga6g"/>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-sm font-semibold truncate">Dr. Aris Thorne</p>
+<p class="text-xs text-slate-400 truncate">Dean of Placements</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col overflow-y-auto">
+<!-- Header -->
+<header class="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-8 flex items-center justify-between sticky top-0 z-10">
+<h2 class="text-xl font-bold text-slate-900 dark:text-slate-100">Dashboard Overview</h2>
+<div class="flex items-center gap-4">
+<div class="relative w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+<input class="w-full pl-10 pr-4 py-1.5 rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:ring-primary focus:border-primary" placeholder="Search data..." type="text"/>
+</div>
+<button class="size-9 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-400">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="h-8 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
+<button class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span>
+                        New Drive
+                    </button>
+</div>
+</header>
+<div class="p-8 space-y-8 max-w-7xl">
+<!-- Stat Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+<div class="flex justify-between items-start">
+<p class="text-sm text-slate-500 font-medium">Total Drives</p>
+<span class="material-symbols-outlined text-primary">calendar_today</span>
+</div>
+<p class="text-3xl font-bold mt-2">42</p>
+<div class="flex items-center gap-1 mt-2 text-green-600 text-xs font-semibold">
+<span class="material-symbols-outlined text-xs">trending_up</span>
+<span>+12% from last month</span>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+<div class="flex justify-between items-start">
+<p class="text-sm text-slate-500 font-medium">Applications</p>
+<span class="material-symbols-outlined text-primary">description</span>
+</div>
+<p class="text-3xl font-bold mt-2">1,280</p>
+<div class="flex items-center gap-1 mt-2 text-green-600 text-xs font-semibold">
+<span class="material-symbols-outlined text-xs">trending_up</span>
+<span>+5% from last month</span>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+<div class="flex justify-between items-start">
+<p class="text-sm text-slate-500 font-medium">Shortlisted</p>
+<span class="material-symbols-outlined text-primary">person_check</span>
+</div>
+<p class="text-3xl font-bold mt-2">450</p>
+<div class="flex items-center gap-1 mt-2 text-green-600 text-xs font-semibold">
+<span class="material-symbols-outlined text-xs">trending_up</span>
+<span>+8% from last month</span>
+</div>
+</div>
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+<div class="flex justify-between items-start">
+<p class="text-sm text-slate-500 font-medium">Selected</p>
+<span class="material-symbols-outlined text-primary">verified</span>
+</div>
+<p class="text-3xl font-bold mt-2">120</p>
+<div class="flex items-center gap-1 mt-2 text-green-600 text-xs font-semibold">
+<span class="material-symbols-outlined text-xs">trending_up</span>
+<span>+15% from last month</span>
+</div>
+</div>
+</div>
+<!-- Main Grid -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+<!-- Funnel Chart Section -->
+<div class="xl:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+<div class="flex items-center justify-between mb-8">
+<div>
+<h3 class="text-lg font-bold">Application Funnel</h3>
+<p class="text-sm text-slate-500">Overview of candidate progression this semester</p>
+</div>
+<div class="flex items-center gap-2">
+<span class="size-3 rounded-full bg-primary/20 border border-primary"></span>
+<span class="text-xs font-medium text-slate-600">Candidates</span>
+</div>
+</div>
+<div class="flex flex-col gap-8">
+<div class="space-y-2">
+<div class="flex justify-between text-sm font-medium">
+<span>Applied</span>
+<span>1,850</span>
+</div>
+<div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-10 overflow-hidden">
+<div class="bg-primary h-full w-[100%] flex items-center px-4">
+<span class="text-white text-xs font-bold">100%</span>
+</div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-sm font-medium">
+<span>Shortlisted</span>
+<span>720</span>
+</div>
+<div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-10 overflow-hidden">
+<div class="bg-primary/80 h-full w-[38%] flex items-center px-4">
+<span class="text-white text-xs font-bold">38%</span>
+</div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-sm font-medium">
+<span>Interviewed</span>
+<span>310</span>
+</div>
+<div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-10 overflow-hidden">
+<div class="bg-primary/60 h-full w-[16%] flex items-center px-4">
+<span class="text-white text-xs font-bold">16%</span>
+</div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-sm font-medium">
+<span>Selected</span>
+<span>120</span>
+</div>
+<div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-10 overflow-hidden">
+<div class="bg-primary/40 h-full w-[6%] flex items-center px-4">
+<span class="text-white text-xs font-bold">6%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Recent Drives Section -->
+<div class="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-lg font-bold">Recent Drives</h3>
+<button class="text-primary text-sm font-semibold hover:underline">View All</button>
+</div>
+<div class="space-y-6">
+<!-- Drive Item -->
+<div class="flex items-center gap-4 group">
+<div class="size-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center p-2">
+<img alt="Google" class="w-full grayscale group-hover:grayscale-0 transition-all" data-alt="Google company logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA584InvAXNFOXr7zhQhSegkGwGsoLiv7_Cx5AS0szfYF0lLo99A8qM8WsFKzoJZadpglNBOOCuljdfNu_pE0iaMjnpBoD0GFL1u7CU7V_s0u_NVuZuM34V8NkC59LyQqM6FBcHLGxyXBPpY--YeYBGdhRyRpp-AnignzzEJ2K6lfIBXFIH3dkT5HlHqD00ppYXgHHbxOvP5Uz1c6XNChcA-tuxwUxZ6kKrJwepHDJeiMF3fNgs-g0fbrqPiZzdys6CUOVpnVvpvck"/>
+</div>
+<div class="flex-1 min-w-0">
+<p class="font-semibold text-sm truncate">Google Cloud India</p>
+<p class="text-xs text-slate-500">Oct 24, 2023</p>
+</div>
+<span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                    Active
+                                </span>
+</div>
+<!-- Drive Item -->
+<div class="flex items-center gap-4 group">
+<div class="size-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center p-2">
+<img alt="Atlassian" class="w-full grayscale group-hover:grayscale-0 transition-all" data-alt="Atlassian company logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_4kONNh2Ol9fWimBIW7HGcQypF9wmbrs8cbMCcyxDdXfK-xUyssNIHGSj46qspdtcx2r6rl3sHf7pIcabQLpaV_oa2_PBChAD_X_7MnBaXbz9cih2VvKkeZK6jB60EyDThNwDqNVpfOK6kypDcdgT6_jfZ1FjZkcaTUpgINQsXK4t81Be3pALGN-KwfawvXXBK_CF-PbYa0tvo-AqcNNFOfYt6LM6pMQwmQbw_GmYuUeHOKkVo7u1GRbwPskETEgb6faOVDdkChs"/>
+</div>
+<div class="flex-1 min-w-0">
+<p class="font-semibold text-sm truncate">Atlassian Corp</p>
+<p class="text-xs text-slate-500">Oct 26, 2023</p>
+</div>
+<span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary dark:bg-primary/30 dark:text-primary">
+                                    Event Day
+                                </span>
+</div>
+<!-- Drive Item -->
+<div class="flex items-center gap-4 group">
+<div class="size-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center p-2">
+<img alt="Microsoft" class="w-full grayscale group-hover:grayscale-0 transition-all" data-alt="Microsoft company logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvp2LTundzJ96AXoTwPqZAZjsYYZj2YSK3sTu71m9gdLODDkXJU36nUzI4QfP9EdEgc6upnfWmdLgKMPkWOem-QePOnk22VCstYU2pChDWb2imSqb3HSW42SSKOamdImJF1q0hOQyL0jBx0coDcAA-dbo3yHg0EzkEDoA6Xv_BiVsYAFKUxJgMM6Dh4F3s0MttRWm0ZnuurVWIjeTfhg0acrGRIEPD4U4otLFxBg4mee5lnFzw3SAFgMQ6b87vUvuP8pxc8gvro_4"/>
+</div>
+<div class="flex-1 min-w-0">
+<p class="font-semibold text-sm truncate">Microsoft Azure</p>
+<p class="text-xs text-slate-500">Oct 20, 2023</p>
+</div>
+<span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                    Completed
+                                </span>
+</div>
+<!-- Drive Item -->
+<div class="flex items-center gap-4 group">
+<div class="size-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center p-2">
+<img alt="Stripe" class="w-full grayscale group-hover:grayscale-0 transition-all" data-alt="Stripe company logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBglsBKTk3DvQcjQL6FAC4rl9fb8X-qWCi0QZNWr7MkMFiAnbUqHQX3IzejxtHjkAu9Isv85mETlGSNAfbocCydOgN3kuydIiYUaCpu-wWBdl56w6g7TEsu6Rc9usCvbtaidC9cbH--LWs2eppg06Vcc8EfG2Qc5n_lKgcA9xguQtwEu140VmTpgeQrx6GUbE0Vp00kKWG3DMHj98MGBW-VpytktSKcnzDuuYdalFf7NhqxnNQiccbaG02JP7-R-vwdFLPpZyqgdIY"/>
+</div>
+<div class="flex-1 min-w-0">
+<p class="font-semibold text-sm truncate">Stripe Payments</p>
+<p class="text-xs text-slate-500">Nov 02, 2023</p>
+</div>
+<span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                    Upcoming
+                                </span>
+</div>
+</div>
+<div class="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
+<div class="flex items-center justify-between mb-4">
+<h4 class="text-sm font-bold">Quick Actions</h4>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<button class="flex flex-col items-center justify-center p-3 rounded-lg border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-primary mb-1">upload_file</span>
+<span class="text-[10px] font-semibold uppercase">Bulk Upload</span>
+</button>
+<button class="flex flex-col items-center justify-center p-3 rounded-lg border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-primary mb-1">mail</span>
+<span class="text-[10px] font-semibold uppercase">Notify All</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
