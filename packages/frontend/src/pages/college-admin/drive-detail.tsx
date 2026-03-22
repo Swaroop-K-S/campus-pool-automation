@@ -1138,6 +1138,50 @@ export default function DriveDetailPage() {
               </div>
             )}
 
+            {/* ═══ SECTION 5: QR Check-In Control (event_day only) ═══ */}
+            {drive.status === 'event_day' && (
+              <div className="bg-slate-900 rounded-2xl p-6 text-white">
+                <h3 className="font-semibold text-lg mb-4">QR Check-In System</h3>
+                <div className="flex gap-3 mb-3">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await api.post(`/event/${driveId}/qr/start`);
+                        toast.success('QR rotation started!');
+                      } catch { toast.error('Failed to start QR'); }
+                    }}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl transition-colors"
+                  >
+                    ▶ Start QR Rotation
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await api.post(`/event/${driveId}/qr/stop`);
+                        toast.success('QR rotation stopped');
+                      } catch { toast.error('Failed to stop QR'); }
+                    }}
+                    className="flex-1 bg-red-600/20 text-red-400 border border-red-600/30 font-bold py-2.5 rounded-xl hover:bg-red-600/30 transition-colors"
+                  >
+                    ⏹ Stop QR
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    window.open(`/event/${driveId}/qr-display`, '_blank', 'width=1920,height=1080,fullscreen=yes');
+                  }}
+                  className="w-full bg-white text-slate-900 font-semibold py-2.5 rounded-xl hover:bg-slate-100 transition-colors"
+                >
+                  Open QR Display Screen
+                </button>
+                <p className="text-slate-500 text-xs text-center mt-2">Opens fullscreen for projector display</p>
+                <div className="mt-4 pt-4 border-t border-slate-700 text-center">
+                  <span className="text-slate-400 text-sm">Students Checked In: </span>
+                  <span className="text-green-400 font-black text-xl">{liveStats.checkedIn || 0}</span>
+                </div>
+              </div>
+            )}
+
             {/* Start Event Day button (only when drive is 'active') */}
             {drive.status === 'active' && (
               <button onClick={startEventDay}

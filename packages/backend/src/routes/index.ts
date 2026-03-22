@@ -4,6 +4,7 @@ import analyticsRoutes from './analytics.routes';
 import driveRoutes from './drive.routes';
 import platformRoutes from './platform.routes';
 import formRoutes from './form.routes';
+import qrRoutes from './qr.routes';
 
 const router = Router();
 
@@ -12,7 +13,6 @@ router.use('/analytics', analyticsRoutes);
 router.use('/drives', driveRoutes);
 router.use('/platform', platformRoutes);
 router.use('/', formRoutes);
-
-// Other routes will be mounted here in subsequent phases
+router.use('/event', qrRoutes);
 
 export default router;

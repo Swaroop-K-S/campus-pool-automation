@@ -32,6 +32,10 @@ export function initSocket(httpServer: any) {
     socket.on('join:app', (applicationId: string) => {
       socket.join(`app:${applicationId}`);
     });
+    // Join QR display room
+    socket.on('join:drive:qr', (driveId: string) => {
+      socket.join(`drive:${driveId}:qr`);
+    });
   });
 
   ioInstance = io;

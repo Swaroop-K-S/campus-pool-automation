@@ -10,6 +10,9 @@ import DriveDetailPage from './pages/college-admin/drive-detail';
 import PublicApplyPage from './pages/public/apply';
 import PlatformDashboardPage from './pages/platform-admin/dashboard';
 import PlatformLayout from './components/shared/PlatformLayout';
+import QRDisplayPage from './pages/public/qr-display';
+import VerifyPage from './pages/public/verify';
+import WelcomePage from './pages/public/welcome';
 
 // Stubs for the actual pages to be built in subsequent phases
 const ErrorBoundary = () => <div>Something went wrong</div>;
@@ -24,6 +27,22 @@ export const router = createBrowserRouter([
   {
     path: '/apply/:formToken',
     element: <PublicApplyPage />,
+    errorElement: <ErrorBoundary />
+  },
+  // Public Event Pages (no auth)
+  {
+    path: '/event/:driveId/qr-display',
+    element: <QRDisplayPage />,
+    errorElement: <ErrorBoundary />
+  },
+  {
+    path: '/event/:driveId/verify',
+    element: <VerifyPage />,
+    errorElement: <ErrorBoundary />
+  },
+  {
+    path: '/event/:driveId/welcome/:appId',
+    element: <WelcomePage />,
     errorElement: <ErrorBoundary />
   },
   {

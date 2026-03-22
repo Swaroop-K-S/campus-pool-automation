@@ -11,6 +11,7 @@
   "dependencies": {
     "@campuspool/shared": "*",
     "@types/nodemailer": "^7.0.11",
+    "@types/qrcode": "^1.5.6",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -25,6 +26,7 @@
     "multer": "^1.4.5-lts.1",
     "multer-gridfs-storage": "^5.0.2",
     "nodemailer": "^8.0.3",
+    "qrcode": "^1.5.4",
     "socket.io": "^4.8.3",
     "twilio": "^5.13.0",
     "uuid": "^13.0.0",
