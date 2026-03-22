@@ -6,6 +6,8 @@ import AdminLayout from './components/shared/AdminLayout';
 import AdminDashboardPage from './pages/college-admin/dashboard';
 import DrivesListPage from './pages/college-admin/drives-list';
 import NewDriveWizard from './pages/college-admin/new-drive';
+import DriveDetailPage from './pages/college-admin/drive-detail';
+import PublicApplyPage from './pages/public/apply';
 import PlatformDashboardPage from './pages/platform-admin/dashboard';
 import PlatformLayout from './components/shared/PlatformLayout';
 
@@ -19,6 +21,11 @@ const GenericDashboard = ({ title }: { title: string }) => (
 );
 
 export const router = createBrowserRouter([
+  {
+    path: '/apply/:formToken',
+    element: <PublicApplyPage />,
+    errorElement: <ErrorBoundary />
+  },
   {
     path: '/login',
     element: <LoginPage />,
@@ -49,7 +56,7 @@ export const router = createBrowserRouter([
         children: [
           { path: 'dashboard', element: <AdminDashboardPage /> },
           { path: 'drives/new', element: <NewDriveWizard /> },
-          { path: 'drives/:id', element: <GenericDashboard title="Drive Details" /> },
+          { path: 'drives/:driveId', element: <DriveDetailPage /> },
           { path: 'drives', element: <DrivesListPage /> },
           { path: 'users', element: <GenericDashboard title="Users Management" /> },
           { path: 'analytics', element: <GenericDashboard title="Analytics Overview" /> },
