@@ -56,3 +56,51 @@ export const createDrive = asyncHandler(async (req: Request, res: Response) => {
     data: newDrive
   });
 });
+
+// GET /api/v1/drives/:driveId
+export const getDriveById = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  const drive = await DriveModel.findOne({ _id: driveId, collegeId });
+  
+  if (!drive) {
+    return res.status(404).json({ success: false, error: 'Drive not found' });
+  }
+
+  res.status(200).json({ success: true, data: drive });
+});
+
+// PUT /api/v1/drives/:driveId
+export const updateDrive = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  const updatedDrive = await DriveModel.findOneAndUpdate(
+    { _id: driveId, collegeId },
+    req.body,
+    { new: true, runValidators: true }
+  );
+
+  if (!updatedDrive) {
+    return res.status(404).json({ success: false, error: 'Drive not found' });
+  }
+
+  res.status(200).json({ success: true, data: updatedDrive });
+});
+
+// PATCH /api/v1/drives/:driveId/activate
+export const activateDrive = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  const initialDrive = await DriveModel.findOne({ _id: driveId, collegeId });
+  if (!initialDrive) {
+    return res.status(404).json({ success: false, error: 'Drive not found' });
+  }
+  
+  initialDrive.status = DriveStatusEnum.enum.active;
+  await initialDrive.save();
+
+  res.status(200).json({ success: true, data: initialDrive });
+});

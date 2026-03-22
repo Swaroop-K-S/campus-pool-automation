@@ -4,6 +4,10 @@ import { ProtectedRoute } from './components/shared/protected-route';
 
 import AdminLayout from './components/shared/AdminLayout';
 import AdminDashboardPage from './pages/college-admin/dashboard';
+import DrivesListPage from './pages/college-admin/drives-list';
+import NewDriveWizard from './pages/college-admin/new-drive';
+import PlatformDashboardPage from './pages/platform-admin/dashboard';
+import PlatformLayout from './components/shared/PlatformLayout';
 
 // Stubs for the actual pages to be built in subsequent phases
 const ErrorBoundary = () => <div>Something went wrong</div>;
@@ -26,9 +30,9 @@ export const router = createBrowserRouter([
     children: [
       {
         path: '',
-        element: <AdminLayout />,
+        element: <PlatformLayout />,
         children: [
-          { path: 'dashboard', element: <GenericDashboard title="Platform Dashboard" /> },
+          { path: 'dashboard', element: <PlatformDashboardPage /> },
           { path: 'colleges', element: <GenericDashboard title="Colleges Management" /> },
           { path: 'settings', element: <GenericDashboard title="Platform Settings" /> }
         ]
@@ -44,9 +48,9 @@ export const router = createBrowserRouter([
         element: <AdminLayout />,
         children: [
           { path: 'dashboard', element: <AdminDashboardPage /> },
-          { path: 'drives/new', element: <GenericDashboard title="New Drive Wizard" /> },
+          { path: 'drives/new', element: <NewDriveWizard /> },
           { path: 'drives/:id', element: <GenericDashboard title="Drive Details" /> },
-          { path: 'drives', element: <GenericDashboard title="Placement Drives" /> },
+          { path: 'drives', element: <DrivesListPage /> },
           { path: 'users', element: <GenericDashboard title="Users Management" /> },
           { path: 'analytics', element: <GenericDashboard title="Analytics Overview" /> },
           { path: 'settings', element: <GenericDashboard title="Settings" /> },
