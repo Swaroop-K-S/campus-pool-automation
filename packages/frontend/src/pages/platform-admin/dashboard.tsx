@@ -21,8 +21,8 @@ export default function PlatformDashboardPage() {
     try {
       setLoading(true);
       const res = await api.get('/platform/colleges');
-      if (res.data?.success) {
-        setColleges(res.data.data);
+      if ((res as any).success) {
+        setColleges((res as any).data);
       }
     } catch (err) {
       toast.error('Failed to fetch colleges');
@@ -56,7 +56,7 @@ export default function PlatformDashboardPage() {
       const res = await api.post('/platform/colleges', payload);
       toast.dismiss(loadingToast);
       
-      if (res.data?.success) {
+      if ((res as any).success) {
         toast.success('College successfully enrolled');
         setIsModalOpen(false);
         fetchColleges();

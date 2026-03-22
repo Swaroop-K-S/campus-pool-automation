@@ -32,7 +32,7 @@ export default function PublicApplyPage() {
   const fetchForm = async () => {
     try {
       const res = await api.get(`/form/${formToken}`);
-      if (res.data?.success) setConfig(res.data.data);
+      if ((res as any).success) setConfig((res as any).data);
     } catch (err: unknown) {
       const ae = err as { response?: { status: number } };
       if (ae.response?.status === 403) setErrorState('Applications for this drive are closed.');
@@ -59,8 +59,8 @@ export default function PublicApplyPage() {
       const res = await api.post(`/form/${formToken}/submit`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      if (res.data?.success) {
-        setSuccessData({ referenceNumber: res.data.data.referenceNumber, ...config });
+      if ((res as any).success) {
+        setSuccessData({ referenceNumber: (res as any).data.referenceNumber, ...config });
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';

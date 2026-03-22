@@ -23,32 +23,17 @@ export const createDrive = asyncHandler(async (req: Request, res: Response) => {
   // Create a new drive from the New Drive Wizard step 1 payload plus defaults
   const newDrive = await DriveModel.create({
     collegeId,
-    name: req.body.companyName || 'Draft Drive',
-    companyDetails: {
-      name: req.body.companyName,
-      website: req.body.website || 'https://example.com',
-      industry: 'Technology',
-      logoUrl: ''
-    },
+    companyName: req.body.companyName || 'Draft Drive',
     jobRole: req.body.jobRole,
-    ctc: {
-      currency: 'INR',
-      amount: parseInt(req.body.ctc) || 0,
-      isHidden: false
-    },
+    ctc: req.body.ctc || 'Not Disclosed',
     locations: req.body.locations ? req.body.locations.split(',').map((l: string) => l.trim()) : [],
     description: req.body.description,
     status: DriveStatusEnum.enum.draft,
-    eligibilityCriteria: {
-      minCgpa: 0,
-      allowedBranches: [],
-      maxBacklogs: 0
+    eligibility: {
+      minCGPA: req.body.eligibilityCriteria?.minCgpa || 0,
+      branches: req.body.eligibilityCriteria?.allowedBranches || []
     },
     rounds: [],
-    dates: {
-      registrationStart: new Date(),
-      registrationEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // +7 days
-    }
   });
 
   res.status(201).json({

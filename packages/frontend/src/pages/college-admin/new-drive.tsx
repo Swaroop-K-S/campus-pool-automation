@@ -92,7 +92,7 @@ export default function NewDriveWizard() {
       };
       const res = await api.post('/drives', payload);
       toast.dismiss(loadingToast);
-      if (res.data?.success) {
+      if ((res as any).success) {
         toast.success('Drive created successfully!');
         navigate('/admin/drives');
       }

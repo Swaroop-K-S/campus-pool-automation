@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { getDrives, createDrive, getDriveById, updateDrive, activateDrive } from '../controllers/drive.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { requireRole } from '../middleware/role-guard.middleware';
+import shortlistRoutes from './shortlist.routes';
+import eventRoutes from './event.routes';
 
 const router = Router();
 
@@ -18,5 +20,8 @@ router.route('/:driveId')
   .put(requireRole(['college_admin']), updateDrive);
 
 router.patch('/:driveId/activate', requireRole(['college_admin']), activateDrive);
+
+router.use('/:driveId', shortlistRoutes);
+router.use('/:driveId', eventRoutes);
 
 export default router;

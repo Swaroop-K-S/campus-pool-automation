@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "@campuspool/shared": "*",
+    "@types/nodemailer": "^7.0.11",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "exceljs": "^4.4.0",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.4",
     "gridfs-stream": "^1.1.1",
@@ -22,9 +24,12 @@
     "mongoose": "^8.0.3",
     "multer": "^1.4.5-lts.1",
     "multer-gridfs-storage": "^5.0.2",
-    "socket.io": "^4.7.2",
+    "nodemailer": "^8.0.3",
+    "socket.io": "^4.8.3",
+    "twilio": "^5.13.0",
     "uuid": "^13.0.0",
     "web-push": "^3.6.7",
+    "xlsx": "^0.18.5",
     "zod": "^3.22.4"
   },
   "devDependencies": {

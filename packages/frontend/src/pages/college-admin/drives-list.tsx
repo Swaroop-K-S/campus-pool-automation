@@ -19,8 +19,8 @@ export default function DrivesListPage() {
     try {
       setLoading(true);
       const res = await api.get('/drives');
-      if (res.data?.success) {
-        setDrives(res.data.data);
+      if ((res as any).success) {
+        setDrives((res as any).data);
       }
     } catch (err) {
       toast.error('Failed to load drives');
@@ -33,7 +33,7 @@ export default function DrivesListPage() {
     e.stopPropagation();
     try {
       const res = await api.patch(`/drives/${id}/activate`);
-      if (res.data?.success) {
+      if ((res as any).success) {
         toast.success('Drive activated successfully');
         fetchDrives();
       }
@@ -122,7 +122,7 @@ export default function DrivesListPage() {
                   <h3 className="text-lg font-bold text-slate-800 leading-tight mb-1">{drive.companyName}</h3>
                   <p className="text-slate-500 font-medium text-sm mb-1.5">{drive.jobRole || 'Software Engineer'}</p>
                   <span className="bg-green-50 text-green-700 text-xs px-2.5 py-1 rounded-full font-bold">
-                    {drive.ctc?.amount ? `${drive.ctc.amount} LPA` : 'TBD'}
+                    {typeof drive.ctc === 'string' ? drive.ctc : 'TBD'}
                   </span>
                 </div>
               </div>
