@@ -51,7 +51,6 @@ export const getPublicFormConfig = async (req: Request, res: Response) => {
     const { formToken } = req.params;
     const drive = await DriveModel.findOne({ formToken });
     if (!drive) return res.status(404).json({ success: false, error: 'Form not found' });
-    if (drive.status !== 'active') return res.status(403).json({ success: false, error: 'Applications for this drive are closed' });
 
     const formConfig = await FormFieldModel.findOne({ driveId: drive._id });
     
@@ -62,6 +61,7 @@ export const getPublicFormConfig = async (req: Request, res: Response) => {
       eventDate: drive.eventDate,
       locations: drive.locations,
       ctc: drive.ctc,
+      status: drive.status,
       fields: formConfig?.fields || []
     }});
   } catch (error: unknown) {
