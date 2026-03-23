@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, Users, BarChart2, Settings, Bell, LogOut, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Users, BarChart2, Settings, Bell, LogOut, GraduationCap, Menu, X } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
 
 export default function AdminLayout() {
   const location = useLocation();
   const logout = useAuthStore(state => state.logout);
   const user = useAuthStore(state => state.user);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const getPageTitle = () => {
     if (location.pathname.includes('/dashboard')) return 'Dashboard';
@@ -26,12 +28,21 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Fixed Left Sidebar */}
-      <aside className="w-60 bg-slate-900 h-screen fixed left-0 flex flex-col z-20">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`w-60 bg-slate-900 h-screen fixed left-0 flex flex-col z-40 transition-transform duration-200
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-slate-800 gap-3 text-white">
           <GraduationCap className="w-7 h-7 text-indigo-500" />
           <span className="font-bold text-lg">CampusPool</span>
+          <button className="ml-auto md:hidden text-slate-400" onClick={() => setSidebarOpen(false)}>
+            <X size={20} />
+          </button>
         </div>
 
         {/* Navigation */}
@@ -39,9 +50,10 @@ export default function AdminLayout() {
           {navItems.map((item) => {
              const isActive = location.pathname.startsWith(item.path);
              return (
-               <Link 
-                 key={item.name} 
-                 to={item.path} 
+               <Link
+                 key={item.name}
+                 to={item.path}
+                 onClick={() => setSidebarOpen(false)}
                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
                    ${isActive ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                >
@@ -52,7 +64,7 @@ export default function AdminLayout() {
           })}
         </nav>
 
-        {/* User Info & Logout (Bottom) */}
+        {/* User Info & Logout */}
         <div className="p-4 border-t border-slate-800 space-y-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold shrink-0 shadow-sm">
@@ -63,8 +75,7 @@ export default function AdminLayout() {
                <p className="text-xs text-slate-400 truncate mt-0.5">{user?.email || 'admin@campuspool.in'}</p>
             </div>
           </div>
-          
-          <button 
+          <button
             onClick={logout}
             className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 bg-slate-800/50 rounded-lg transition-colors border border-slate-700/50"
           >
@@ -74,13 +85,18 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="ml-60 flex-1 flex flex-col min-h-screen relative max-w-full">
+      {/* Main Content */}
+      <div className="md:ml-60 flex-1 flex flex-col min-h-screen relative max-w-full">
         {/* Top Header */}
         <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-10 w-full">
-          <h1 className="text-xl font-bold text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700">
-            {getPageTitle()}
-          </h1>
+          <div className="flex items-center gap-3">
+            <button className="md:hidden text-slate-600 hover:text-indigo-600" onClick={() => setSidebarOpen(true)}>
+              <Menu size={24} />
+            </button>
+            <h1 className="text-xl font-bold text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700">
+              {getPageTitle()}
+            </h1>
+          </div>
           <div className="flex items-center gap-4">
              <button className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all border border-transparent hover:border-slate-200 relative">
                <Bell size={20} />
@@ -92,7 +108,7 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        {/* Page Content Rendered Here */}
+        {/* Page Content */}
         <main className="flex-1 w-full bg-[#f8fafc]">
           <Outlet />
         </main>

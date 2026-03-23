@@ -36,6 +36,14 @@ const WelcomePage: React.FC = () => {
 
   useEffect(() => {
     fetchWelcomeData();
+    // Register service worker for push notifications
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(() => {
+        if (Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      }).catch(() => {});
+    }
   }, [fetchWelcomeData]);
 
   useEffect(() => {

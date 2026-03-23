@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { DriveModel, ApplicationModel, RoomModel } from '../models';
 import { randomAssign, aiSuggestAssign, calcOverallMatchQuality } from '../services/room-assignment.service';
 import { getIO } from '../socket';
+import { sendPushNotification } from '../services/push.service';
 import * as XLSX from 'xlsx';
 
 // POST /drives/:driveId/rooms/auto-assign/:roundType
@@ -359,6 +360,13 @@ export const finalSelection = async (req: Request, res: Response): Promise<void>
             jobRole: drive.jobRole
           });
         } catch {}
+
+        // Fire-and-forget push notification
+        sendPushNotification(app._id.toString(), {
+          title: '🎉 Congratulations! You are selected!',
+          body: `You have been selected by ${drive.companyName} for ${drive.jobRole}. Check the app for details.`,
+          url: `/event/${driveId}/welcome/${app._id}`
+        }).catch(() => {});
       } else {
         notFound++;
       }
