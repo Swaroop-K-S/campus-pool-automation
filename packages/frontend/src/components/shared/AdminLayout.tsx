@@ -1,30 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, Users, BarChart2, Settings, Bell, LogOut, GraduationCap, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Briefcase, BarChart2, Settings, Bell, LogOut, GraduationCap, Menu, X, Grid3X3, ListChecks, QrCode } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
+import { api } from '../../services/api';
 
 export default function AdminLayout() {
   const location = useLocation();
   const logout = useAuthStore(state => state.logout);
   const user = useAuthStore(state => state.user);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeDrive, setActiveDrive] = useState<any>(null);
+
+  // Check for any drive in event_day status
+  useEffect(() => {
+    api.get('/drives').then((d: any) => {
+      if (d.success) {
+        const eventDrive = (d.data || []).find((dr: any) => dr.status === 'event_day');
+        setActiveDrive(eventDrive || null);
+      }
+    }).catch(() => {});
+  }, [location.pathname]); // re-check when navigating
 
   const getPageTitle = () => {
     if (location.pathname.includes('/dashboard')) return 'Dashboard';
-    if (location.pathname.includes('/drives')) return 'Placement Pools';
-    if (location.pathname.includes('/users')) return 'Users';
+    if (location.pathname.includes('/room-assignment')) return 'Room Assignment';
+    if (location.pathname.includes('/rounds')) return 'Round Management';
+    if (location.pathname.includes('/drives')) return 'Placement Drives';
     if (location.pathname.includes('/analytics')) return 'Analytics';
     if (location.pathname.includes('/settings')) return 'Settings';
     return 'Dashboard';
   };
-
-  const navItems = [
-    { name: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
-    { name: 'Drives', icon: Briefcase, path: '/admin/drives' },
-    { name: 'Users', icon: Users, path: '/admin/users' },
-    { name: 'Analytics', icon: BarChart2, path: '/admin/analytics' },
-    { name: 'Settings', icon: Settings, path: '/admin/settings' },
-  ];
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -46,22 +51,63 @@ export default function AdminLayout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6 space-y-2">
-          {navItems.map((item) => {
-             const isActive = location.pathname.startsWith(item.path);
-             return (
-               <Link
-                 key={item.name}
-                 to={item.path}
-                 onClick={() => setSidebarOpen(false)}
-                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
-                   ${isActive ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-               >
-                 <item.icon size={20} />
-                 {item.name}
-               </Link>
-             )
-          })}
+        <nav className="flex-1 px-4 py-4 space-y-6 overflow-y-auto">
+          {/* MAIN */}
+          <div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Main</div>
+            <div className="space-y-1">
+              {[
+                { name: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
+                { name: 'Drives', icon: Briefcase, path: '/admin/drives' },
+                { name: 'Analytics', icon: BarChart2, path: '/admin/analytics' },
+              ].map(item => {
+                const isActive = location.pathname === item.path || (item.path === '/admin/drives' && location.pathname.startsWith('/admin/drives'));
+                return (
+                  <Link key={item.name} to={item.path} onClick={() => setSidebarOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
+                      ${isActive ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                    <item.icon size={20} />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* EVENT DAY — only visible when a drive is in event_day status */}
+          {activeDrive && (
+            <div>
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Event Day</div>
+              <div className="space-y-1">
+                <Link to={`/admin/drives/${activeDrive._id}/room-assignment`} onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
+                    ${location.pathname.includes('/room-assignment') ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                  <Grid3X3 size={20} /> Room Assignment
+                </Link>
+                <Link to={`/admin/drives/${activeDrive._id}/rounds`} onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
+                    ${location.pathname.includes('/rounds') ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                  <ListChecks size={20} /> Round Management
+                </Link>
+                <button onClick={() => window.open(`/event/${activeDrive._id}/qr-display`, '_blank')}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium text-slate-400 hover:bg-slate-800 hover:text-white">
+                  <QrCode size={20} /> QR Display ↗
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* SYSTEM */}
+          <div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">System</div>
+            <div className="space-y-1">
+              <Link to="/admin/settings" onClick={() => setSidebarOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
+                  ${location.pathname.includes('/settings') ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                <Settings size={20} /> Settings
+              </Link>
+            </div>
+          </div>
         </nav>
 
         {/* User Info & Logout */}
@@ -71,16 +117,13 @@ export default function AdminLayout() {
                {user?.name?.[0]?.toUpperCase() || 'A'}
             </div>
             <div className="overflow-hidden">
-               <p className="text-sm font-semibold text-white truncate leading-tight">{user?.name || 'Admin User'}</p>
+               <p className="text-sm font-semibold text-white truncate leading-tight">{user?.name || 'Admin'}</p>
                <p className="text-xs text-slate-400 truncate mt-0.5">{user?.email || 'admin@campuspool.in'}</p>
             </div>
           </div>
-          <button
-            onClick={logout}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 bg-slate-800/50 rounded-lg transition-colors border border-slate-700/50"
-          >
-             <LogOut size={18} />
-             Sign Out
+          <button onClick={logout}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 bg-slate-800/50 rounded-lg transition-colors border border-slate-700/50">
+             <LogOut size={18} /> Sign Out
           </button>
         </div>
       </aside>

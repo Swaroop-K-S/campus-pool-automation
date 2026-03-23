@@ -7,30 +7,33 @@ async function seed() {
   await mongoose.connect(env.MONGODB_URI);
   console.log('Connected to DB');
 
-  // Create a dummy college
-  const college = await CollegeModel.create({
-    name: 'Test Engineering College',
-    website: 'https://testcollege.edu',
-    location: 'Bangalore',
-    address: '123 Tech Park, Electronic City, Bangalore 560100',
-    tier: 'Tier 1'
-  });
-  console.log('Created College:', college._id);
+  // Clear existing
+  await CollegeModel.deleteMany({});
+  await UserModel.deleteMany({});
 
-  // Create a college admin user
-  const hashedPassword = await bcrypt.hash('password123', 10);
-  const user = await UserModel.create({
-    email: 'admin@college.edu',
-    passwordHash: hashedPassword,
-    name: 'College Admin Test',
-    role: 'college_admin',
+  // Create default college
+  const college = await CollegeModel.create({
+    name: 'Demo College of Engineering',
+    address: 'Bangalore, Karnataka - 560001',
+    isActive: true
+  });
+  console.log('✅ College created:', college.name);
+
+  // Create single admin user
+  const passwordHash = await bcrypt.hash('Admin@123', 12);
+  const admin = await UserModel.create({
+    name: 'Admin',
+    email: 'admin@campuspool.in',
+    passwordHash,
+    role: 'admin',
     collegeId: college._id,
     isActive: true
   });
-  console.log('Created User:', user.email);
+  console.log('✅ Admin created:', admin.email);
+  console.log('✅ Password: Admin@123');
+  console.log('🚀 Seed complete!');
 
   await mongoose.disconnect();
-  console.log('Done');
 }
 
 seed().catch(console.error);

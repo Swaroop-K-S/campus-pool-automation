@@ -2,26 +2,10 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { env } from '../config/env';
 import { UserModel } from '../models';
-import { LoginRequest, RoleEnum } from '@campuspool/shared';
 
-// For scaffold purposes, we hardcode the platform admin check
-export const login = async (credentials: LoginRequest) => {
+export const login = async (credentials: { email: string; password: string }) => {
   const { email, password } = credentials;
 
-  // Check Platform Admin default seeded account
-  if (email === env.PLATFORM_ADMIN_EMAIL) {
-    if (password !== env.PLATFORM_ADMIN_PASSWORD) {
-      throw new Error('Invalid credentials');
-    }
-    
-    return generateTokens({
-      userId: 'platform-admin-id',
-      collegeId: 'platform',
-      role: RoleEnum.enum.platform_admin
-    });
-  }
-
-  // Normal user lookup
   const user = await UserModel.findOne({ email, isActive: true });
   if (!user || !user.passwordHash) {
     throw new Error('Invalid credentials');
@@ -35,9 +19,7 @@ export const login = async (credentials: LoginRequest) => {
   const payload = {
     userId: user._id.toString(),
     collegeId: user.collegeId?.toString(),
-    role: user.role,
-    driveId: user.driveId?.toString(),
-    roomId: user.roomId?.toString()
+    email: user.email
   };
 
   const tokens = generateTokens(payload);
@@ -46,21 +28,12 @@ export const login = async (credentials: LoginRequest) => {
   user.refreshToken = tokens.refreshToken;
   await user.save();
 
-  return tokens;
+  return { ...tokens, user: { name: user.name, email: user.email, collegeId: user.collegeId } };
 };
 
 export const refresh = async (token: string) => {
   try {
     const decoded = jwt.verify(token, env.JWT_REFRESH_SECRET) as any;
-    
-    // In scaffold we bypass DB check for platform admin
-    if (decoded.role === RoleEnum.enum.platform_admin) {
-      return generateTokens({
-        userId: decoded.userId,
-        collegeId: decoded.collegeId,
-        role: decoded.role
-      });
-    }
 
     const user = await UserModel.findOne({ _id: decoded.userId, refreshToken: token });
     if (!user) throw new Error();
@@ -68,9 +41,7 @@ export const refresh = async (token: string) => {
     const payload = {
       userId: user._id.toString(),
       collegeId: user.collegeId?.toString(),
-      role: user.role,
-      driveId: user.driveId?.toString(),
-      roomId: user.roomId?.toString()
+      email: user.email
     };
 
     const tokens = generateTokens(payload);
@@ -84,9 +55,7 @@ export const refresh = async (token: string) => {
 };
 
 export const logout = async (userId: string) => {
-  if (userId !== 'platform-admin-id') {
-    await UserModel.findByIdAndUpdate(userId, { $unset: { refreshToken: 1 } });
-  }
+  await UserModel.findByIdAndUpdate(userId, { $unset: { refreshToken: 1 } });
 };
 
 const generateTokens = (payload: any) => {

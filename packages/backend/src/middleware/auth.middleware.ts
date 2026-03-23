@@ -5,9 +5,7 @@ import { env } from '../config/env';
 export interface AuthPayload {
   userId: string;
   collegeId: string;
-  role: string;
-  driveId?: string;
-  roomId?: string;
+  email: string;
 }
 
 declare global {

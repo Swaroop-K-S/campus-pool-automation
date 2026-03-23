@@ -4,11 +4,8 @@ import { persist } from 'zustand/middleware';
 interface AuthUser {
   userId: string;
   collegeId: string;
-  role: string;
   name?: string;
   email?: string;
-  driveId?: string;
-  roomId?: string;
 }
 
 interface AuthState {
@@ -30,7 +27,6 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (user, accessToken, refreshToken) => set({ user, accessToken, refreshToken }),
       
       logout: () => {
-        // Also call the logout API asynchronously (fire-and-forget for frontend scale)
         fetch('http://localhost:5000/api/v1/auth/logout', { 
            method: 'POST',
            headers: { 'Authorization': `Bearer ${useAuthStore.getState().accessToken}` }
@@ -40,7 +36,7 @@ export const useAuthStore = create<AuthState>()(
       }
     }),
     {
-      name: 'campuspool-auth', // localStorage key
+      name: 'campuspool-auth',
     }
   )
 );

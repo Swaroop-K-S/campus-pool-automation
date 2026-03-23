@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
-import { requireRole } from '../middleware/role-guard.middleware';
-import { RoleEnum } from '@campuspool/shared';
 import {
   autoAssign, aiSuggest, confirmAssignments, getAssignments,
   uploadRoundResults, getRoundStudents, exportRoundStudents,
@@ -15,18 +13,18 @@ const router = Router({ mergeParams: true });
 router.use(authenticate);
 
 // Room Assignment
-router.post('/rooms/auto-assign/:roundType', requireRole([RoleEnum.enum.college_admin]), autoAssign);
-router.post('/rooms/ai-suggest/:roundType', requireRole([RoleEnum.enum.college_admin]), aiSuggest);
-router.post('/rooms/confirm-assignments', requireRole([RoleEnum.enum.college_admin]), confirmAssignments);
-router.get('/rooms/:roundType/assignments', requireRole([RoleEnum.enum.college_admin, RoleEnum.enum.company_hr, RoleEnum.enum.invigilator]), getAssignments);
+router.post('/rooms/auto-assign/:roundType', autoAssign);
+router.post('/rooms/ai-suggest/:roundType', aiSuggest);
+router.post('/rooms/confirm-assignments', confirmAssignments);
+router.get('/rooms/:roundType/assignments', getAssignments);
 
 // Round Progression
-router.post('/rounds/:roundType/results', requireRole([RoleEnum.enum.college_admin, RoleEnum.enum.company_hr]), upload.single('file'), uploadRoundResults);
-router.get('/rounds/:roundType/students', requireRole([RoleEnum.enum.college_admin, RoleEnum.enum.company_hr]), getRoundStudents);
-router.get('/rounds/:roundType/export', requireRole([RoleEnum.enum.college_admin]), exportRoundStudents);
+router.post('/rounds/:roundType/results', upload.single('file'), uploadRoundResults);
+router.get('/rounds/:roundType/students', getRoundStudents);
+router.get('/rounds/:roundType/export', exportRoundStudents);
 
 // Final Selection
-router.post('/final-selection', requireRole([RoleEnum.enum.college_admin]), upload.single('file'), finalSelection);
-router.get('/selected', requireRole([RoleEnum.enum.college_admin]), getSelectedStudents);
+router.post('/final-selection', upload.single('file'), finalSelection);
+router.get('/selected', getSelectedStudents);
 
 export default router;

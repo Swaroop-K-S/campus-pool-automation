@@ -24,27 +24,21 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      const response = await api.post('/auth/login', data) as { success: boolean, data: { accessToken: string, refreshToken: string } };
+      const response = await api.post('/auth/login', data) as { success: boolean, data: { accessToken: string, refreshToken: string, user: any } };
       
       if (response.success && response.data) {
-        const { accessToken, refreshToken } = response.data;
-        const decodedToken = jwtDecode<{ role: string, userId: string, collegeId: string }>(accessToken);
+        const { accessToken, refreshToken, user } = response.data;
+        const decoded = jwtDecode<{ userId: string, collegeId: string, email: string }>(accessToken);
         
         setAuth({
-          userId: decodedToken.userId,
-          collegeId: decodedToken.collegeId,
-          role: decodedToken.role
+          userId: decoded.userId,
+          collegeId: decoded.collegeId,
+          name: user?.name,
+          email: decoded.email
         }, accessToken, refreshToken);
         
         toast.success("Login successful");
-        
-        switch (decodedToken.role) {
-          case 'platform_admin': navigate('/platform/dashboard'); break;
-          case 'college_admin': navigate('/admin/dashboard'); break;
-          case 'company_hr': navigate('/hr/dashboard'); break;
-          case 'invigilator': navigate('/invigilator/dashboard'); break;
-          default: navigate('/');
-        }
+        navigate('/admin/dashboard');
       }
     } catch (err: unknown) {
       const ae = err as { error?: string };
@@ -83,13 +77,13 @@ export default function LoginPage() {
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Welcome Back</h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm text-center">Enter your credentials to access the placement portal</p>
+            <p className="text-slate-500 dark:text-slate-400 text-sm text-center">Sign in to your CampusPool admin account</p>
           </div>
           
           <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300" htmlFor="email">
-                Institutional Email
+                Email
               </label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">mail</span>
@@ -97,7 +91,7 @@ export default function LoginPage() {
                   {...register('email')}
                   className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" 
                   id="email" 
-                  placeholder="name@university.edu" 
+                  placeholder="admin@campuspool.in" 
                   type="email"
                 />
               </div>
@@ -109,7 +103,6 @@ export default function LoginPage() {
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300" htmlFor="password">
                   Password
                 </label>
-                <a className="text-xs font-semibold text-primary hover:underline" href="#">Forgot password?</a>
               </div>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">lock</span>
@@ -137,21 +130,15 @@ export default function LoginPage() {
               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 mt-2" 
               type="submit"
             >
-              {isSubmitting ? 'Signing in...' : 'Sign In to Portal'}
+              {isSubmitting ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
-          
-          <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 text-center">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Trusted by 500+ Institutions worldwide
-            </p>
-          </div>
         </div>
       </main>
       
       <footer className="w-full py-6 px-6 text-center">
         <p className="text-xs text-slate-400 dark:text-slate-500">
-          © 2024 CampusPool Inc. All rights reserved. | <a className="hover:text-primary underline" href="#">Privacy Policy</a> | <a className="hover:text-primary underline" href="#">Terms of Service</a>
+          © 2024 CampusPool Inc. All rights reserved.
         </p>
       </footer>
     </div>
