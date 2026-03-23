@@ -21,8 +21,7 @@ const ROUND_OPTIONS = [
 const DriveSchema = z.object({
   companyName: z.string().min(1, 'Company Name is required'),
   jobRole: z.string().min(1, 'Job Role/Position is required'),
-  ctc: z.string().min(1, 'CTC Package is required'),
-  locations: z.array(z.string()).min(1, 'Add at least one location')
+  ctc: z.string().min(1, 'CTC Package is required')
 });
 
 export default function NewDriveWizard() {
@@ -36,7 +35,7 @@ export default function NewDriveWizard() {
 
   const { register, handleSubmit, formState: { errors }, trigger, getValues } = useForm({
     resolver: zodResolver(DriveSchema),
-    defaultValues: { companyName: '', jobRole: '', ctc: '', locations: [] }
+    defaultValues: { companyName: '', jobRole: '', ctc: '' }
   });
 
   const handleNext = async () => {
