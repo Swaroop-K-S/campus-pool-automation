@@ -78,10 +78,14 @@ export const submitApplication = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, error: 'Form is inactive' });
     }
 
-    const { email } = req.body;
-    const existing = await ApplicationModel.findOne({ driveId: drive._id, 'data.email': email });
-    if (existing) {
-      return res.status(409).json({ success: false, error: 'You have already applied for this drive', referenceNumber: existing.referenceNumber });
+    const emailKey = Object.keys(req.body).find(k => k.toLowerCase().includes('email'));
+    const emailValue = emailKey ? req.body[emailKey] : null;
+
+    if (emailValue) {
+      const existing = await ApplicationModel.findOne({ driveId: drive._id, [`data.${emailKey}`]: emailValue });
+      if (existing) {
+        return res.status(409).json({ success: false, error: 'You have already applied for this drive', referenceNumber: existing.referenceNumber });
+      }
     }
 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };

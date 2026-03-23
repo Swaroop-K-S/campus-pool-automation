@@ -218,7 +218,7 @@ export default function DriveDetailPage() {
   const fetchApplications = async () => {
     try {
       const res = await api.get(`/drives/${driveId}/applications`);
-      if ((res as any).success) setApplications((res as any).data);
+      if ((res as any).success) setApplications((res as any).data.applications || []);
     } catch (err) {
       toast.error('Failed to fetch applications');
     }
@@ -711,7 +711,11 @@ export default function DriveDetailPage() {
                    </thead>
                    <tbody>
                       {filteredApplications.map(app => {
-                        const initials = (app.data?.fullName || 'NA').split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase();
+                        const fullName = app.data?.fullName || app.data?.['Full Name'] || app.data?.['Name'] || 'N/A';
+                        const usn = app.data?.usn || app.data?.['USN'] || app.data?.['Roll Number'] || 'N/A';
+                        const branch = app.data?.branch || app.data?.['Branch'] || app.data?.['Department'] || 'N/A';
+                        const cgpa = app.data?.cgpa || app.data?.['CGPA'] || 'N/A';
+                        const initials = fullName !== 'N/A' ? fullName.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase() : 'NA';
                         return (
                           <tr key={app._id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                             <td className="px-5 py-3">
@@ -724,9 +728,9 @@ export default function DriveDetailPage() {
                                 />
                               </div>
                             </td>
-                            <td className="px-5 py-3 font-bold text-slate-800">{app.data?.fullName || 'N/A'}</td>
-                            <td className="px-5 py-3 font-medium text-slate-600">{app.data?.usn} - {app.data?.branch}</td>
-                            <td className="px-5 py-3 font-bold text-slate-700">{app.data?.cgpa}</td>
+                            <td className="px-5 py-3 font-bold text-slate-800">{fullName}</td>
+                            <td className="px-5 py-3 font-medium text-slate-600">{usn} - {branch}</td>
+                            <td className="px-5 py-3 font-bold text-slate-700">{cgpa}</td>
                             <td className="px-5 py-3">
                               <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
                                 app.status === 'shortlisted' ? 'bg-green-100 text-green-700' :

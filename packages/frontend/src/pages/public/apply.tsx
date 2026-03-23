@@ -48,11 +48,19 @@ export default function PublicApplyPage() {
       setSubmitting(true);
       const formData = new FormData();
       Object.keys(data).forEach(key => {
-        if (key === 'resume' || key === 'photo') {
+        const fieldConfig = config?.fields.find((f: { id: string, label: string, type: string }) => f.id === key);
+        let submitKey = fieldConfig ? fieldConfig.label : key;
+
+        if (fieldConfig?.type === 'file') {
            const fileList = data[key] as FileList;
-           if (fileList?.[0]) formData.append(key, fileList[0]);
+           if (submitKey.toLowerCase().includes('resume') || submitKey.toLowerCase().includes('pdf') || submitKey.toLowerCase().includes('cv')) {
+             submitKey = 'resume';
+           } else {
+             submitKey = 'photo';
+           }
+           if (fileList?.[0]) formData.append(submitKey, fileList[0]);
         } else {
-           formData.append(key, data[key] as string);
+           formData.append(submitKey, data[key] as string);
         }
       });
 
