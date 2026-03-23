@@ -13,6 +13,8 @@ import PlatformLayout from './components/shared/PlatformLayout';
 import QRDisplayPage from './pages/public/qr-display';
 import VerifyPage from './pages/public/verify';
 import WelcomePage from './pages/public/welcome';
+import RoomAssignmentPage from './pages/college-admin/room-assignment';
+import RoundManagementPage from './pages/college-admin/round-management';
 
 // Stubs for the actual pages to be built in subsequent phases
 const ErrorBoundary = () => <div>Something went wrong</div>;
@@ -76,6 +78,8 @@ export const router = createBrowserRouter([
           { path: 'dashboard', element: <AdminDashboardPage /> },
           { path: 'drives/new', element: <NewDriveWizard /> },
           { path: 'drives/:driveId', element: <DriveDetailPage /> },
+          { path: 'drives/:driveId/room-assignment', element: <RoomAssignmentPage /> },
+          { path: 'drives/:driveId/rounds', element: <RoundManagementPage /> },
           { path: 'drives', element: <DrivesListPage /> },
           { path: 'users', element: <GenericDashboard title="Users Management" /> },
           { path: 'analytics', element: <GenericDashboard title="Analytics Overview" /> },

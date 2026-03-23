@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { requireRole } from '../middleware/role-guard.middleware';
 import shortlistRoutes from './shortlist.routes';
 import eventRoutes from './event.routes';
+import assignmentRoutes from './assignment.routes';
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.patch('/:driveId/activate', requireRole(['college_admin']), activateDrive
 
 router.use('/:driveId', shortlistRoutes);
 router.use('/:driveId', eventRoutes);
+router.use('/:driveId', assignmentRoutes);
 
 export default router;
