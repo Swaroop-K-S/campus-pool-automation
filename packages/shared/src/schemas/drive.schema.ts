@@ -21,6 +21,16 @@ export const DriveSchema = z.object({
   formToken: z.string().optional(),
   status: DriveStatusEnum.default("draft"),
   eventDate: z.string().or(z.date()).optional(),
+  formOpenDate: z.string().or(z.date()).nullable().optional(),
+  formCloseDate: z.string().or(z.date()).nullable().optional(),
+  formStatus: z.enum(['not_configured', 'scheduled', 'open', 'closed', 'extended']).default('not_configured'),
+  formExtensions: z.array(z.object({
+    extendedBy: z.string(),
+    previousCloseDate: z.string().or(z.date()).nullable(),
+    newCloseDate: z.string().or(z.date()),
+    reason: z.string(),
+    extendedAt: z.string().or(z.date())
+  })).optional(),
   venueDetails: z.object({
     hallName: z.string(),
     capacity: z.number()

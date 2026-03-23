@@ -89,3 +89,84 @@ export const activateDrive = asyncHandler(async (req: Request, res: Response) =>
 
   res.status(200).json({ success: true, data: initialDrive });
 });
+
+// PATCH /api/v1/drives/:driveId/form/schedule
+export const scheduleForm = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+  const { formOpenDate, formCloseDate } = req.body;
+
+  const now = new Date();
+  let formStatus = 'scheduled';
+  if (new Date(formOpenDate) <= now) {
+    formStatus = 'open';
+  }
+
+  const updatedDrive = await DriveModel.findOneAndUpdate(
+    { _id: driveId, collegeId },
+    { formOpenDate, formCloseDate, formStatus },
+    { new: true }
+  );
+
+  if (!updatedDrive) return res.status(404).json({ success: false, error: 'Drive not found' });
+  res.status(200).json({ success: true, data: updatedDrive });
+});
+
+// PATCH /api/v1/drives/:driveId/form/extend
+export const extendForm = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+  const { newCloseDate, reason } = req.body;
+
+  const drive = await DriveModel.findOne({ _id: driveId, collegeId });
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  if (!drive.formExtensions) {
+    drive.formExtensions = [];
+  }
+
+  drive.formExtensions.push({
+    extendedBy: (req as any).user.email,
+    previousCloseDate: drive.formCloseDate || null,
+    newCloseDate: new Date(newCloseDate),
+    reason: reason || 'Extended by admin',
+    extendedAt: new Date()
+  });
+
+  drive.formCloseDate = new Date(newCloseDate);
+  drive.formStatus = 'extended';
+  
+  await drive.save();
+  res.status(200).json({ success: true, data: drive });
+});
+
+// PATCH /api/v1/drives/:driveId/form/close
+export const closeForm = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  const updatedDrive = await DriveModel.findOneAndUpdate(
+    { _id: driveId, collegeId },
+    { formStatus: 'closed', formCloseDate: new Date() },
+    { new: true }
+  );
+
+  if (!updatedDrive) return res.status(404).json({ success: false, error: 'Drive not found' });
+  res.status(200).json({ success: true, data: updatedDrive });
+});
+
+// PATCH /api/v1/drives/:driveId/form/reopen
+export const reopenForm = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+  const { newCloseDate } = req.body;
+
+  const updatedDrive = await DriveModel.findOneAndUpdate(
+    { _id: driveId, collegeId },
+    { formStatus: 'open', formCloseDate: new Date(newCloseDate) },
+    { new: true }
+  );
+
+  if (!updatedDrive) return res.status(404).json({ success: false, error: 'Drive not found' });
+  res.status(200).json({ success: true, data: updatedDrive });
+});

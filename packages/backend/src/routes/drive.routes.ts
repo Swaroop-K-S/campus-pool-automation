@@ -19,6 +19,12 @@ router.route('/:driveId')
 
 router.patch('/:driveId/activate', activateDrive);
 
+import { scheduleForm, extendForm, closeForm, reopenForm } from '../controllers/drive.controller';
+router.patch('/:driveId/form/schedule', scheduleForm);
+router.patch('/:driveId/form/extend', extendForm);
+router.patch('/:driveId/form/close', closeForm);
+router.patch('/:driveId/form/reopen', reopenForm);
+
 router.use('/:driveId', shortlistRoutes);
 router.use('/:driveId', eventRoutes);
 router.use('/:driveId', assignmentRoutes);

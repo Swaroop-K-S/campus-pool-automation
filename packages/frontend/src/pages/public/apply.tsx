@@ -64,9 +64,7 @@ export default function PublicApplyPage() {
         }
       });
 
-      const res = await api.post(`/form/${formToken}/submit`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.post(`/form/${formToken}/submit`, formData);
       if ((res as any).success) {
         setSuccessData({ referenceNumber: (res as any).data.referenceNumber, ...config });
       }
@@ -145,9 +143,32 @@ export default function PublicApplyPage() {
            </div>
            <h1 className="text-3xl font-black mb-2 relative z-10">{config?.companyName}</h1>
            <p className="text-indigo-200 font-bold mb-4 relative z-10 text-lg">{config?.jobRole} • {config?.ctc} • {config?.locations?.join(', ') || 'Various Locations'}</p>
-           {config?.eventDate && <p className="text-sm font-medium text-indigo-100 bg-indigo-500/50 inline-block px-3 py-1.5 rounded-lg border border-indigo-400/50">Applications close: {new Date(config.eventDate).toLocaleDateString()}</p>}
+           {config?.formStatus === 'scheduled' && config.formOpenDate && (
+             <div className="bg-amber-500/20 border border-amber-400/50 text-amber-100 px-4 py-3 rounded-xl font-bold mb-2">
+               ⏳ This form will open on {new Date(config.formOpenDate).toLocaleString()}
+             </div>
+           )}
+           {config?.formStatus === 'closed' && (
+             <div className="bg-red-500/20 border border-red-400/50 text-red-100 px-4 py-3 rounded-xl font-bold mb-2">
+               ✕ This form is permanently closed.
+             </div>
+           )}
+           {config?.formStatus === 'not_configured' && (
+             <div className="bg-slate-800/20 border border-slate-600/50 text-slate-200 px-4 py-3 rounded-xl font-bold mb-2">
+               This form is not currently accepting applications.
+             </div>
+           )}
+           {(config?.formStatus === 'open' || config?.formStatus === 'extended') && config?.formCloseDate && (
+             <div className="bg-green-500/20 border border-green-400/50 text-green-100 px-4 py-3 inline-block rounded-xl font-bold">
+               ● Applications close: {new Date(config.formCloseDate).toLocaleString()}
+             </div>
+           )}
+           {(!config?.formStatus || config.formStatus === 'draft') && config?.eventDate && (
+             <p className="text-sm font-medium text-indigo-100 bg-indigo-500/50 inline-block px-3 py-1.5 rounded-lg border border-indigo-400/50">Event Date: {new Date(config.eventDate).toLocaleDateString()}</p>
+           )}
         </div>
 
+        {(!config?.formStatus || config.formStatus === 'open' || config.formStatus === 'extended') && (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-6">
             <h3 className="text-xl font-black text-slate-800 border-b border-slate-100 pb-4">Application Details</h3>
@@ -250,12 +271,17 @@ export default function PublicApplyPage() {
           </div>
 
           <button 
-            type="submit" disabled={submitting}
-            className="w-full py-4 rounded-xl text-white font-black text-lg shadow-sm transition-all bg-indigo-600 hover:bg-indigo-700 hover:shadow-indigo-600/30 disabled:opacity-50 flex items-center justify-center gap-2"
+            type="submit" disabled={submitting || (config?.formStatus && config.formStatus !== 'open' && config.formStatus !== 'extended')}
+            className={`w-full py-4 rounded-xl text-white font-black text-lg shadow-sm transition-all flex items-center justify-center gap-2 ${
+              (config?.formStatus && config.formStatus !== 'open' && config.formStatus !== 'extended') 
+              ? 'bg-slate-400 cursor-not-allowed' 
+              : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-indigo-600/30 disabled:opacity-50'
+            }`}
           >
-            {submitting ? 'Submitting Application...' : 'Submit Application'}
+            {submitting ? 'Submitting Application...' : (config?.formStatus && config.formStatus !== 'open' && config.formStatus !== 'extended') ? 'Form Unavailable' : 'Submit Application'}
           </button>
         </form>
+        )}
       </div>
     </div>
   );

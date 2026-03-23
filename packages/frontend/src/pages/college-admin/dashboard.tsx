@@ -190,14 +190,29 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Right Actions */}
-                <div className="flex items-center justify-end gap-6 w-1/3 flex-1">
-                  <div className="flex items-center gap-2">
-                    {/* Status Dot + Badge */}
+                <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2 sm:gap-4 w-1/3 flex-1">
+                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                    {/* Form Status Badge */}
+                    {drive.formStatus === 'open' || drive.formStatus === 'extended' ? (
+                       <span className="bg-green-100/50 text-green-700 text-xs font-bold px-2 py-1 rounded-lg border border-green-200 flex items-center gap-1.5 shadow-sm">
+                         <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Accepting
+                       </span>
+                    ) : drive.formStatus === 'scheduled' ? (
+                       <span className="bg-amber-100/50 text-amber-700 text-xs font-bold px-2 py-1 rounded-lg border border-amber-200 flex items-center shadow-sm">
+                         Scheduled
+                       </span>
+                    ) : drive.formStatus === 'closed' ? (
+                       <span className="bg-red-100/50 text-red-700 text-xs font-bold px-2 py-1 rounded-lg border border-red-200 shadow-sm opacity-90">
+                         Forms Closed
+                       </span>
+                    ) : null}
+
+                    {/* Drive Status Badge */}
                     {getStatusBadge(drive.status)}
                   </div>
                   <button 
                     onClick={() => navigate(`/admin/drives/${drive._id}`)}
-                    className="text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-300 transition-colors px-4 py-2 rounded-lg font-bold text-sm ml-2"
+                    className="text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-300 transition-colors px-4 py-2 w-full sm:w-auto text-center rounded-lg font-bold text-sm"
                   >
                     Manage Pool &rarr;
                   </button>

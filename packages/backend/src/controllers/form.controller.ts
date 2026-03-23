@@ -62,6 +62,9 @@ export const getPublicFormConfig = async (req: Request, res: Response) => {
       locations: drive.locations,
       ctc: drive.ctc,
       status: drive.status,
+      formOpenDate: drive.formOpenDate,
+      formCloseDate: drive.formCloseDate,
+      formStatus: drive.formStatus,
       fields: formConfig?.fields || []
     }});
   } catch (error: unknown) {
@@ -76,6 +79,21 @@ export const submitApplication = async (req: Request, res: Response) => {
     const drive = await DriveModel.findOne({ formToken });
     if (!drive || drive.status !== 'active') {
       return res.status(403).json({ success: false, error: 'Form is inactive' });
+    }
+
+    const now = new Date();
+    if (drive.formStatus === 'not_configured') {
+      return res.status(403).json({ success: false, error: 'This form is not yet open for applications.' });
+    }
+    if (drive.formStatus === 'closed') {
+      return res.status(403).json({ success: false, error: 'This form has been closed. Applications are no longer being accepted.' });
+    }
+    if (drive.formCloseDate && now > new Date(drive.formCloseDate)) {
+      await DriveModel.findByIdAndUpdate(drive._id, { formStatus: 'closed' });
+      return res.status(403).json({ success: false, error: `Applications closed on ${new Date(drive.formCloseDate).toLocaleDateString()}. This form is no longer accepting submissions.` });
+    }
+    if (drive.formOpenDate && now < new Date(drive.formOpenDate)) {
+      return res.status(403).json({ success: false, error: `This form opens on ${new Date(drive.formOpenDate).toLocaleDateString()}. Check back then!` });
     }
 
     const emailKey = Object.keys(req.body).find(k => k.toLowerCase().includes('email'));
@@ -102,6 +120,24 @@ export const submitApplication = async (req: Request, res: Response) => {
     const appData = { ...req.body };
     delete appData.resume;
     delete appData.photo;
+
+    const keys = Object.keys(appData);
+    
+    // Normalize core fields to ensure schema indices and frontend table rendering work perfectly
+    const finalEmailKey = keys.find(k => k.toLowerCase().includes('email'));
+    if (finalEmailKey && finalEmailKey !== 'email') { appData.email = appData[finalEmailKey]; delete appData[finalEmailKey]; }
+
+    const usnKey = keys.find(k => k.toLowerCase().includes('usn') || k.toLowerCase().includes('roll'));
+    if (usnKey && usnKey !== 'usn') { appData.usn = appData[usnKey]; delete appData[usnKey]; }
+
+    const nameKey = keys.find(k => k.toLowerCase().includes('name'));
+    if (nameKey && nameKey !== 'fullName') { appData.fullName = appData[nameKey]; delete appData[nameKey]; }
+
+    const branchKey = keys.find(k => k.toLowerCase().includes('branch') || k.toLowerCase().includes('department'));
+    if (branchKey && branchKey !== 'branch') { appData.branch = appData[branchKey]; delete appData[branchKey]; }
+
+    const cgpaKey = keys.find(k => k.toLowerCase().includes('cgpa') || k.toLowerCase().includes('gpa'));
+    if (cgpaKey && cgpaKey !== 'cgpa') { appData.cgpa = appData[cgpaKey]; delete appData[cgpaKey]; }
 
     await ApplicationModel.create({
       referenceNumber,

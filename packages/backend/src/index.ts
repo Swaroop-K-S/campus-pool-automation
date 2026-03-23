@@ -15,6 +15,32 @@ const startServer = async () => {
     await mongoose.connect(env.MONGODB_URI);
     console.log(`✅ MongoDB Connected`);
     
+    // Auto-close scheduler
+    setInterval(async () => {
+      const now = new Date();
+      if (!mongoose.connection.db) return;
+
+      // Find all drives whose form should be closed but aren't yet
+      await mongoose.connection.db.collection('drives').updateMany(
+        {
+          formStatus: { $in: ['open', 'extended', 'scheduled'] },
+          formCloseDate: { $lt: now, $ne: null }
+        },
+        { $set: { formStatus: 'closed' } }
+      );
+      
+      // Also open scheduled forms
+      await mongoose.connection.db.collection('drives').updateMany(
+        {
+          formStatus: 'scheduled',
+          formOpenDate: { $lte: now }
+        },
+        { $set: { formStatus: 'open' } }
+      );
+    }, 60000); // every 60 seconds
+
+    console.log('⏰ Form auto-close scheduler started');
+
     server.listen(PORT, () => {
       console.log(`🚀 Server running in ${env.NODE_ENV} mode on port ${PORT}`);
     });

@@ -27,6 +27,49 @@ const FIELD_TYPES = [
   { type: 'file_image', label: 'Image Upload', icon: ImageIcon },
 ];
 
+const CountdownTimer = ({ closeDate }: { closeDate: string }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+  const [urgency, setUrgency] = useState('normal');
+
+  useEffect(() => {
+    if (!closeDate) return;
+    const interval = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = new Date(closeDate).getTime() - now;
+      
+      if (distance < 0) {
+        setTimeLeft('Closed');
+        clearInterval(interval);
+        return;
+      }
+      
+      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+      
+      setTimeLeft(`${days}d ${hours}h ${minutes}m ${seconds}s`);
+      if (hours < 1 && days === 0) setUrgency('urgent');
+      else if (hours < 24 && days === 0) setUrgency('warning');
+      else setUrgency('normal');
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [closeDate]);
+
+  if (!timeLeft) return null;
+
+  return (
+    <div className={`border rounded-xl p-3 flex w-full items-center gap-3 ${
+      urgency === 'urgent' ? 'bg-red-50 border-red-200 text-red-700' :
+      urgency === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-700' :
+      'bg-green-50 border-green-200 text-green-700'
+    }`}>
+      <Clock size={16} />
+      <span className="text-sm font-medium font-mono">Form closes in: {timeLeft}</span>
+    </div>
+  );
+};
+
 const DEFAULT_FIELDS = [
   { id: 'default_name', type: 'text', label: 'Full Name', required: true, locked: true },
   { id: 'default_usn', type: 'text', label: 'USN', required: true, locked: true },
@@ -89,6 +132,17 @@ export default function DriveDetailPage() {
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null);
   const [formToken, setFormToken] = useState<string | null>(null);
   const [savingForm, setSavingForm] = useState(false);
+
+  // Form Validity State
+  const [formOpenDate, setFormOpenDate] = useState<string>('');
+  const [formCloseDate, setFormCloseDate] = useState<string>('');
+  const [formStatus, setFormStatus] = useState<string>('not_configured');
+  const [formExtensions, setFormExtensions] = useState<any[]>([]);
+  const [showExtendModal, setShowExtendModal] = useState(false);
+  const [showReopenModal, setShowReopenModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [newCloseDate, setNewCloseDate] = useState<string>('');
+  const [extendReason, setExtendReason] = useState<string>('');
 
   // Applications State
   const [applications, setApplications] = useState<any[]>([]);
@@ -193,7 +247,14 @@ export default function DriveDetailPage() {
   const fetchDriveDetails = async () => {
     try {
       const res = await api.get(`/drives/${driveId}`);
-      if ((res as any).success) setDrive((res as any).data);
+      if ((res as any).success) {
+        const d = (res as any).data;
+        setDrive(d);
+        if (d.formOpenDate) setFormOpenDate(new Date(d.formOpenDate).toISOString().slice(0, 16));
+        if (d.formCloseDate) setFormCloseDate(new Date(d.formCloseDate).toISOString().slice(0, 16));
+        setFormStatus(d.formStatus || 'not_configured');
+        setFormExtensions(d.formExtensions || []);
+      }
     } catch (err) {
       toast.error('Failed to fetch drive info');
     } finally {
@@ -412,6 +473,56 @@ export default function DriveDetailPage() {
     }
   };
 
+  const scheduleForm = async () => {
+    try {
+      const res = await api.patch(`/drives/${driveId}/form/schedule`, { formOpenDate, formCloseDate });
+      if ((res as any).success) {
+        setFormStatus('open');
+        fetchDriveDetails();
+        toast.success(`Form correctly scheduled!`);
+      }
+    } catch (err) { toast.error('Failed to schedule form'); }
+  };
+
+  const extendForm = async () => {
+    try {
+      const res = await api.patch(`/drives/${driveId}/form/extend`, { newCloseDate, reason: extendReason });
+      if ((res as any).success) {
+        setFormStatus('extended');
+        fetchDriveDetails();
+        setShowExtendModal(false);
+        setNewCloseDate('');
+        setExtendReason('');
+        toast.success('Form deadline extended!');
+      }
+    } catch (err) { toast.error('Failed to extend deadline'); }
+  };
+
+  const closeFormNow = async () => {
+    if (!confirm('Are you sure you want to close this form? Students will not be able to submit after this.')) return;
+    try {
+      const res = await api.patch(`/drives/${driveId}/form/close`);
+      if ((res as any).success) {
+        setFormStatus('closed');
+        fetchDriveDetails();
+        toast.success('Form closed immediately!');
+      }
+    } catch (err) { toast.error('Failed to close form'); }
+  };
+
+  const reopenForm = async () => {
+    try {
+      const res = await api.patch(`/drives/${driveId}/form/reopen`, { newCloseDate });
+      if ((res as any).success) {
+        setFormStatus('open');
+        fetchDriveDetails();
+        setShowReopenModal(false);
+        setNewCloseDate('');
+        toast.success('Form reopened successfully!');
+      }
+    } catch (err) { toast.error('Failed to reopen form'); }
+  };
+
   if (loading) return <div className="p-8 text-center text-slate-500 font-bold">Loading drive details...</div>;
   if (!drive) return <div className="p-8 text-center text-red-500 font-bold">Drive not found</div>;
 
@@ -525,6 +636,62 @@ export default function DriveDetailPage() {
                 <span className="px-3 py-1 bg-slate-200 text-slate-700 rounded-full text-xs font-bold">
                   {fields.length} Fields
                 </span>
+              </div>
+
+              {/* FORM VALIDITY PERIOD CARD */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-semibold text-slate-800">Form Validity Period</h3>
+                  <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    formStatus === 'not_configured' ? 'bg-slate-100 text-slate-600' :
+                    formStatus === 'scheduled' ? 'bg-blue-100 text-blue-700' :
+                    formStatus === 'open' ? 'bg-green-100 text-green-700 animate-pulse' :
+                    formStatus === 'extended' ? 'bg-indigo-100 text-indigo-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {formStatus === 'not_configured' ? 'Not Scheduled' :
+                     formStatus === 'scheduled' ? '⏰ Scheduled' :
+                     formStatus === 'open' ? '● Accepting' :
+                     formStatus === 'extended' ? '↗ Extended' :
+                     '✕ Closed'}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase">Opens On</label>
+                    <input type="datetime-local" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mt-1 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                           value={formOpenDate} onChange={e => setFormOpenDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase">Closes On</label>
+                    <input type="datetime-local" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mt-1 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                           value={formCloseDate} onChange={e => setFormCloseDate(e.target.value)} />
+                  </div>
+                </div>
+
+                <button onClick={scheduleForm} className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-sm mb-4 transition-colors">
+                  Set Schedule
+                </button>
+
+                {(formStatus === 'open' || formStatus === 'extended') && (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => setShowExtendModal(true)} className="flex-1 px-3 py-2 border border-amber-500 text-amber-600 hover:bg-amber-50 rounded-lg text-sm font-bold transition-colors">Extend Deadline</button>
+                      <button onClick={closeFormNow} className="flex-1 px-3 py-2 border border-red-500 text-red-600 hover:bg-red-50 rounded-lg text-sm font-bold transition-colors">Close Form Now</button>
+                      <button onClick={() => setShowHistoryModal(true)} className="flex-1 px-3 py-2 border border-slate-300 text-slate-600 hover:bg-slate-50 rounded-lg text-sm font-bold transition-colors">View History</button>
+                    </div>
+                    {/* COUNTDOWN TIMER */}
+                    <CountdownTimer closeDate={formCloseDate} />
+                  </div>
+                )}
+
+                {formStatus === 'closed' && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 mt-3 flex justify-between items-center">
+                    <span className="text-red-700 font-bold text-sm">✕ This form is currently closed</span>
+                    <button onClick={() => setShowReopenModal(true)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold transition-colors">Reopen Form</button>
+                  </div>
+                )}
               </div>
 
               <DndContext sensors={Sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -1197,6 +1364,108 @@ export default function DriveDetailPage() {
         )}
 
       </div>
+
+      {/* EXTEND MODAL */}
+      {showExtendModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-lg text-slate-800">Extend Form Deadline</h3>
+              <button onClick={() => setShowExtendModal(false)} className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">New Close Date *</label>
+                  <input type="datetime-local" className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+                         value={newCloseDate} onChange={e => setNewCloseDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Reason for Extension</label>
+                  <textarea className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none" 
+                            rows={3} placeholder="E.g., Requested by college placement cell"
+                            value={extendReason} onChange={e => setExtendReason(e.target.value)} />
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button onClick={() => setShowExtendModal(false)} className="px-5 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">Cancel</button>
+              <button onClick={extendForm} disabled={!newCloseDate} className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm disabled:opacity-50">Extend Deadline</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REOPEN MODAL */}
+      {showReopenModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-indigo-50/50">
+              <h3 className="font-bold text-lg text-indigo-900">Reopen Form</h3>
+              <button onClick={() => setShowReopenModal(false)} className="text-slate-400 hover:text-slate-600 bg-white hover:bg-slate-100 p-1.5 rounded-lg transition-colors border shadow-sm">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4 font-medium">Please set a new closing deadline to reopen this form for applications.</p>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">New Close Date *</label>
+                <input type="datetime-local" className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+                       value={newCloseDate} onChange={e => setNewCloseDate(e.target.value)} />
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button onClick={() => setShowReopenModal(false)} className="px-5 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">Cancel</button>
+              <button onClick={reopenForm} disabled={!newCloseDate} className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm disabled:opacity-50">Reopen Form</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HISTORY MODAL */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-lg text-slate-800">Extension History</h3>
+              <button onClick={() => setShowHistoryModal(false)} className="text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 p-1.5 rounded-lg transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-6 max-h-96 overflow-y-auto">
+              {formExtensions.length === 0 ? (
+                 <div className="text-center py-8">
+                   <p className="text-slate-500 font-medium">No extensions have been made yet.</p>
+                 </div>
+              ) : (
+                <div className="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+                  {formExtensions.map((ext, idx) => (
+                    <div key={idx} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-slate-100 text-slate-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                        <Calendar size={18} />
+                      </div>
+                      <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                        <div className="flex items-center justify-between space-x-2 mb-1">
+                          <div className="font-bold text-slate-900 text-sm">Extended By {ext.extendedBy}</div>
+                          <time className="text-xs font-medium text-slate-500">{new Date(ext.extendedAt).toLocaleDateString()}</time>
+                        </div>
+                        <div className="text-slate-500 text-xs mb-2 italic">"{ext.reason}"</div>
+                        <div className="flex items-center gap-2 text-xs font-bold mt-2 pt-2 border-t">
+                           <span className="text-slate-400 line-through">{ext.previousCloseDate ? new Date(ext.previousCloseDate).toLocaleString() : 'N/A'}</span>
+                           <span className="text-indigo-400">→</span>
+                           <span className="text-indigo-600">{new Date(ext.newCloseDate).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

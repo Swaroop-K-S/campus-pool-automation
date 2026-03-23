@@ -28,6 +28,20 @@ const driveSchema = new Schema({
     roundType: String,
     startTime: String,
     duration: Number
+  }],
+  formOpenDate: { type: Date, default: null },
+  formCloseDate: { type: Date, default: null },
+  formStatus: { 
+    type: String, 
+    enum: ['not_configured', 'scheduled', 'open', 'closed', 'extended'],
+    default: 'not_configured'
+  },
+  formExtensions: [{
+    extendedBy: String,
+    previousCloseDate: Date,
+    newCloseDate: Date,
+    reason: String,
+    extendedAt: Date
   }]
 }, {
   timestamps: true
