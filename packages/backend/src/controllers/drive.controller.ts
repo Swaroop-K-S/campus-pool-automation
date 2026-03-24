@@ -191,3 +191,49 @@ export const reopenForm = asyncHandler(async (req: Request, res: Response) => {
   if (!updatedDrive) return res.status(404).json({ success: false, error: 'Drive not found' });
   res.status(200).json({ success: true, data: updatedDrive });
 });
+
+// DELETE /api/v1/drives/:driveId
+export const deleteDrive = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  const drive = await DriveModel.findOne({ _id: driveId, collegeId });
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  await Promise.all([
+    DriveModel.findByIdAndDelete(driveId),
+    ApplicationModel.deleteMany({ driveId })
+  ]);
+
+  res.status(200).json({ success: true, data: {} });
+});
+
+// PATCH /api/v1/drives/:driveId/start-event
+export const startEventDay = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  const drive = await DriveModel.findOneAndUpdate(
+    { _id: driveId, collegeId },
+    { status: 'event_day' },
+    { new: true }
+  );
+
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+  res.status(200).json({ success: true, data: drive });
+});
+
+// PATCH /api/v1/drives/:driveId/complete
+export const markCompleted = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  const drive = await DriveModel.findOneAndUpdate(
+    { _id: driveId, collegeId },
+    { status: 'completed' },
+    { new: true }
+  );
+
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+  res.status(200).json({ success: true, data: drive });
+});

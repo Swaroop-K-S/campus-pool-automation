@@ -7,3 +7,11 @@
 .page-enter {
   animation: fadeIn 0.2s ease-out;
 }
+
+input, textarea, select {
+  color: #1E293B !important;
+  background-color: #FFFFFF !important;
+}
+input::placeholder, textarea::placeholder {
+  color: #94A3B8 !important;
+}

@@ -56,7 +56,7 @@ export default function SettingsPage() {
     } catch { toast.error('Error changing password'); }
   };
 
-  const inputClass = "w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all";
+  const inputClass = "w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors";
   const labelClass = "block text-sm font-semibold text-slate-700 mb-1.5";
   const btnClass = "bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-6 rounded-lg text-sm transition-colors";
 

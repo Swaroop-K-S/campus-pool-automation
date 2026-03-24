@@ -185,7 +185,7 @@ export default function PublicApplyPage() {
                     type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
                     placeholder={field.placeholder || ''}
                     {...register(field.id, { required: field.required })}
-                    className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 transition-shadow ${errors[field.id] ? 'border-red-400 bg-red-50' : 'border-slate-300'}`}
+                    className={`w-full border rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors ${errors[field.id] ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
                   />
                 )}
 
@@ -195,7 +195,7 @@ export default function PublicApplyPage() {
                     rows={4}
                     placeholder={field.placeholder || ''}
                     {...register(field.id, { required: field.required })}
-                    className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 transition-shadow ${errors[field.id] ? 'border-red-400 bg-red-50' : 'border-slate-300'}`}
+                    className={`w-full border rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors ${errors[field.id] ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
                   />
                 )}
 

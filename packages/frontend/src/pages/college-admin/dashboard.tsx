@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Users, UserCheck, Trophy, Plus, ChevronRight, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, BarChart2, GraduationCap } from 'lucide-react';
+import { Briefcase, Users, UserCheck, Trophy, Plus, ChevronRight, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, BarChart2, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2 } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
+import { useRef } from 'react';
 
 const StatCard = ({ label, value, icon, color, onClick, trend, sublabel }: any) => (
   <div onClick={onClick}
@@ -32,6 +33,136 @@ const StatCard = ({ label, value, icon, color, onClick, trend, sublabel }: any) 
   </div>
 );
 
+const DriveOptionsMenu = ({ drive, onEdit, onDelete, onDuplicate, onChangeStatus }: any) => {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button onClick={(e) => { e.stopPropagation(); setOpen(!open); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+        <MoreVertical size={16}/>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-9 w-52 bg-white rounded-xl shadow-lg border border-slate-100 z-50 py-1 animate-in slide-in-from-top-2">
+          <button onClick={(e) => { e.stopPropagation(); onEdit(drive); setOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
+            <Pencil size={15} className="text-slate-400"/> Edit Drive Details
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDuplicate(drive); setOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
+            <Copy size={15} className="text-slate-400"/> Duplicate Drive
+          </button>
+          <div className="border-t border-slate-100 my-1"/>
+          {drive.status === 'draft' && (
+            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(drive._id, 'active'); setOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-indigo-600 hover:bg-indigo-50">
+              <Play size={15}/> Activate Drive
+            </button>
+          )}
+          {drive.status === 'active' && (
+            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(drive._id, 'event_day'); setOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-green-600 hover:bg-green-50">
+              <CalendarCheck size={15}/> Start Event Day
+            </button>
+          )}
+          {drive.status === 'event_day' && (
+            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(drive._id, 'completed'); setOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50">
+              <CheckCircle size={15}/> Mark Completed
+            </button>
+          )}
+          <div className="border-t border-slate-100 my-1"/>
+          {drive.status === 'draft' ? (
+            <button onClick={(e) => { e.stopPropagation(); onDelete(drive); setOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50">
+              <Trash2 size={15}/> Delete Drive
+            </button>
+          ) : (
+            <button onClick={(e) => { e.stopPropagation(); onDelete(drive); setOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 text-left">
+              <div className="shrink-0"><Trash2 size={15}/></div>
+              <div className="leading-tight">
+                <div>Delete Drive</div>
+                <div className="text-xs text-red-400">All data will be lost</div>
+              </div>
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const EditDriveModal = ({ drive, onClose, onSave }: any) => {
+  const [form, setForm] = useState({
+    companyName: drive.companyName, jobRole: drive.jobRole, ctc: drive.ctc,
+    locations: drive.locations, eligibility: drive.eligibility || { minCGPA: 6.5, branches: ['CSE', 'ISE', 'ECE', 'ME', 'CV', 'EEE'] }, eventDate: drive.eventDate
+  });
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b">
+          <h2 className="text-lg font-bold text-slate-800">Edit Drive</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100"><X size={18}/></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-1.5 block">Company Name*</label>
+            <input value={form.companyName} onChange={e => setForm({...form, companyName: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"/>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-1.5 block">Job Role*</label>
+            <input value={form.jobRole} onChange={e => setForm({...form, jobRole: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"/>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700 mb-1.5 block">CTC Package</label>
+              <input value={form.ctc} onChange={e => setForm({...form, ctc: e.target.value})} placeholder="e.g. 8.5 LPA" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400"/>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Event Date</label>
+              <input type="date" value={form.eventDate ? new Date(form.eventDate).toISOString().split('T')[0] : ''} onChange={e => setForm({...form, eventDate: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400"/>
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-1.5 block">Minimum CGPA</label>
+            <input type="range" min="5" max="10" step="0.5" value={form.eligibility?.minCGPA || 6} onChange={e => setForm({...form, eligibility: {...form.eligibility, minCGPA: parseFloat(e.target.value)}})} className="w-full accent-indigo-600"/>
+            <div className="flex justify-between text-xs text-slate-400 mt-1"><span>5.0</span><span className="text-indigo-600 font-semibold text-sm">{form.eligibility?.minCGPA || 6} / 10.0</span><span>10.0</span></div>
+          </div>
+        </div>
+        <div className="flex gap-3 p-6 border-t">
+          <button onClick={onClose} className="flex-1 border border-slate-200 rounded-xl py-3 text-slate-600 hover:bg-slate-50 font-medium">Cancel</button>
+          <button onClick={() => onSave(form)} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 font-medium">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DeleteDriveModal = ({ drive, onClose, onConfirm, loading }: any) => (
+  <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={24} className="text-red-600"/></div>
+      <h2 className="text-lg font-bold text-center text-slate-800 mb-2">Delete Drive?</h2>
+      <p className="text-slate-500 text-center text-sm mb-2">You are about to delete:</p>
+      <div className="bg-slate-50 rounded-xl p-3 text-center mb-4"><div className="font-semibold text-slate-800">{drive.companyName}</div><div className="text-sm text-slate-500">{drive.jobRole}</div></div>
+      {drive.status !== 'draft' && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+          <p className="text-red-700 text-sm font-medium">⚠️ Warning</p>
+          <p className="text-red-600 text-xs mt-1">This drive has {drive.applicationCount || 0} applications. All student data, uploaded resumes, photos, and notifications will be permanently deleted.</p>
+        </div>
+      )}
+      <p className="text-slate-500 text-center text-sm mb-6">This action cannot be undone.</p>
+      <div className="flex gap-3">
+        <button onClick={onClose} className="flex-1 border border-slate-200 rounded-xl py-3 text-slate-600 hover:bg-slate-50 font-medium">Cancel</button>
+        <button onClick={onConfirm} disabled={loading} className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl py-3 font-medium flex items-center justify-center gap-2">
+          {loading ? 'Deleting...' : <><Trash2 size={16}/> Delete Drive</>}
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -51,6 +182,12 @@ export default function AdminDashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [viewMode, setViewMode] = useState<'grid'|'list'>((localStorage.getItem('dashboardView') as 'grid'|'list') || 'grid');
+
+  const [editingDrive, setEditingDrive] = useState<any>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [deletingDrive, setDeletingDrive] = useState<any>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('dashboardView', viewMode);
@@ -75,6 +212,51 @@ export default function AdminDashboardPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDuplicateDrive = async (drive: any) => {
+    try {
+      const res = await api.post('/drives', {
+        companyName: drive.companyName + ' (Copy)', jobRole: drive.jobRole, ctc: drive.ctc,
+        locations: drive.locations, eligibility: drive.eligibility,
+        rounds: drive.rounds?.map((r: any) => ({ type: r.type, order: r.order, status: 'pending' })) || [],
+        status: 'draft'
+      });
+      toast.success('Drive duplicated as draft!');
+      fetchData();
+      navigate(`/admin/drives/${(res as any).data._id}`);
+    } catch { toast.error('Failed to duplicate drive'); }
+  };
+
+  const handleEditDrive = (drive: any) => { setEditingDrive(drive); setShowEditModal(true); };
+  const handleSaveEdit = async (formData: any) => {
+    try {
+      await api.put(`/drives/${editingDrive._id}`, formData);
+      toast.success('Drive updated successfully!');
+      setShowEditModal(false);
+      fetchData();
+    } catch { toast.error('Failed to update drive'); }
+  };
+
+  const handleDeleteDrive = (drive: any) => { setDeletingDrive(drive); setShowDeleteModal(true); };
+  const handleConfirmDelete = async () => {
+    setDeleteLoading(true);
+    try {
+      await api.delete(`/drives/${deletingDrive._id}`);
+      toast.success('Drive deleted');
+      setShowDeleteModal(false);
+      fetchData();
+    } catch { toast.error('Failed to delete drive'); }
+    finally { setDeleteLoading(false); }
+  };
+
+  const handleChangeStatus = async (driveId: string, newStatus: string) => {
+    try {
+      const endpoint = newStatus === 'active' ? 'activate' : newStatus === 'event_day' ? 'start-event' : 'complete';
+      await api.patch(`/drives/${driveId}/${endpoint}`);
+      toast.success(`Drive status updated!`);
+      fetchData();
+    } catch { toast.error('Failed to update status'); }
   };
 
   useEffect(() => {
@@ -284,7 +466,9 @@ export default function AdminDashboardPage() {
                  }`}>
                    {drive.status.replace('_', ' ')}
                  </div>
-                 <ChevronRight size={16} className="text-slate-300 group-hover:text-indigo-600 transition-colors" />
+                 <div onClick={e => e.stopPropagation()}>
+                    <DriveOptionsMenu drive={drive} onEdit={handleEditDrive} onDelete={handleDeleteDrive} onDuplicate={handleDuplicateDrive} onChangeStatus={handleChangeStatus} />
+                 </div>
                </div>
             </div>
           ))}
@@ -306,14 +490,17 @@ export default function AdminDashboardPage() {
                   <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-700 font-black text-xl flex items-center justify-center border border-indigo-100/50">
                     {drive.companyName.substring(0, 2).toUpperCase()}
                   </div>
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
-                    drive.status === 'active' ? 'bg-green-100 text-green-700' :
-                    drive.status === 'event_day' ? 'bg-indigo-100 text-indigo-700' :
-                    drive.status === 'draft' ? 'bg-slate-100 text-slate-500' : 'bg-slate-200 text-slate-600'
-                  }`}>
-                    {drive.status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
-                    {drive.status.replace('_', ' ')}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                      drive.status === 'active' ? 'bg-green-100 text-green-700' :
+                      drive.status === 'event_day' ? 'bg-indigo-100 text-indigo-700' :
+                      drive.status === 'draft' ? 'bg-slate-100 text-slate-500' : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      {drive.status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
+                      {drive.status.replace('_', ' ')}
+                    </span>
+                    <DriveOptionsMenu drive={drive} onEdit={handleEditDrive} onDelete={handleDeleteDrive} onDuplicate={handleDuplicateDrive} onChangeStatus={handleChangeStatus} />
+                  </div>
                 </div>
                 
                 <h3 className="font-black text-slate-800 text-lg leading-tight line-clamp-1">{drive.companyName}</h3>
@@ -410,6 +597,9 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       )}
+
+      {showEditModal && <EditDriveModal drive={editingDrive} onClose={() => setShowEditModal(false)} onSave={handleSaveEdit} />}
+      {showDeleteModal && <DeleteDriveModal drive={deletingDrive} onClose={() => setShowDeleteModal(false)} onConfirm={handleConfirmDelete} loading={deleteLoading} />}
 
     </div>
   );

@@ -137,19 +137,19 @@ export default function NewDriveWizard() {
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1.5">Company Name *</label>
-                <input {...register('companyName')} className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-600 outline-none transition-shadow" placeholder="e.g. Google, Amazon" />
+                <input {...register('companyName')} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors" placeholder="e.g. Google, Amazon" />
                 {errors.companyName && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.companyName.message}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1.5">Job Role / Position *</label>
-                <input {...register('jobRole')} className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-600 outline-none transition-shadow" placeholder="e.g. SDE-1" />
+                <input {...register('jobRole')} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors" placeholder="e.g. SDE-1" />
                 {errors.jobRole && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.jobRole.message}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1.5">CTC Package *</label>
-                <input {...register('ctc')} className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-600 outline-none transition-shadow" placeholder="8.5 LPA" />
+                <input {...register('ctc')} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors" placeholder="8.5 LPA" />
                 {errors.ctc && <p className="text-red-500 text-xs mt-1 font-semibold">{errors.ctc.message}</p>}
               </div>
 
@@ -159,7 +159,7 @@ export default function NewDriveWizard() {
                   value={locInput} 
                   onChange={e => setLocInput(e.target.value)} 
                   onKeyDown={handleKeyDownLocation}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-600 outline-none transition-shadow" 
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors" 
                   placeholder="e.g. Bangalore, Hyderabad" 
                 />
                 <div className="flex flex-wrap gap-2 mt-3">
@@ -190,12 +190,9 @@ export default function NewDriveWizard() {
                 onChange={e => setEligibility({...eligibility, cgpa: parseFloat(e.target.value)})}
                 className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
               />
-              <div className="flex justify-between text-xs font-bold text-slate-400 mt-2 px-1">
+              <div className="flex justify-between text-sm text-slate-600 mt-2">
                 <span>5.0</span>
-                <span>6.0</span>
-                <span>7.0</span>
-                <span>8.0</span>
-                <span>9.0</span>
+                <span className="font-bold text-indigo-600 text-base">{eligibility.cgpa.toFixed(1)} / 10.0</span>
                 <span>10.0</span>
               </div>
             </div>

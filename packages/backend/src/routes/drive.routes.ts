@@ -15,11 +15,14 @@ router.route('/')
 
 router.route('/:driveId')
   .get(getDriveById)
-  .put(updateDrive);
+  .put(updateDrive)
+  .delete(deleteDrive);
 
 router.patch('/:driveId/activate', activateDrive);
+router.patch('/:driveId/start-event', startEventDay);
+router.patch('/:driveId/complete', markCompleted);
 
-import { scheduleForm, extendForm, closeForm, reopenForm } from '../controllers/drive.controller';
+import { scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted } from '../controllers/drive.controller';
 router.patch('/:driveId/form/schedule', scheduleForm);
 router.patch('/:driveId/form/extend', extendForm);
 router.patch('/:driveId/form/close', closeForm);
