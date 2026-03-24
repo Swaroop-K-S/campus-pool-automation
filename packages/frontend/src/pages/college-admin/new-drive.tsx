@@ -185,7 +185,7 @@ export default function NewDriveWizard() {
                 <span className="text-xl font-black text-indigo-600 bg-indigo-50 px-4 py-1.5 rounded-lg border border-indigo-100">{eligibility.cgpa.toFixed(1)} / 10.0</span>
               </label>
               <input 
-                type="range" min="5.0" max="10.0" step="0.5" 
+                type="range" min="5.0" max="10.0" step="0.1" 
                 value={eligibility.cgpa}
                 onChange={e => setEligibility({...eligibility, cgpa: parseFloat(e.target.value)})}
                 className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"

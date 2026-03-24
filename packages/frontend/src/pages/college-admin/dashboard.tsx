@@ -126,8 +126,8 @@ const EditDriveModal = ({ drive, onClose, onSave }: any) => {
           </div>
           <div>
             <label className="text-sm font-medium text-slate-700 mb-1.5 block">Minimum CGPA</label>
-            <input type="range" min="5" max="10" step="0.5" value={form.eligibility?.minCGPA || 6} onChange={e => setForm({...form, eligibility: {...form.eligibility, minCGPA: parseFloat(e.target.value)}})} className="w-full accent-indigo-600"/>
-            <div className="flex justify-between text-xs text-slate-400 mt-1"><span>5.0</span><span className="text-indigo-600 font-semibold text-sm">{form.eligibility?.minCGPA || 6} / 10.0</span><span>10.0</span></div>
+            <input type="range" min="5" max="10" step="0.1" value={form.eligibility?.minCGPA || 6} onChange={e => setForm({...form, eligibility: {...form.eligibility, minCGPA: parseFloat(e.target.value)}})} className="w-full accent-indigo-600"/>
+            <div className="flex justify-between text-xs text-slate-400 mt-1"><span>5.0</span><span className="text-indigo-600 font-semibold text-sm">{(form.eligibility?.minCGPA || 6).toFixed(1)} / 10.0</span><span>10.0</span></div>
           </div>
         </div>
         <div className="flex gap-3 p-6 border-t">
