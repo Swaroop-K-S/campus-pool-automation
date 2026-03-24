@@ -33,7 +33,7 @@ export default function NewDriveWizard() {
   const [eligibility, setEligibility] = useState({ cgpa: 6.5, branches: [...BRANCH_OPTIONS] });
   const [selectedRounds, setSelectedRounds] = useState<string[]>([]);
 
-  const { register, handleSubmit, formState: { errors }, trigger, getValues } = useForm({
+  const { register, formState: { errors }, trigger, getValues } = useForm({
     resolver: zodResolver(DriveSchema),
     defaultValues: { companyName: '', jobRole: '', ctc: '' }
   });
@@ -93,7 +93,7 @@ export default function NewDriveWizard() {
       toast.dismiss(loadingToast);
       if ((res as any).success) {
         toast.success('Drive created successfully!');
-        navigate('/admin/drives');
+        navigate('/admin/dashboard');
       }
     } catch (err) {
       toast.error('Failed to create drive. Please try again.');

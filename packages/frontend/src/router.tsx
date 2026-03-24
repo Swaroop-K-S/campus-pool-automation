@@ -5,7 +5,6 @@ import AdminLayout from './components/shared/AdminLayout';
 
 // Admin pages
 import AdminDashboardPage from './pages/college-admin/dashboard';
-import DrivesListPage from './pages/college-admin/drives-list';
 import NewDriveWizard from './pages/college-admin/new-drive';
 import DriveDetailPage from './pages/college-admin/drive-detail';
 import RoomAssignmentPage from './pages/college-admin/room-assignment';
@@ -55,7 +54,6 @@ export const router = createBrowserRouter([
         { path: 'drives/:driveId', element: <DriveDetailPage /> },
         { path: 'drives/:driveId/room-assignment', element: <RoomAssignmentPage /> },
         { path: 'drives/:driveId/rounds', element: <RoundManagementPage /> },
-        { path: 'drives', element: <DrivesListPage /> },
         { path: 'analytics', element: <AnalyticsPage /> },
         { path: 'settings', element: <SettingsPage /> },
       ]

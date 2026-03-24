@@ -1,14 +1,35 @@
 import { Request, Response } from 'express';
-import { DriveModel } from '../models';
+import { DriveModel, ApplicationModel } from '../models';
+import mongoose from 'mongoose';
 import { asyncHandler } from '../utils/async-handler';
 import { DriveStatusEnum } from '@campuspool/shared';
 
 // GET /api/v1/drives
 export const getDrives = asyncHandler(async (req: Request, res: Response) => {
   const collegeId = (req as any).user.collegeId;
+  const includeCount = req.query.includeCount === 'true';
   
   // Sort by most recent
-  const drives = await DriveModel.find({ collegeId }).sort({ createdAt: -1 });
+  let drives = await DriveModel.find({ collegeId }).sort({ createdAt: -1 }).lean();
+
+  if (includeCount) {
+    const counts = await ApplicationModel.aggregate([
+      { $match: { collegeId: new mongoose.Types.ObjectId(collegeId) } },
+      { $group: { 
+        _id: { driveId: '$driveId', status: '$status' },
+        count: { $sum: 1 }
+      }}
+    ]);
+
+    drives = drives.map(drive => {
+      const driveCounts = counts.filter(c => c._id.driveId?.toString() === drive._id.toString());
+      const applicationCount = driveCounts.reduce((acc, curr) => acc + curr.count, 0);
+      const shortlistedCount = driveCounts.find(c => c._id.status === 'shortlisted')?.count || 0;
+      const selectedCount = driveCounts.find(c => c._id.status === 'selected')?.count || 0;
+      
+      return { ...drive, applicationCount, shortlistedCount, selectedCount };
+    });
+  }
 
   res.status(200).json({
     success: true,

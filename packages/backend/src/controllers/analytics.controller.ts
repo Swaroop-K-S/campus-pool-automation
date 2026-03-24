@@ -114,3 +114,42 @@ export const getDrivesHistory = asyncHandler(async (req: Request, res: Response)
     }))
   });
 });
+
+// GET /analytics/selected-students
+export const getSelectedStudents = asyncHandler(async (req: Request, res: Response) => {
+  const collegeId = (req as any).user.collegeId;
+
+  // Use populate instead of aggregate since we want dynamic form fields flexibly mapped
+  const applications = await ApplicationModel.find({ collegeId, status: 'selected' })
+    .populate('driveId', 'companyName jobRole')
+    .lean();
+
+  const driveGroups: any = {};
+  for (const app of applications) {
+    if (!app.driveId) continue;
+    
+    // Check if driveId is an object (populated)
+    const driveObj = (app.driveId as any);
+    if (!driveObj || !driveObj._id) continue;
+    
+    const dId = driveObj._id.toString();
+    if (!driveGroups[dId]) {
+      driveGroups[dId] = {
+        driveId: dId,
+        companyName: driveObj.companyName,
+        jobRole: driveObj.jobRole,
+        students: []
+      };
+    }
+    
+    const d = app.data || {};
+    driveGroups[dId].students.push({
+      name: d.fullName || d.Name || d['Full Name'] || 'N/A',
+      usn: d.usn || d.USN || d['Roll Number'] || 'N/A',
+      branch: d.branch || d.Branch || d['Department'] || 'N/A',
+      email: d.email || d.Email || (app as any).candidateEmail || 'N/A'
+    });
+  }
+
+  res.json({ success: true, data: Object.values(driveGroups) });
+});

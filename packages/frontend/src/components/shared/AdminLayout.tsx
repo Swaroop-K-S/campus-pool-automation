@@ -25,7 +25,8 @@ export default function AdminLayout() {
     if (location.pathname.includes('/dashboard')) return 'Dashboard';
     if (location.pathname.includes('/room-assignment')) return 'Room Assignment';
     if (location.pathname.includes('/rounds')) return 'Round Management';
-    if (location.pathname.includes('/drives')) return 'Placement Drives';
+    if (location.pathname.includes('/drives/new')) return 'New Drive';
+    if (location.pathname.includes('/drives/')) return 'Drive Detail';
     if (location.pathname.includes('/analytics')) return 'Analytics';
     if (location.pathname.includes('/settings')) return 'Settings';
     return 'Dashboard';
@@ -58,10 +59,9 @@ export default function AdminLayout() {
             <div className="space-y-1">
               {[
                 { name: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
-                { name: 'Drives', icon: Briefcase, path: '/admin/drives' },
                 { name: 'Analytics', icon: BarChart2, path: '/admin/analytics' },
               ].map(item => {
-                const isActive = location.pathname === item.path || (item.path === '/admin/drives' && location.pathname.startsWith('/admin/drives'));
+                const isActive = location.pathname === item.path || (item.name === 'Dashboard' && location.pathname.startsWith('/admin/drives'));
                 return (
                   <Link key={item.name} to={item.path} onClick={() => setSidebarOpen(false)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
