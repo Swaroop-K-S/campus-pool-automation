@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { ApplicationModel } from '../models';
+import { FormFieldModel } from '../models/form-field.model';
 
 export const getApplications = async (req: Request, res: Response) => {
   try {
@@ -11,18 +12,41 @@ export const getApplications = async (req: Request, res: Response) => {
     const status = req.query.status as string;
 
     const query: any = { driveId, collegeId };
-    if (status) {
+    if (status && status !== 'all') {
       query.status = status;
     }
+
+    // Get form fields for this drive (to know what columns to show)
+    const formConfig = await FormFieldModel.findOne({ driveId }).lean();
+
+    const total = await ApplicationModel.countDocuments(query);
 
     const applications = await ApplicationModel.find(query)
       .sort({ submittedAt: -1 })
       .skip((page - 1) * limit)
-      .limit(limit);
+      .limit(limit)
+      .lean();
 
-    const total = await ApplicationModel.countDocuments(query);
+    // Add hasResume and hasPhoto flags
+    const enriched = applications.map((app: any) => ({
+      ...app,
+      hasResume: !!app.resumeFileId,
+      hasPhoto: !!app.photoFileId,
+      photoUrl: app.photoFileId
+        ? `/api/v1/drives/${driveId}/applications/${app._id}/photo`
+        : null,
+    }));
 
-    return res.json({ success: true, data: { applications, total, page } });
+    return res.json({
+      success: true,
+      data: {
+        applications: enriched,
+        formFields: formConfig?.fields || [],
+        total,
+        page,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ success: false, error: message });
@@ -77,6 +101,33 @@ export const getApplicationStats = async (req: Request, res: Response) => {
     });
 
     return res.json({ success: true, data: result });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: message });
+  }
+};
+
+export const updateApplicationStatus = async (req: Request, res: Response) => {
+  try {
+    const { driveId, appId } = req.params;
+    const collegeId = req.user?.collegeId;
+    const { status } = req.body;
+
+    if (!status || !['applied', 'shortlisted', 'attended', 'selected', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+
+    const application = await ApplicationModel.findOneAndUpdate(
+      { _id: appId, driveId, collegeId },
+      { status },
+      { new: true }
+    );
+
+    if (!application) {
+      return res.status(404).json({ success: false, error: 'Application not found' });
+    }
+
+    return res.json({ success: true, data: application });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ success: false, error: message });

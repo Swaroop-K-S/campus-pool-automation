@@ -6,7 +6,7 @@ import {
   ArrowLeft, AlignLeft, AlignJustify, Hash,
   ChevronDown, ChevronRight, Circle, CheckSquare, Calendar, FileText, 
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, MessageCircle, Mail,
-  Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check
+  Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
@@ -147,6 +147,12 @@ export default function DriveDetailPage() {
 
   // Applications State
   const [applications, setApplications] = useState<any[]>([]);
+  const [formFields, setFormFields] = useState<any[]>([]);
+  const [appTotal, setAppTotal] = useState(0);
+  const [appLoading, setAppLoading] = useState(true);
+  const [appSearchQuery, setAppSearchQuery] = useState('');
+  const [selectedApp, setSelectedApp] = useState<any>(null);
+  const [showDetailDrawer, setShowDetailDrawer] = useState(false);
 
   // Shortlist State
   const [uploadResult, setUploadResult] = useState<any>(null);
@@ -215,7 +221,7 @@ export default function DriveDetailPage() {
     if (activeTab === 'Shortlist') {
       fetchShortlisted();
     }
-  }, [activeTab, driveId]);
+  }, [activeTab, driveId, appStatusFilter]);
 
   useEffect(() => {
     // Socket Connection
@@ -278,11 +284,18 @@ export default function DriveDetailPage() {
   };
 
   const fetchApplications = async () => {
+    setAppLoading(true);
     try {
-      const res = await api.get(`/drives/${driveId}/applications`);
-      if ((res as any).success) setApplications((res as any).data.applications || []);
+      const res = await api.get(`/drives/${driveId}/applications?status=${appStatusFilter}`);
+      if ((res as any).success) {
+        setApplications((res as any).data.applications || []);
+        setFormFields((res as any).data.formFields || []);
+        setAppTotal((res as any).data.total || 0);
+      }
     } catch (err) {
       toast.error('Failed to fetch applications');
+    } finally {
+      setAppLoading(false);
     }
   };
 
@@ -413,9 +426,6 @@ export default function DriveDetailPage() {
     setExpandedRounds(prev => ({ ...prev, [roundType]: !prev[roundType] }));
   };
 
-  const filteredApplications = appStatusFilter === 'all'
-    ? applications
-    : applications.filter(a => a.status === appStatusFilter);
 
   const Sensors = useSensors(
     useSensor(PointerSensor),
@@ -884,108 +894,388 @@ export default function DriveDetailPage() {
           </div>
         )}
 
-        {activeTab === 'Applications' && (
+        {activeTab === 'Applications' && (() => {
+          const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+
+          // Build dynamic table columns from formFields (or fallback from raw data keys)
+          const tableFields = (() => {
+            const priority = ['usn', 'branch', 'cgpa', 'email', 'phone'];
+            
+            if (formFields.length > 0) {
+              const sorted = [...formFields]
+                .filter((f: any) => f.type !== 'file_pdf' && f.type !== 'file_image')
+                .sort((a: any, b: any) => {
+                  const aKey = a.label.toLowerCase().replace(/\s+/g, '');
+                  const bKey = b.label.toLowerCase().replace(/\s+/g, '');
+                  const ai = priority.indexOf(aKey);
+                  const bi = priority.indexOf(bKey);
+                  if (ai === -1 && bi === -1) return (a.order || 0) - (b.order || 0);
+                  if (ai === -1) return 1;
+                  if (bi === -1) return -1;
+                  return ai - bi;
+                });
+              return sorted.slice(0, 5);
+            }
+            
+            // Fallback: extract keys from the first application's data
+            const firstApp = applications[0];
+            if (!firstApp?.data) return [];
+            const skipKeys = ['name', 'fullName', 'full_name', 'Full Name', 'Name'];
+            const rawKeys = Object.keys(firstApp.data)
+              .filter(k => {
+                if (skipKeys.includes(k)) return false;
+                const val = firstApp.data[k];
+                // Skip non-displayable values (files, objects, arrays)
+                return typeof val === 'string' || typeof val === 'number';
+              });
+            
+            // Sort by priority
+            const sorted = rawKeys.sort((a, b) => {
+              const ai = priority.indexOf(a.toLowerCase().replace(/[\s_]/g, ''));
+              const bi = priority.indexOf(b.toLowerCase().replace(/[\s_]/g, ''));
+              if (ai === -1 && bi === -1) return 0;
+              if (ai === -1) return 1;
+              if (bi === -1) return -1;
+              return ai - bi;
+            });
+            
+            return sorted.slice(0, 5).map((key, i) => ({
+              id: key,
+              label: key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+              type: typeof firstApp.data[key] === 'number' ? 'number' : 'text',
+              order: i,
+            }));
+          })();
+
+          // Safe string conversion for display
+          const safeStr = (val: any): string => {
+            if (val === null || val === undefined) return '—';
+            if (typeof val === 'string') return val;
+            if (typeof val === 'number') return String(val);
+            if (Array.isArray(val)) return val.filter(v => typeof v === 'string' || typeof v === 'number').join(', ');
+            return '—';
+          };
+
+          // Client-side search filter
+          const displayApps = appSearchQuery
+            ? applications.filter((app: any) => {
+                const q = appSearchQuery.toLowerCase();
+                const data = app.data || {};
+                return Object.values(data).some(v => {
+                  const s = safeStr(v);
+                  return s !== '—' && s.toLowerCase().includes(q);
+                });
+              })
+            : applications;
+
+          // Helper to get field value from app.data
+          const getFieldValue = (app: any, field: any) => {
+            const keys = [
+              field.id,
+              field.label?.toLowerCase().replace(/\s+/g, '_'),
+              field.label?.toLowerCase().replace(/\s+/g, ''),
+              field.label,
+            ];
+            for (const key of keys) {
+              if (key && app.data?.[key] !== undefined) {
+                return safeStr(app.data[key]);
+              }
+            }
+            return '—';
+          };
+
+          return (
           <div className="p-8 h-full overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-800">Student Applications</h3>
+            {/* Header */}
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xl font-bold text-slate-800">Student Applications</h3>
+                <span className="bg-slate-100 text-slate-600 text-sm px-2.5 py-1 rounded-full font-medium">{appTotal}</span>
+              </div>
               <button
-                onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/export/applications`, '_blank')}
+                onClick={() => window.open(`${apiBase}/drives/${driveId}/export/applications`, '_blank')}
                 className="inline-flex items-center gap-2 px-4 py-2 border border-indigo-300 text-indigo-600 font-bold text-sm rounded-lg hover:bg-indigo-50 transition-colors"
               >
                 <Download size={16} /> Download XLSX
               </button>
             </div>
 
-            {/* Status Filter Chips */}
-            <div className="flex gap-2 mb-6">
+            {/* Filter Chips */}
+            <div className="flex gap-2 mb-4">
               {['all', 'applied', 'shortlisted', 'attended', 'selected'].map(status => (
                 <button
                   key={status}
                   onClick={() => setAppStatusFilter(status)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-bold transition-colors border ${
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all capitalize ${
                     appStatusFilter === status
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-300'
                   }`}
                 >
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                  {status === 'all' ? `All (${appTotal})` : status}
                 </button>
               ))}
             </div>
 
-            {filteredApplications.length === 0 ? (
-              <div className="text-center py-20 px-6 max-w-md mx-auto border border-slate-200 border-dashed rounded-2xl bg-white mt-4">
-                <div className="w-20 h-20 bg-indigo-50 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <FileText size={40} />
-                </div>
-                <h3 className="text-xl font-black text-slate-800 mb-2">
-                  {applications.length === 0 ? 'No Applications Yet' : 'No Matches Found'}
-                </h3>
-                <p className="text-slate-500 font-medium tracking-wide leading-relaxed">
-                  {applications.length === 0 
-                    ? 'Share the placement form link with students to start collecting applications.'
-                    : 'Try adjusting your status filter. No applications match the current criteria.'}
-                </p>
-              </div>
-            ) : (
-              <div className="bg-white border text-sm border-slate-200 rounded-xl overflow-hidden">
-                 <table className="w-full text-left border-collapse">
-                   <thead>
-                     <tr className="bg-slate-50 border-b border-slate-200">
-                       <th className="px-5 py-3 font-bold text-slate-600">Photo</th>
-                       <th className="px-5 py-3 font-bold text-slate-600">Candidate</th>
-                       <th className="px-5 py-3 font-bold text-slate-600">USN & Branch</th>
-                       <th className="px-5 py-3 font-bold text-slate-600">CGPA</th>
-                       <th className="px-5 py-3 font-bold text-slate-600">Status</th>
-                       <th className="px-5 py-3 font-bold text-slate-600">Resume</th>
-                     </tr>
-                   </thead>
-                   <tbody>
-                      {filteredApplications.map(app => {
-                        const fullName = app.data?.fullName || app.data?.['Full Name'] || app.data?.['Name'] || 'N/A';
-                        const usn = app.data?.usn || app.data?.['USN'] || app.data?.['Roll Number'] || 'N/A';
-                        const branch = app.data?.branch || app.data?.['Branch'] || app.data?.['Department'] || 'N/A';
-                        const cgpa = app.data?.cgpa || app.data?.['CGPA'] || 'N/A';
-                        const initials = fullName !== 'N/A' ? fullName.split(' ').map((n: string) => n[0]).join('').slice(0,2).toUpperCase() : 'NA';
-                        return (
-                          <tr key={app._id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                            <td className="px-5 py-3">
-                              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-black overflow-hidden">
-                                <img
-                                  src={`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/applications/${app._id}/photo`}
-                                  alt=""
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.textContent = initials; }}
-                                />
+            {/* Search Bar */}
+            <div className="relative mb-4">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+              <input
+                value={appSearchQuery}
+                onChange={e => setAppSearchQuery(e.target.value)}
+                placeholder="Search by name, USN, email..."
+                className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"/>
+            </div>
+
+            {/* Dynamic Table */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide w-8">#</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide min-w-[12rem]">Candidate</th>
+                      {tableFields.map((field: any) => (
+                        <th key={field.id} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{field.label}</th>
+                      ))}
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Applied</th>
+                      <th className="w-10 px-4 py-3"/>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {appLoading ? (
+                      [...Array(5)].map((_, i) => (
+                        <tr key={i}>
+                          <td className="px-4 py-3"><div className="h-4 w-4 bg-slate-200 rounded animate-pulse"/></td>
+                          <td className="px-4 py-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-slate-200 animate-pulse"/><div className="space-y-1.5"><div className="h-3.5 w-28 bg-slate-200 rounded animate-pulse"/><div className="h-3 w-20 bg-slate-200 rounded animate-pulse"/></div></div></td>
+                          {tableFields.map((f: any) => <td key={f.id} className="px-4 py-3"><div className="h-3.5 w-16 bg-slate-200 rounded animate-pulse"/></td>)}
+                          <td className="px-4 py-3"><div className="h-6 w-20 rounded-full bg-slate-200 animate-pulse"/></td>
+                          <td className="px-4 py-3"><div className="h-3.5 w-16 bg-slate-200 rounded animate-pulse"/></td>
+                          <td/>
+                        </tr>
+                      ))
+                    ) : displayApps.length === 0 ? (
+                      <tr>
+                        <td colSpan={tableFields.length + 5} className="px-4 py-16 text-center">
+                          <div className="text-4xl mb-3">📭</div>
+                          <p className="text-slate-500 font-medium">{applications.length === 0 ? 'No Applications Yet' : 'No Matches Found'}</p>
+                          <p className="text-slate-400 text-sm mt-1">{applications.length === 0 ? 'Share the form link to start collecting applications' : 'Try adjusting your search or status filter'}</p>
+                        </td>
+                      </tr>
+                    ) : displayApps.map((app: any, index: number) => {
+                      const fullName = app.data?.name || app.data?.fullName || app.data?.['Full Name'] || app.data?.['Name'] || 'Unknown';
+                      const initials = fullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+                      return (
+                        <tr key={app._id}
+                          onClick={() => { setSelectedApp(app); setShowDetailDrawer(true); }}
+                          className="hover:bg-indigo-50/40 cursor-pointer transition-colors group">
+                          <td className="px-4 py-3 text-sm text-slate-400">{index + 1}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              {app.hasPhoto ? (
+                                <img src={app.photoUrl?.startsWith('/') ? `${apiBase}${app.photoUrl.replace('/api/v1', '')}` : `${apiBase}/drives/${driveId}/applications/${app._id}/photo`}
+                                  alt={fullName}
+                                  className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}/>
+                              ) : null}
+                              <div className={`w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 text-sm font-bold flex items-center justify-center flex-shrink-0 ${app.hasPhoto ? 'hidden' : ''}`}>{initials}</div>
+                              <div>
+                                <div className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors">{fullName}</div>
+                                <div className="text-xs text-slate-400">{app.referenceNumber || app._id?.toString().slice(-8).toUpperCase()}</div>
                               </div>
-                            </td>
-                            <td className="px-5 py-3 font-bold text-slate-800">{fullName}</td>
-                            <td className="px-5 py-3 font-medium text-slate-600">{usn} - {branch}</td>
-                            <td className="px-5 py-3 font-bold text-slate-700">{cgpa}</td>
-                            <td className="px-5 py-3">
-                              <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
-                                app.status === 'shortlisted' ? 'bg-green-100 text-green-700' :
-                                app.status === 'selected' ? 'bg-emerald-100 text-emerald-700' :
-                                app.status === 'attended' ? 'bg-blue-100 text-blue-700' :
-                                'bg-indigo-100 text-indigo-700'
-                              }`}>{app.status}</span>
-                            </td>
-                            <td className="px-5 py-3">
-                              <a
-                                href={`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/applications/${app._id}/resume`}
-                                target="_blank" rel="noreferrer"
-                                className="text-indigo-600 font-bold text-sm hover:underline"
-                              >View Resume</a>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                   </tbody>
-                 </table>
+                            </div>
+                          </td>
+                          {tableFields.map((field: any) => {
+                            const value = getFieldValue(app, field);
+                            const isCgpa = field.type === 'number' && field.label.toLowerCase().includes('cgpa');
+                            return (
+                              <td key={field.id} className="px-4 py-3 text-sm text-slate-700 max-w-[8rem] truncate">
+                                {isCgpa ? (
+                                  <span className={`font-semibold ${parseFloat(value) >= 8 ? 'text-green-600' : parseFloat(value) >= 6 ? 'text-amber-600' : 'text-red-500'}`}>{value}</span>
+                                ) : (
+                                  <span title={String(value)}>{String(value).length > 20 ? String(value).slice(0,20) + '...' : value}</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                          <td className="px-4 py-3">
+                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
+                              app.status === 'selected' ? 'bg-green-100 text-green-700'
+                              : app.status === 'shortlisted' ? 'bg-indigo-100 text-indigo-700'
+                              : app.status === 'attended' ? 'bg-purple-100 text-purple-700'
+                              : 'bg-slate-100 text-slate-600'
+                            }`}>{app.status}</span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
+                            {app.submittedAt ? new Date(app.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                          </td>
+                          <td className="px-4 py-3"><ChevronRight size={16} className="text-slate-300 group-hover:text-indigo-500 transition-colors"/></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            )}
+            </div>
+
+            {/* ── Candidate Detail Drawer ── */}
+            {showDetailDrawer && selectedApp && (() => {
+              const app = selectedApp;
+              const dataFields = formFields.filter((f: any) => f.type !== 'file_pdf' && f.type !== 'file_image');
+              const drawerName = app.data?.name || app.data?.fullName || app.data?.['Full Name'] || app.data?.['Name'] || 'Unknown';
+              const drawerInitials = drawerName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+
+              return (
+                <>
+                  <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={() => { setShowDetailDrawer(false); setSelectedApp(null); }}/>
+                  <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white z-50 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+                    {/* Header */}
+                    <div className="flex items-center gap-4 p-6 border-b border-slate-100">
+                      <div className="relative flex-shrink-0">
+                        {app.hasPhoto ? (
+                          <img src={`${apiBase}/drives/${driveId}/applications/${app._id}/photo`} alt={drawerName}
+                            className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-100 shadow-sm"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}/>
+                        ) : (
+                          <div className="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-700 text-2xl font-bold flex items-center justify-center">{drawerInitials}</div>
+                        )}
+                        <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
+                          app.status === 'selected' ? 'bg-green-500' : app.status === 'shortlisted' ? 'bg-indigo-500' : 'bg-slate-400'
+                        }`}/>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h2 className="text-lg font-bold text-slate-800 truncate">{drawerName}</h2>
+                        <p className="text-sm text-slate-500">{app.referenceNumber || 'REF: ' + app._id?.toString().slice(-8).toUpperCase()}</p>
+                        <span className={`inline-flex mt-1 text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
+                          app.status === 'selected' ? 'bg-green-100 text-green-700'
+                          : app.status === 'shortlisted' ? 'bg-indigo-100 text-indigo-700'
+                          : app.status === 'attended' ? 'bg-purple-100 text-purple-700'
+                          : 'bg-slate-100 text-slate-600'
+                        }`}>{app.status}</span>
+                      </div>
+                      <button onClick={() => { setShowDetailDrawer(false); setSelectedApp(null); }}
+                        className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
+                        <X size={20}/>
+                      </button>
+                    </div>
+
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                      {/* Documents */}
+                      {(app.hasResume || app.hasPhoto) && (
+                        <div>
+                          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Documents</h3>
+                          <div className="grid grid-cols-2 gap-3">
+                            {app.hasResume && (
+                              <a href={`${apiBase}/drives/${driveId}/applications/${app._id}/resume`} target="_blank" rel="noreferrer"
+                                className="flex items-center gap-3 p-4 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors group/doc">
+                                <div className="w-10 h-10 bg-red-100 group-hover/doc:bg-red-200 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"><FileText size={20} className="text-red-600"/></div>
+                                <div><div className="text-sm font-semibold text-red-700">Resume</div><div className="text-xs text-red-500">Click to view PDF</div></div>
+                              </a>
+                            )}
+                            {app.hasPhoto && (
+                              <a href={`${apiBase}/drives/${driveId}/applications/${app._id}/photo`} target="_blank" rel="noreferrer"
+                                className="flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors group/doc">
+                                <div className="w-10 h-10 bg-blue-100 group-hover/doc:bg-blue-200 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"><ImageIcon size={20} className="text-blue-600"/></div>
+                                <div><div className="text-sm font-semibold text-blue-700">Photo</div><div className="text-xs text-blue-500">Click to view</div></div>
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* All Form Fields */}
+                      <div>
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Application Details</h3>
+                        <div className="bg-slate-50 rounded-xl divide-y divide-slate-200 overflow-hidden border border-slate-200">
+                          {dataFields.length > 0 ? (
+                            dataFields.map((field: any) => {
+                              const val = getFieldValue(app, field);
+                              if (val === '—' || val === null || val === '') return null;
+                              const isCgpa = field.type === 'number' && field.label.toLowerCase().includes('cgpa');
+                              return (
+                                <div key={field.id} className="flex items-start gap-4 px-4 py-3">
+                                  <div className="text-xs text-slate-500 w-32 flex-shrink-0 pt-0.5 font-medium leading-relaxed">{field.label}</div>
+                                  <div className="flex-1 text-sm text-slate-800 font-medium break-words">
+                                    {isCgpa ? (
+                                      <span className={`font-bold ${parseFloat(val) >= 8 ? 'text-green-600' : parseFloat(val) >= 6 ? 'text-amber-600' : 'text-red-500'}`}>{val} / 10</span>
+                                    ) : field.type === 'email' ? (
+                                      <a href={`mailto:${val}`} className="text-indigo-600 hover:underline">{val}</a>
+                                    ) : field.type === 'phone' ? (
+                                      <a href={`tel:${val}`} className="text-indigo-600 hover:underline">{val}</a>
+                                    ) : Array.isArray(val) ? (
+                                      <div className="flex flex-wrap gap-1">{val.map((v: string) => <span key={v} className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full">{v}</span>)}</div>
+                                    ) : String(val)}
+                                  </div>
+                                </div>
+                              );
+                            }).filter(Boolean)
+                          ) : (
+                            Object.entries(app.data || {})
+                              .filter(([, value]) => {
+                                // Skip non-displayable values (FileList, objects, etc.)
+                                return typeof value === 'string' || typeof value === 'number' || (Array.isArray(value) && value.every(v => typeof v === 'string' || typeof v === 'number'));
+                              })
+                              .map(([key, value]) => (
+                              <div key={key} className="flex items-start gap-4 px-4 py-3">
+                                <div className="text-xs text-slate-500 w-32 flex-shrink-0 pt-0.5 font-medium capitalize">{key.replace(/_/g, ' ')}</div>
+                                <div className="flex-1 text-sm text-slate-800 font-medium">{safeStr(value)}</div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Submission Info */}
+                      <div>
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Submission Info</h3>
+                        <div className="bg-slate-50 rounded-xl divide-y divide-slate-200 overflow-hidden border border-slate-200">
+                          <div className="flex items-center gap-4 px-4 py-3">
+                            <div className="text-xs text-slate-500 w-32 font-medium">Reference</div>
+                            <div className="text-sm font-mono font-bold text-indigo-600">{app.referenceNumber || '—'}</div>
+                          </div>
+                          <div className="flex items-center gap-4 px-4 py-3">
+                            <div className="text-xs text-slate-500 w-32 font-medium">Submitted</div>
+                            <div className="text-sm text-slate-800">{app.submittedAt ? new Date(app.submittedAt).toLocaleString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</div>
+                          </div>
+                          {app.attendedAt && (
+                            <div className="flex items-center gap-4 px-4 py-3">
+                              <div className="text-xs text-slate-500 w-32 font-medium">Checked In</div>
+                              <div className="text-sm text-slate-800">{new Date(app.attendedAt).toLocaleString('en-IN')}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer Actions */}
+                    <div className="border-t border-slate-100 p-4 flex gap-3 bg-white">
+                      {app.hasResume && (
+                        <a href={`${apiBase}/drives/${driveId}/applications/${app._id}/resume`} target="_blank" rel="noreferrer"
+                          className="flex-1 flex items-center justify-center gap-2 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl py-2.5 text-sm font-medium transition-colors">
+                          <Download size={15}/> Download Resume
+                        </a>
+                      )}
+                      {app.status === 'applied' && (
+                        <button
+                          onClick={() => {
+                            api.patch(`/drives/${driveId}/applications/${app._id}/status`, { status: 'shortlisted' })
+                              .then(() => { toast.success('Marked as shortlisted'); fetchApplications(); setShowDetailDrawer(false); setSelectedApp(null); })
+                              .catch(() => toast.error('Failed to update status'));
+                          }}
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm font-medium transition-colors">
+                          Shortlist Candidate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
-        )}
+          );
+        })()}
 
         {activeTab === 'Shortlist' && (
           <div className="p-8 h-full overflow-y-auto w-full max-w-5xl mx-auto">
