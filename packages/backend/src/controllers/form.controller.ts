@@ -77,17 +77,20 @@ export const submitApplication = async (req: Request, res: Response) => {
   try {
     const { formToken } = req.params;
     const drive = await DriveModel.findOne({ formToken });
-    if (!drive || drive.status !== 'active') {
-      return res.status(403).json({ success: false, error: 'Form is inactive' });
+    if (!drive) {
+      return res.status(404).json({ success: false, error: 'Form not found' });
     }
 
-    const now = new Date();
+    // Check form status — allow submissions as long as the form is open,
+    // regardless of drive lifecycle stage (active, event_day, etc.)
     if (drive.formStatus === 'not_configured') {
       return res.status(403).json({ success: false, error: 'This form is not yet open for applications.' });
     }
     if (drive.formStatus === 'closed') {
       return res.status(403).json({ success: false, error: 'This form has been closed. Applications are no longer being accepted.' });
     }
+
+    const now = new Date();
     if (drive.formCloseDate && now > new Date(drive.formCloseDate)) {
       await DriveModel.findByIdAndUpdate(drive._id, { formStatus: 'closed' });
       return res.status(403).json({ success: false, error: `Applications closed on ${new Date(drive.formCloseDate).toLocaleDateString()}. This form is no longer accepting submissions.` });
