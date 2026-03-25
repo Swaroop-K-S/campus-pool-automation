@@ -1064,7 +1064,23 @@ export default function DriveDetailPage() {
                         </td>
                       </tr>
                     ) : displayApps.map((app: any, index: number) => {
-                      const fullName = app.data?.name || app.data?.fullName || app.data?.['Full Name'] || app.data?.['Name'] || 'Unknown';
+                      const nameKeys = Object.keys(app.data || {});
+                      const nameKey = nameKeys.find(k => k.toLowerCase() === 'fullname') || nameKeys.find(k => k.toLowerCase() === 'full_name') || nameKeys.find(k => k.toLowerCase() === 'name') || nameKeys.find(k => k.toLowerCase().includes('name') && !k.toLowerCase().includes('email'));
+                      let fullName = (nameKey ? app.data[nameKey] : null);
+                      // Handle legacy nested data: {Full: {Name: "abc"}} from old submissions where spaces caused nesting
+                      if (!fullName || typeof fullName === 'object') {
+                        const nested = nameKeys.reduce((acc: string, k: string) => {
+                          if (acc) return acc;
+                          const v = app.data[k];
+                          if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+                            const innerKey = Object.keys(v).find(ik => ik.toLowerCase().includes('name'));
+                            if (innerKey && typeof v[innerKey] === 'string') return v[innerKey];
+                          }
+                          return acc;
+                        }, '');
+                        fullName = nested || fullName || 'Unknown';
+                      }
+                      if (typeof fullName !== 'string') fullName = 'Unknown';
                       const initials = fullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
                       return (
                         <tr key={app._id}
@@ -1123,7 +1139,22 @@ export default function DriveDetailPage() {
             {showDetailDrawer && selectedApp && (() => {
               const app = selectedApp;
               const dataFields = formFields.filter((f: any) => f.type !== 'file_pdf' && f.type !== 'file_image');
-              const drawerName = app.data?.name || app.data?.fullName || app.data?.['Full Name'] || app.data?.['Name'] || 'Unknown';
+              const dNameKeys = Object.keys(app.data || {});
+              const dNameKey = dNameKeys.find(k => k.toLowerCase() === 'fullname') || dNameKeys.find(k => k.toLowerCase() === 'full_name') || dNameKeys.find(k => k.toLowerCase() === 'name') || dNameKeys.find(k => k.toLowerCase().includes('name') && !k.toLowerCase().includes('email'));
+              let drawerName = (dNameKey ? app.data[dNameKey] : null);
+              if (!drawerName || typeof drawerName === 'object') {
+                const nested = dNameKeys.reduce((acc: string, k: string) => {
+                  if (acc) return acc;
+                  const v = app.data[k];
+                  if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+                    const innerKey = Object.keys(v).find(ik => ik.toLowerCase().includes('name'));
+                    if (innerKey && typeof v[innerKey] === 'string') return v[innerKey];
+                  }
+                  return acc;
+                }, '');
+                drawerName = nested || drawerName || 'Unknown';
+              }
+              if (typeof drawerName !== 'string') drawerName = 'Unknown';
               const drawerInitials = drawerName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
 
               return (

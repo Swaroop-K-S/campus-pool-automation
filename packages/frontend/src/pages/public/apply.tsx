@@ -49,7 +49,7 @@ export default function PublicApplyPage() {
       const formData = new FormData();
       Object.keys(data).forEach(key => {
         const fieldConfig = config?.fields.find((f: { id: string, label: string, type: string }) => f.id === key);
-        let submitKey = fieldConfig ? fieldConfig.label : key;
+        let submitKey = fieldConfig ? fieldConfig.label.replace(/\s+/g, '_') : key;
 
         if (fieldConfig?.type === 'file') {
            const fileList = data[key] as FileList;
@@ -183,6 +183,7 @@ export default function PublicApplyPage() {
                 {['text', 'number', 'email', 'phone'].includes(field.type) && (
                   <input
                     type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
+                    step={field.type === 'number' ? 'any' : undefined}
                     placeholder={field.placeholder || ''}
                     {...register(field.id, { required: field.required })}
                     className={`w-full border rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors ${errors[field.id] ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
