@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ArrowLeft, ArrowRight, Check, X, FileText, Monitor, Users, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, X, FileText, Monitor, Users, CheckCircle, GraduationCap, BookOpen, Award } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -30,7 +30,13 @@ export default function NewDriveWizard() {
   const [locations, setLocations] = useState<string[]>([]);
   const [locInput, setLocInput] = useState('');
   
-  const [eligibility, setEligibility] = useState({ cgpa: 6.5, branches: [...BRANCH_OPTIONS] });
+  const [eligibility, setEligibility] = useState({
+    cgpa: 6.5,
+    branches: [...BRANCH_OPTIONS],
+    tenth: { required: false, minPercentage: 60 },
+    twelfth: { required: false, minPercentage: 60 },
+    diploma: { required: false, minCGPA: 6.0 }
+  });
   const [selectedRounds, setSelectedRounds] = useState<string[]>([]);
 
   const { register, formState: { errors }, trigger, getValues } = useForm({
@@ -85,7 +91,10 @@ export default function NewDriveWizard() {
         description: 'New CampusPool Drive',
         eligibilityCriteria: {
           minCgpa: eligibility.cgpa,
-          allowedBranches: eligibility.branches
+          allowedBranches: eligibility.branches,
+          tenth: eligibility.tenth,
+          twelfth: eligibility.twelfth,
+          diploma: eligibility.diploma
         },
         rounds: selectedRounds.map(r => ({ type: r, name: r }))
       };
@@ -177,26 +186,118 @@ export default function NewDriveWizard() {
 
         {step === 2 && (
           <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
-            <h2 className="text-2xl font-black text-slate-800 mb-8">Eligibility Criteria</h2>
-            
-            <div className="mb-10 bg-slate-50 p-6 rounded-2xl border border-slate-200">
-              <label className="flex justify-between items-center mb-4">
-                <span className="text-sm font-bold text-slate-700">Minimum CGPA Required</span>
-                <span className="text-xl font-black text-indigo-600 bg-indigo-50 px-4 py-1.5 rounded-lg border border-indigo-100">{eligibility.cgpa.toFixed(1)} / 10.0</span>
-              </label>
-              <input 
-                type="range" min="5.0" max="10.0" step="0.1" 
-                value={eligibility.cgpa}
-                onChange={e => setEligibility({...eligibility, cgpa: parseFloat(e.target.value)})}
-                className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-              />
-              <div className="flex justify-between text-sm text-slate-600 mt-2">
-                <span>5.0</span>
-                <span className="font-bold text-indigo-600 text-base">{eligibility.cgpa.toFixed(1)} / 10.0</span>
-                <span>10.0</span>
+            <h2 className="text-2xl font-black text-slate-800 mb-2">Eligibility Criteria</h2>
+            <p className="text-slate-500 text-sm mb-8">Set minimum score requirements. Check the boxes to enable each criterion.</p>
+
+            {/* Graduation CGPA */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center"><GraduationCap size={16} className="text-indigo-600"/></div>
+                <div><h3 className="font-semibold text-slate-800 text-sm">Graduation CGPA</h3><p className="text-slate-400 text-xs">Current degree / B.E / B.Tech</p></div>
+                <span className="ml-auto text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-medium">Required</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-slate-500 text-sm w-8">5.0</span>
+                <input type="range" min="5" max="10" step="0.1" value={eligibility.cgpa} onChange={e => setEligibility({...eligibility, cgpa: parseFloat(e.target.value)})} className="flex-1 accent-indigo-600 h-2 cursor-pointer"/>
+                <span className="text-slate-500 text-sm w-8">10.0</span>
+              </div>
+              <div className="text-center mt-2">
+                <span className="text-2xl font-bold text-indigo-600">{eligibility.cgpa.toFixed(1)}</span>
+                <span className="text-slate-400 text-sm"> / 10.0 minimum</span>
               </div>
             </div>
 
+            {/* 10th Standard */}
+            <div className={`bg-white rounded-2xl border-2 transition-all mb-4 ${eligibility.tenth.required ? 'border-indigo-300 shadow-sm shadow-indigo-50' : 'border-slate-200'}`}>
+              <div className="flex items-center gap-3 p-5 cursor-pointer" onClick={() => setEligibility({...eligibility, tenth: {...eligibility.tenth, required: !eligibility.tenth.required}})}>
+                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${eligibility.tenth.required ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>
+                  {eligibility.tenth.required && <Check size={12} className="text-white" strokeWidth={3}/>}
+                </div>
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><BookOpen size={16} className="text-blue-600"/></div>
+                  <div><h3 className="font-semibold text-slate-800 text-sm">10th Standard</h3><p className="text-slate-400 text-xs">SSC / Matriculation percentage</p></div>
+                </div>
+                {eligibility.tenth.required && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">Enabled</span>}
+              </div>
+              {eligibility.tenth.required && (
+                <div className="px-5 pb-5 border-t border-slate-100 pt-4">
+                  <label className="text-sm font-medium text-slate-700 block mb-3">Minimum Percentage Required</label>
+                  <div className="flex items-center gap-4">
+                    <span className="text-slate-500 text-sm w-6">0%</span>
+                    <input type="range" min="0" max="100" step="1" value={eligibility.tenth.minPercentage} onChange={e => setEligibility({...eligibility, tenth: {...eligibility.tenth, minPercentage: parseInt(e.target.value)}})} className="flex-1 accent-blue-600 h-2 cursor-pointer"/>
+                    <span className="text-slate-500 text-sm w-10">100%</span>
+                  </div>
+                  <div className="text-center mt-2"><span className="text-2xl font-bold text-blue-600">{eligibility.tenth.minPercentage}%</span><span className="text-slate-400 text-sm"> minimum</span></div>
+                  <div className="mt-3 flex items-center gap-3"><div className="flex-1 h-px bg-slate-200"/><span className="text-xs text-slate-400">or type directly</span><div className="flex-1 h-px bg-slate-200"/></div>
+                  <div className="mt-3 relative">
+                    <input type="number" min="0" max="100" value={eligibility.tenth.minPercentage} onChange={e => setEligibility({...eligibility, tenth: {...eligibility.tenth, minPercentage: Math.min(100, Math.max(0, parseInt(e.target.value) || 0))}})} className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50"/>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">%</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 12th Standard */}
+            <div className={`bg-white rounded-2xl border-2 transition-all mb-4 ${eligibility.twelfth.required ? 'border-indigo-300 shadow-sm shadow-indigo-50' : 'border-slate-200'}`}>
+              <div className="flex items-center gap-3 p-5 cursor-pointer" onClick={() => setEligibility({...eligibility, twelfth: {...eligibility.twelfth, required: !eligibility.twelfth.required}})}>
+                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${eligibility.twelfth.required ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>
+                  {eligibility.twelfth.required && <Check size={12} className="text-white" strokeWidth={3}/>}
+                </div>
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center"><BookOpen size={16} className="text-purple-600"/></div>
+                  <div><h3 className="font-semibold text-slate-800 text-sm">12th Standard</h3><p className="text-slate-400 text-xs">HSC / PUC / Intermediate percentage</p></div>
+                </div>
+                {eligibility.twelfth.required && <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-medium">Enabled</span>}
+              </div>
+              {eligibility.twelfth.required && (
+                <div className="px-5 pb-5 border-t border-slate-100 pt-4">
+                  <label className="text-sm font-medium text-slate-700 block mb-3">Minimum Percentage Required</label>
+                  <div className="flex items-center gap-4">
+                    <span className="text-slate-500 text-sm w-6">0%</span>
+                    <input type="range" min="0" max="100" step="1" value={eligibility.twelfth.minPercentage} onChange={e => setEligibility({...eligibility, twelfth: {...eligibility.twelfth, minPercentage: parseInt(e.target.value)}})} className="flex-1 accent-purple-600 h-2 cursor-pointer"/>
+                    <span className="text-slate-500 text-sm w-10">100%</span>
+                  </div>
+                  <div className="text-center mt-2"><span className="text-2xl font-bold text-purple-600">{eligibility.twelfth.minPercentage}%</span><span className="text-slate-400 text-sm"> minimum</span></div>
+                  <div className="mt-3 flex items-center gap-3"><div className="flex-1 h-px bg-slate-200"/><span className="text-xs text-slate-400">or type directly</span><div className="flex-1 h-px bg-slate-200"/></div>
+                  <div className="mt-3 relative">
+                    <input type="number" min="0" max="100" value={eligibility.twelfth.minPercentage} onChange={e => setEligibility({...eligibility, twelfth: {...eligibility.twelfth, minPercentage: Math.min(100, Math.max(0, parseInt(e.target.value) || 0))}})} className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-50"/>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">%</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Diploma */}
+            <div className={`bg-white rounded-2xl border-2 transition-all mb-6 ${eligibility.diploma.required ? 'border-indigo-300 shadow-sm shadow-indigo-50' : 'border-slate-200'}`}>
+              <div className="flex items-center gap-3 p-5 cursor-pointer" onClick={() => setEligibility({...eligibility, diploma: {...eligibility.diploma, required: !eligibility.diploma.required}})}>
+                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${eligibility.diploma.required ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>
+                  {eligibility.diploma.required && <Check size={12} className="text-white" strokeWidth={3}/>}
+                </div>
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center"><Award size={16} className="text-amber-600"/></div>
+                  <div><h3 className="font-semibold text-slate-800 text-sm">Diploma</h3><p className="text-slate-400 text-xs">Polytechnic / Diploma CGPA (for lateral entry students)</p></div>
+                </div>
+                {eligibility.diploma.required && <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-medium">Enabled</span>}
+              </div>
+              {eligibility.diploma.required && (
+                <div className="px-5 pb-5 border-t border-slate-100 pt-4">
+                  <label className="text-sm font-medium text-slate-700 block mb-3">Minimum CGPA Required</label>
+                  <div className="flex items-center gap-4">
+                    <span className="text-slate-500 text-sm w-6">0</span>
+                    <input type="range" min="0" max="10" step="0.1" value={eligibility.diploma.minCGPA} onChange={e => setEligibility({...eligibility, diploma: {...eligibility.diploma, minCGPA: parseFloat(e.target.value)}})} className="flex-1 accent-amber-500 h-2 cursor-pointer"/>
+                    <span className="text-slate-500 text-sm w-8">10.0</span>
+                  </div>
+                  <div className="text-center mt-2"><span className="text-2xl font-bold text-amber-600">{eligibility.diploma.minCGPA.toFixed(1)}</span><span className="text-slate-400 text-sm"> / 10.0 minimum</span></div>
+                  <div className="mt-3 flex items-center gap-3"><div className="flex-1 h-px bg-slate-200"/><span className="text-xs text-slate-400">or type directly</span><div className="flex-1 h-px bg-slate-200"/></div>
+                  <div className="mt-3 relative">
+                    <input type="number" min="0" max="10" step="0.1" value={eligibility.diploma.minCGPA} onChange={e => setEligibility({...eligibility, diploma: {...eligibility.diploma, minCGPA: Math.min(10, Math.max(0, parseFloat(e.target.value) || 0))}})} className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-16 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50"/>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">CGPA</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Eligible Branches */}
             <div>
               <div className="flex justify-between items-center mb-4">
                 <label className="block text-sm font-bold text-slate-700">Eligible Branches</label>
@@ -310,12 +411,33 @@ export default function NewDriveWizard() {
 
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                 <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Eligibility</h3>
-                <div className="flex items-center gap-8">
-                  <div>
-                    <span className="text-xs font-bold text-slate-400 uppercase">Min CGPA</span>
-                    <p className="font-bold text-slate-800 text-xl">{eligibility.cgpa.toFixed(1)}</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Min CGPA</span>
+                    <span className="font-medium text-slate-800">{eligibility.cgpa.toFixed(1)} / 10.0</span>
                   </div>
-                  <div className="flex-1">
+                  {eligibility.tenth.required && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>10th Percentage</span>
+                      <span className="font-medium text-slate-800">≥ {eligibility.tenth.minPercentage}%</span>
+                    </div>
+                  )}
+                  {eligibility.twelfth.required && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>12th Percentage</span>
+                      <span className="font-medium text-slate-800">≥ {eligibility.twelfth.minPercentage}%</span>
+                    </div>
+                  )}
+                  {eligibility.diploma.required && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>Diploma CGPA</span>
+                      <span className="font-medium text-slate-800">≥ {eligibility.diploma.minCGPA.toFixed(1)}</span>
+                    </div>
+                  )}
+                  {!eligibility.tenth.required && !eligibility.twelfth.required && !eligibility.diploma.required && (
+                    <div className="text-xs text-slate-400 italic">No 10th/12th/Diploma requirement set</div>
+                  )}
+                  <div className="mt-3 pt-3 border-t border-slate-200">
                     <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">Branches</span>
                     <div className="flex gap-1 flex-wrap">
                       {eligibility.branches.map(b => <span key={b} className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-bold">{b}</span>)}

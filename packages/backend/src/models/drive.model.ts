@@ -9,7 +9,19 @@ const driveSchema = new Schema({
   locations: [{ type: String }],
   eligibility: {
     minCGPA: { type: Number },
-    branches: [{ type: String }]
+    branches: [{ type: String }],
+    tenth: {
+      required: { type: Boolean, default: false },
+      minPercentage: { type: Number, default: 0 }
+    },
+    twelfth: {
+      required: { type: Boolean, default: false },
+      minPercentage: { type: Number, default: 0 }
+    },
+    diploma: {
+      required: { type: Boolean, default: false },
+      minCGPA: { type: Number, default: 0 }
+    }
   },
   rounds: [{
     type: { type: String, enum: Object.values(RoundTypeEnum.enum) },

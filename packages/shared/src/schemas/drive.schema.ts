@@ -11,7 +11,19 @@ export const DriveSchema = z.object({
   locations: z.array(z.string()).min(1, "At least one location is required"),
   eligibility: z.object({
     minCGPA: z.number().min(0).max(10),
-    branches: z.array(z.string()).min(1)
+    branches: z.array(z.string()).min(1),
+    tenth: z.object({
+      required: z.boolean(),
+      minPercentage: z.number().min(0).max(100)
+    }).optional(),
+    twelfth: z.object({
+      required: z.boolean(),
+      minPercentage: z.number().min(0).max(100)
+    }).optional(),
+    diploma: z.object({
+      required: z.boolean(),
+      minCGPA: z.number().min(0).max(10)
+    }).optional()
   }),
   rounds: z.array(z.object({
     type: RoundTypeEnum,
