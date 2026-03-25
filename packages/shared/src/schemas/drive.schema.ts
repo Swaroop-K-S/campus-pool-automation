@@ -26,9 +26,11 @@ export const DriveSchema = z.object({
     }).optional()
   }),
   rounds: z.array(z.object({
-    type: RoundTypeEnum,
+    type: z.string(),
+    label: z.string().optional(),
     order: z.number(),
-    status: RoundStatusEnum.default("pending")
+    status: z.enum(['pending', 'active', 'completed']).default("pending"),
+    isCustom: z.boolean().default(false)
   })),
   formToken: z.string().optional(),
   status: DriveStatusEnum.default("draft"),

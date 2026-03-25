@@ -24,9 +24,11 @@ const driveSchema = new Schema({
     }
   },
   rounds: [{
-    type: { type: String, enum: Object.values(RoundTypeEnum.enum) },
+    type: { type: String, required: true },
+    label: { type: String },
     order: { type: Number },
-    status: { type: String, enum: Object.values(RoundStatusEnum.enum), default: 'pending' }
+    status: { type: String, enum: ['pending', 'active', 'completed'], default: 'pending' },
+    isCustom: { type: Boolean, default: false }
   }],
   formToken: { type: String, unique: true, sparse: true },
   status: { type: String, enum: Object.values(DriveStatusEnum.enum), default: 'draft' },

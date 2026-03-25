@@ -633,16 +633,23 @@ export default function DriveDetailPage() {
                  </div>
               </div>
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                 <h3 className="font-bold text-lg text-slate-800 mb-4 border-b pb-2">Rounds</h3>
-                 <ol className="space-y-3">
+                 <div className="flex items-center justify-between mb-4 border-b pb-2">
+                   <h3 className="font-bold text-lg text-slate-800">Drive Rounds</h3>
+                 </div>
+                 <div className="space-y-2">
                    {drive.rounds?.map((r: any, idx: number) => (
-                     <li key={idx} className="flex items-center gap-3">
-                       <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold">{idx + 1}</span>
-                       <span className="font-bold text-slate-700 flex-1">{r.type.replace('_', ' ').toUpperCase()}</span>
-                       <span className={`text-xs px-2 py-1 rounded font-bold uppercase ${r.status === 'pending' ? 'bg-slate-100 text-slate-500' : 'bg-indigo-100 text-indigo-600'}`}>{r.status}</span>
-                     </li>
+                     <div key={idx} className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">
+                       <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 ${r.status === 'completed' ? 'bg-green-500 text-white' : r.status === 'active' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                         {r.status === 'completed' ? '✓' : (r.order || idx + 1)}
+                       </div>
+                       <span className="text-sm text-slate-700 flex-1 font-medium">{r.label || r.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
+                       {r.isCustom && <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded font-medium">Custom</span>}
+                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.status === 'completed' ? 'bg-green-100 text-green-700' : r.status === 'active' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
+                         {r.status === 'completed' ? 'Done' : r.status === 'active' ? '● Active' : 'Pending'}
+                       </span>
+                     </div>
                    ))}
-                 </ol>
+                 </div>
               </div>
             </div>
           </div>
