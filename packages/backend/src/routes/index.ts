@@ -6,10 +6,12 @@ import platformRoutes from './platform.routes';
 import formRoutes from './form.routes';
 import qrRoutes from './qr.routes';
 import applicationRoutes from './application.routes';
+import exportRoutes from './export.routes';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
+router.use('/', exportRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/drives', driveRoutes);
 router.use('/platform', platformRoutes);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, Users, UserCheck, Award } from 'lucide-react';
+import { DownloadButton } from '../../components/shared/DownloadButton';
 
 const COLORS = ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
@@ -115,6 +116,12 @@ export default function AnalyticsPage() {
       <div className="bg-white rounded-xl border border-slate-200">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <h3 className="text-lg font-bold text-slate-800">Drive History</h3>
+          <DownloadButton
+            url="/analytics/export/summary"
+            label="Download Full Report"
+            variant="primary"
+            size="sm"
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
