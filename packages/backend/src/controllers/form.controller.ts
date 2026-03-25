@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { DriveModel, FormFieldModel, ApplicationModel } from '../models';
 import { getGridFSBucket } from '../services/gridfs.service';
+import { generateUniqueDriveId } from '../utils/generate-drive-id';
+import { sendDriveIdEmail } from '../services/email.service';
 import mongoose from 'mongoose';
 import { env } from '../config/env';
 
@@ -120,6 +122,9 @@ export const submitApplication = async (req: Request, res: Response) => {
     const randomNum = Math.floor(10000 + Math.random() * 90000); 
     const referenceNumber = `CP-${currentYear}-${randomNum}`;
 
+    // Generate unique Drive Student ID
+    const driveStudentId = await generateUniqueDriveId(drive.companyName);
+
     const appData = { ...req.body };
     delete appData.resume;
     delete appData.photo;
@@ -142,8 +147,9 @@ export const submitApplication = async (req: Request, res: Response) => {
     const cgpaKey = keys.find(k => k.toLowerCase().includes('cgpa') || k.toLowerCase().includes('gpa'));
     if (cgpaKey && cgpaKey !== 'cgpa') { appData.cgpa = appData[cgpaKey]; delete appData[cgpaKey]; }
 
-    await ApplicationModel.create({
+    const application = await ApplicationModel.create({
       referenceNumber,
+      driveStudentId,
       driveId: drive._id,
       collegeId: drive.collegeId,
       data: appData,
@@ -153,7 +159,22 @@ export const submitApplication = async (req: Request, res: Response) => {
       submittedAt: new Date()
     });
 
-    return res.status(201).json({ success: true, data: { referenceNumber, message: 'Application submitted' } });
+    // Send Drive ID confirmation email (fire & forget)
+    const studentEmail = appData.email || appData.Email;
+    const studentName = appData.fullName || appData.name || 'Student';
+    if (studentEmail) {
+      sendDriveIdEmail(
+        studentEmail,
+        studentName,
+        driveStudentId,
+        drive.companyName,
+        drive.jobRole,
+        drive.eventDate || null,
+        (drive.collegeId || '').toString()
+      ).catch((err: any) => console.error('Drive ID email failed:', err));
+    }
+
+    return res.status(201).json({ success: true, data: { referenceNumber, driveStudentId, message: 'Application submitted' } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ success: false, error: message });

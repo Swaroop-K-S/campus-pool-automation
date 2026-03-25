@@ -9,6 +9,7 @@ const applicationSchema = new Schema({
   resumeFileId: { type: Schema.Types.ObjectId },
   photoFileId: { type: Schema.Types.ObjectId },
   status: { type: String, enum: Object.values(ApplicationStatusEnum.enum), default: 'applied' },
+  driveStudentId: { type: String, unique: true, sparse: true, index: true },
   currentRound: { type: String },
   attendedAt: { type: Date },
   submittedAt: { type: Date, default: Date.now }
@@ -24,6 +25,7 @@ applicationSchema.index({ driveId: 1, 'data.usn': 1 });
 applicationSchema.index({ status: 1 });
 applicationSchema.index({ collegeId: 1, status: 1 });
 applicationSchema.index({ referenceNumber: 1 });
+applicationSchema.index({ driveStudentId: 1 }, { unique: true, sparse: true });
 
 applicationSchema.virtual('isSelected').get(function() {
   return this.status === 'selected';

@@ -1098,7 +1098,11 @@ export default function DriveDetailPage() {
                               <div className={`w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 text-sm font-bold flex items-center justify-center flex-shrink-0 ${app.hasPhoto ? 'hidden' : ''}`}>{initials}</div>
                               <div>
                                 <div className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors">{fullName}</div>
-                                <div className="text-xs text-slate-400">{app.referenceNumber || app._id?.toString().slice(-8).toUpperCase()}</div>
+                                {app.driveStudentId ? (
+                                  <div className="text-xs font-mono text-indigo-500 font-semibold">{app.driveStudentId}</div>
+                                ) : (
+                                  <div className="text-xs text-slate-400">{app.referenceNumber || app._id?.toString().slice(-8).toUpperCase()}</div>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -1212,6 +1216,22 @@ export default function DriveDetailPage() {
                                 <div><div className="text-sm font-semibold text-blue-700">Photo</div><div className="text-xs text-blue-500">Click to view</div></div>
                               </a>
                             )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Drive Student ID */}
+                      {app.driveStudentId && (
+                        <div>
+                          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Drive ID</h3>
+                          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-center justify-between">
+                            <div className="text-lg font-black font-mono text-indigo-700 tracking-wider">{app.driveStudentId}</div>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(app.driveStudentId); toast.success('Drive ID copied!'); }}
+                              className="text-slate-400 hover:text-indigo-600 transition-colors p-1"
+                            >
+                              <Copy size={14} />
+                            </button>
                           </div>
                         </div>
                       )}

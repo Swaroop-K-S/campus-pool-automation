@@ -5,6 +5,7 @@ import { ApplicationStatusEnum } from '../types/enums';
 export const ApplicationSchema = z.object({
   _id: ObjectIdSchema.optional(),
   referenceNumber: z.string().optional(),
+  driveStudentId: z.string().optional(),
   driveId: ObjectIdSchema,
   collegeId: ObjectIdSchema,
   data: z.record(z.any()), // Dynamic object

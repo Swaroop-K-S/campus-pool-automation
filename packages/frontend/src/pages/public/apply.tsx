@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
-import { GraduationCap, FileText, CheckCircle, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { GraduationCap, FileText, CheckCircle, AlertTriangle, Image as ImageIcon, Copy, Check, Calendar } from 'lucide-react';
 
 interface FormFieldConfig {
   id: string;
@@ -20,6 +20,7 @@ export default function PublicApplyPage() {
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
   
   const [successData, setSuccessData] = useState<any>(null);
 
@@ -66,7 +67,11 @@ export default function PublicApplyPage() {
 
       const res = await api.post(`/form/${formToken}/submit`, formData);
       if ((res as any).success) {
-        setSuccessData({ referenceNumber: (res as any).data.referenceNumber, ...config });
+        setSuccessData({
+          referenceNumber: (res as any).data.referenceNumber,
+          driveStudentId: (res as any).data.driveStudentId,
+          ...config
+        });
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -99,22 +104,74 @@ export default function PublicApplyPage() {
 
   if (successData) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white px-8 py-12 rounded-2xl shadow-sm border border-slate-200 text-center animate-in slide-in-from-bottom-8 duration-500">
-           <div className="w-20 h-20 mx-auto bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6 animate-pulse">
-             <CheckCircle size={40} className="w-10 h-10" />
-           </div>
-           <h2 className="text-3xl font-black text-green-600 mb-4">Application Submitted!</h2>
-           <p className="text-slate-500 font-medium mb-6">Your application for {successData.jobRole} at <span className="font-bold text-slate-800">{successData.companyName}</span> has been securely received.</p>
-           
-           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Your Reference Number</p>
-           <div className="text-3xl font-mono font-black text-slate-800 bg-slate-100 border border-slate-200 py-4 px-6 rounded-xl inline-block mb-8 select-all">
-             {successData.referenceNumber}
-           </div>
-           
-           <p className="text-sm font-bold text-slate-500 bg-yellow-50 text-yellow-800 p-4 rounded-xl border border-yellow-200">
-             ⚠️ Please save this number for future reference. Good luck! 🎉
-           </p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+
+          {/* Success header */}
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle size={36} className="text-green-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-800">Application Submitted!</h1>
+            <p className="text-slate-500 mt-1">{successData.companyName} • {successData.jobRole}</p>
+          </div>
+
+          {/* DRIVE ID — Most prominent element */}
+          <div className="bg-white rounded-2xl border-2 border-indigo-200 p-6 mb-4 shadow-sm">
+            <div className="text-center mb-4">
+              <p className="text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-1">Your Event Day Drive ID</p>
+              <p className="text-xs text-slate-500 mb-3">You will need this to check in on event day</p>
+
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl py-5 px-6 mb-4">
+                <div className="text-4xl font-black text-indigo-700 tracking-widest font-mono select-all">
+                  {successData.driveStudentId}
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(successData.driveStudentId);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className={`flex items-center gap-2 mx-auto px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${copied ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'}`}
+              >
+                {copied ? <><Check size={15} /> Copied!</> : <><Copy size={15} /> Copy ID</>}
+              </button>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+              <AlertTriangle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+              <p className="text-amber-700 text-xs leading-relaxed">
+                <strong>Save this ID!</strong> Take a screenshot or note it down. You will be asked for this ID when you scan the QR code on event day. A copy has also been sent to your email.
+              </p>
+            </div>
+          </div>
+
+          {/* How to use on event day */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
+            <h3 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
+              <Calendar size={15} className="text-indigo-500" />
+              On Event Day
+            </h3>
+            <div className="space-y-2.5">
+              {[
+                { step: '1', text: 'Arrive at the venue' },
+                { step: '2', text: 'Find and scan the QR code displayed on screen' },
+                { step: '3', text: `Enter your Drive ID: ${successData.driveStudentId}` },
+                { step: '4', text: "You're checked in — your schedule appears!" }
+              ].map(item => (
+                <div key={item.step} className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {item.step}
+                  </div>
+                  <p className="text-sm text-slate-600">{item.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-center text-xs text-slate-400">Reference: {successData.referenceNumber}</p>
         </div>
       </div>
     );

@@ -38,75 +38,88 @@ export const stopQR = async (req: Request, res: Response): Promise<void> => {
 export const verifyStudent = async (req: Request, res: Response): Promise<void> => {
   try {
     const { driveId } = req.params;
-    const { token, name, email, phone } = req.body;
+    const { token, driveStudentId } = req.body;
 
-    if (!token || !email) {
-      res.status(400).json({ success: false, error: 'Token and email are required' });
+    if (!token || !driveStudentId) {
+      res.status(400).json({ success: false, error: 'Token and Drive ID are required', code: 'MISSING_FIELDS' });
       return;
     }
 
     // 1. Verify JWT token
-    let decoded: any;
     try {
-      decoded = verifyQRToken(token);
+      verifyQRToken(token);
     } catch {
       res.status(401).json({
         success: false,
-        error: 'QR code has expired. Please scan the latest QR code.',
+        error: 'QR code has expired. Please scan the latest QR code on screen.',
+        code: 'QR_EXPIRED',
         expired: true
       });
       return;
     }
 
-    if (decoded.driveId !== driveId) {
-      res.status(400).json({ success: false, error: 'Invalid QR code for this drive' });
+    // 2. Verify drive is in event_day status
+    const drive = await DriveModel.findById(driveId);
+    if (!drive) {
+      res.status(404).json({ success: false, error: 'Drive not found', code: 'DRIVE_NOT_FOUND' });
+      return;
+    }
+    if (drive.status === 'completed') {
+      res.status(403).json({ success: false, error: 'This drive has ended. Your ID is no longer valid.', code: 'DRIVE_ENDED' });
+      return;
+    }
+    if (drive.status !== 'event_day') {
+      res.status(400).json({ success: false, error: 'This drive is not currently in event day mode.', code: 'DRIVE_NOT_ACTIVE' });
       return;
     }
 
-    // 2. Find application
+    // 3. Find application by driveStudentId
     const application = await ApplicationModel.findOne({
-      driveId,
-      'data.email': email.toLowerCase().trim(),
-      status: { $in: ['shortlisted', 'invited', 'applied'] }
+      driveStudentId: driveStudentId.trim().toUpperCase(),
+      driveId
     });
 
     if (!application) {
-      // Check if already attended
-      const attended = await ApplicationModel.findOne({
-        driveId,
-        'data.email': email.toLowerCase().trim(),
-        status: 'attended'
-      });
+      res.status(404).json({ success: false, error: 'Invalid Drive ID. Please check your ID and try again.', code: 'INVALID_ID' });
+      return;
+    }
 
-      if (attended) {
-        res.status(409).json({
-          success: false,
-          error: 'You have already checked in!',
-          alreadyCheckedIn: true,
-          applicationId: attended._id
-        });
-        return;
-      }
+    const studentName = application.data?.fullName || application.data?.name || 'Student';
 
-      res.status(404).json({
-        success: false,
-        error: 'You are not registered for this drive'
+    // 4. Already checked in — return session anyway (idempotent)
+    if (application.status === 'attended' || application.attendedAt) {
+      const sessionToken = jwt.sign(
+        { applicationId: application._id, driveId },
+        env.JWT_ACCESS_SECRET,
+        { expiresIn: '8h' }
+      );
+      res.json({
+        success: true,
+        data: {
+          sessionToken,
+          applicationId: application._id,
+          studentName,
+          alreadyCheckedIn: true
+        }
       });
       return;
     }
 
-    // 3. Update application
+    // 5. Mark as attended
     application.status = 'attended' as any;
     application.attendedAt = new Date();
     await application.save();
 
-    // 4. Emit to drive room
-    const attendedCount = await ApplicationModel.countDocuments({ driveId, status: 'attended' });
+    // 6. Emit Socket.io
+    const attendedCount = await ApplicationModel.countDocuments({
+      driveId,
+      status: { $in: ['attended', 'selected'] }
+    });
     try {
-      getIO().to(`drive:${driveId}`).emit('student:verified', { count: attendedCount });
+      getIO().to(`drive:${driveId}`).emit('student:verified', { count: attendedCount, studentName });
     } catch {}
 
-    // 5. Generate session token (8h)
+    // 7. Generate session token (8h)
     const sessionToken = jwt.sign(
       { applicationId: application._id, driveId },
       env.JWT_ACCESS_SECRET,
@@ -118,7 +131,8 @@ export const verifyStudent = async (req: Request, res: Response): Promise<void> 
       data: {
         sessionToken,
         applicationId: application._id,
-        studentName: application.data?.fullName || application.data?.name || name
+        studentName,
+        alreadyCheckedIn: false
       }
     });
   } catch (error: any) {
