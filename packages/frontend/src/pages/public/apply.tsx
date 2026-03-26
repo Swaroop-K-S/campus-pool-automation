@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
-import { GraduationCap, FileText, CheckCircle, AlertTriangle, Image as ImageIcon, Copy, Check, Calendar } from 'lucide-react';
+import { GraduationCap, FileText, CheckCircle, AlertTriangle, Image as ImageIcon, Copy, Check, Calendar, Zap, Download } from 'lucide-react';
 
 interface FormFieldConfig {
   id: string;
@@ -12,6 +12,12 @@ interface FormFieldConfig {
   placeholder?: string;
   required: boolean;
   options?: string[];
+  validation?: {
+    pattern?: string;
+    customErrorMessage?: string;
+    minLength?: number;
+    maxLength?: number;
+  };
 }
 
 export default function PublicApplyPage() {
@@ -24,7 +30,53 @@ export default function PublicApplyPage() {
   
   const [successData, setSuccessData] = useState<any>(null);
 
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  const [ssoId, setSsoId] = useState('');
+  const [ssoLoading, setSsoLoading] = useState(false);
+
+  const { register, handleSubmit, formState: { errors }, trigger, setValue } = useForm();
+
+  const pages = useMemo(() => {
+    if (!config?.fields) return [];
+    
+    const result: { title: string, fields: FormFieldConfig[] }[] = [];
+    let currentFields: FormFieldConfig[] = [];
+    let currentTitle = 'Application Details';
+
+    config.fields.forEach((field: FormFieldConfig) => {
+      if (field.type === 'page_break') {
+        // Only push if there are fields, to avoid empty pages if multiple breaks are back-to-back
+        if (currentFields.length > 0) {
+          result.push({ title: currentTitle, fields: currentFields });
+          currentFields = [];
+        }
+        currentTitle = field.label || 'Next Step';
+      } else {
+        currentFields.push(field);
+      }
+    });
+
+    if (currentFields.length > 0 || result.length === 0) {
+      result.push({ title: currentTitle, fields: currentFields });
+    }
+
+    return result;
+  }, [config?.fields]);
+
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const handleNext = async () => {
+    const fieldsOnPage = pages[currentPage].fields.map(f => f.id);
+    const isValid = await trigger(fieldsOnPage);
+    if (isValid) {
+      setCurrentPage(prev => prev + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handlePrev = () => {
+    setCurrentPage(prev => Math.max(0, prev - 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     fetchForm();
@@ -83,6 +135,37 @@ export default function PublicApplyPage() {
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSSOFetch = async () => {
+    if (!ssoId.trim()) return;
+    setSsoLoading(true);
+    try {
+      const res = await api.get(`/sso/profile/${ssoId.trim()}`);
+      if ((res as any).success && (res as any).data) {
+        const profile = (res as any).data;
+        
+        // Auto-fill matched fields based on labels or common keys
+        config.fields.forEach((field: FormFieldConfig) => {
+          const label = field.label.toLowerCase();
+          
+          if (label.includes('name') && !label.includes('company')) setValue(field.id, profile.name, { shouldValidate: true });
+          else if (label.includes('usn') || label.includes('roll')) setValue(field.id, profile.usn, { shouldValidate: true });
+          else if (label.includes('email')) setValue(field.id, profile.email, { shouldValidate: true });
+          else if (label.includes('phone') || label.includes('mobile')) setValue(field.id, profile.phone, { shouldValidate: true });
+          else if (label.includes('branch') || label.includes('department')) setValue(field.id, profile.branch, { shouldValidate: true });
+          else if (label.includes('cgpa') || label.includes('gpa')) setValue(field.id, profile.cgpa, { shouldValidate: true });
+          else if (label.includes('linkedin')) setValue(field.id, profile.linkedin, { shouldValidate: true });
+          else if (label.includes('github')) setValue(field.id, profile.github, { shouldValidate: true });
+        });
+        
+        toast.success(`Profile auto-filled for ${profile.name}!`);
+      }
+    } catch (error) {
+      toast.error('Failed to find profile. Please enter your data manually.');
+    } finally {
+      setSsoLoading(false);
     }
   };
 
@@ -171,6 +254,11 @@ export default function PublicApplyPage() {
             </div>
           </div>
 
+          <button onClick={() => window.print()} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors mb-6 print:hidden">
+            <Download size={18} />
+            Download PDF Receipt
+          </button>
+
           <p className="text-center text-xs text-slate-400">Reference: {successData.referenceNumber}</p>
         </div>
       </div>
@@ -226,12 +314,49 @@ export default function PublicApplyPage() {
         </div>
 
         {(!config?.formStatus || config.formStatus === 'open' || config.formStatus === 'extended') && (
+        <div className="space-y-6">
+          {currentPage === 0 && (
+            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center gap-4">
+               <div className="flex-1">
+                 <h3 className="font-black text-indigo-900 text-lg flex items-center gap-2"><Zap size={20} className="text-yellow-500 fill-yellow-500" /> Auto-Fill with CampusPool Passport</h3>
+                 <p className="text-sm text-indigo-700 font-medium">Have a verified student profile? Enter your Passport ID to auto-fill your details.</p>
+               </div>
+               <div className="flex w-full md:w-auto gap-2">
+                 <input 
+                   type="text"
+                   placeholder="Enter Passport ID"
+                   value={ssoId}
+                   onChange={e => setSsoId(e.target.value)}
+                   className="px-4 py-3 rounded-xl border border-indigo-200 w-full md:w-48 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold bg-white"
+                 />
+                 <button 
+                   type="button"
+                   onClick={handleSSOFetch}
+                   disabled={ssoLoading || !ssoId.trim()}
+                   className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors whitespace-nowrap disabled:opacity-50"
+                 >
+                   {ssoLoading ? 'Fetching...' : 'Auto-Fill'}
+                 </button>
+               </div>
+            </div>
+          )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-6">
-            <h3 className="text-xl font-black text-slate-800 border-b border-slate-100 pb-4">Application Details</h3>
+            <h3 className="text-xl font-black text-slate-800 border-b border-slate-100 pb-4">
+              {pages[currentPage]?.title || 'Application Details'}
+              {pages.length > 1 && (
+                <span className="text-sm font-semibold text-slate-400 ml-3 bg-slate-100 px-2 py-1 rounded-md">
+                  Step {currentPage + 1} of {pages.length}
+                </span>
+              )}
+            </h3>
 
-            {config?.fields?.map((field: FormFieldConfig) => (
-              <div key={field.id}>
+            {config?.fields?.map((field: FormFieldConfig) => {
+              if (field.type === 'page_break') return null;
+              const isOnCurrentPage = pages[currentPage]?.fields.some(f => f.id === field.id);
+              
+              return (
+              <div key={field.id} className={isOnCurrentPage ? 'block animate-in fade-in duration-300' : 'hidden'}>
                 <label className="block text-sm font-bold text-slate-700 mb-2">
                   {field.label} {field.required && <span className="text-red-500">*</span>}
                 </label>
@@ -242,7 +367,15 @@ export default function PublicApplyPage() {
                     type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : 'text'}
                     step={field.type === 'number' ? 'any' : undefined}
                     placeholder={field.placeholder || ''}
-                    {...register(field.id, { required: field.required })}
+                    {...register(field.id, { 
+                      required: field.required ? 'This field is required' : false,
+                      ...(field.validation?.pattern ? {
+                        pattern: {
+                          value: new RegExp(field.validation.pattern),
+                          message: field.validation.customErrorMessage || 'Invalid format'
+                        }
+                      } : {})
+                    })}
                     className={`w-full border rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors ${errors[field.id] ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
                   />
                 )}
@@ -322,23 +455,46 @@ export default function PublicApplyPage() {
                 )}
 
                 {errors[field.id] && (
-                  <p className="text-red-500 text-xs font-bold mt-2">This field is required</p>
+                  <p className="text-red-500 text-xs font-bold mt-2">{errors[field.id]?.message as string || 'This field is required'}</p>
                 )}
               </div>
-            ))}
+            )})}
           </div>
 
-          <button 
-            type="submit" disabled={submitting || (config?.formStatus && config.formStatus !== 'open' && config.formStatus !== 'extended')}
-            className={`w-full py-4 rounded-xl text-white font-black text-lg shadow-sm transition-all flex items-center justify-center gap-2 ${
-              (config?.formStatus && config.formStatus !== 'open' && config.formStatus !== 'extended') 
-              ? 'bg-slate-400 cursor-not-allowed' 
-              : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-indigo-600/30 disabled:opacity-50'
-            }`}
-          >
-            {submitting ? 'Submitting Application...' : (config?.formStatus && config.formStatus !== 'open' && config.formStatus !== 'extended') ? 'Form Unavailable' : 'Submit Application'}
-          </button>
+          <div className="flex gap-4">
+            {currentPage > 0 && (
+              <button 
+                type="button" 
+                onClick={handlePrev}
+                className="w-1/3 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-black text-lg transition-all"
+               >
+                 Back
+               </button>
+            )}
+            
+            {currentPage < pages.length - 1 ? (
+              <button 
+                type="button" 
+                onClick={handleNext}
+                className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-lg transition-all"
+              >
+                Next Step
+              </button>
+            ) : (
+              <button 
+                type="submit" disabled={submitting || (config?.formStatus && config.formStatus !== 'open' && config.formStatus !== 'extended')}
+                className={`flex-1 py-4 rounded-xl text-white font-black text-lg shadow-sm transition-all flex items-center justify-center gap-2 ${
+                  (config?.formStatus && config.formStatus !== 'open' && config.formStatus !== 'extended') 
+                  ? 'bg-slate-400 cursor-not-allowed' 
+                  : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-indigo-600/30 disabled:opacity-50'
+                }`}
+              >
+                {submitting ? 'Submitting Application...' : (config?.formStatus && config.formStatus !== 'open' && config.formStatus !== 'extended') ? 'Form Unavailable' : 'Submit Application'}
+              </button>
+            )}
+          </div>
         </form>
+        </div>
         )}
       </div>
     </div>

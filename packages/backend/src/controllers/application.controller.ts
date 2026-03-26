@@ -133,3 +133,58 @@ export const updateApplicationStatus = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, error: message });
   }
 };
+
+export const updateApplicationData = async (req: Request, res: Response) => {
+  try {
+    const { driveId, appId } = req.params;
+    const collegeId = req.user?.collegeId;
+    const { data } = req.body;
+
+    if (!data) {
+      return res.status(400).json({ success: false, error: 'No data provided to update' });
+    }
+
+    const application = await ApplicationModel.findOneAndUpdate(
+      { _id: appId, driveId, collegeId },
+      { $set: { data } },
+      { new: true }
+    );
+
+    if (!application) {
+      return res.status(404).json({ success: false, error: 'Application not found' });
+    }
+
+    return res.json({ success: true, data: application });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: message });
+  }
+};
+
+export const addManualCandidate = async (req: Request, res: Response) => {
+  try {
+    const { driveId } = req.params;
+    const collegeId = req.user?.collegeId;
+    const { data } = req.body;
+
+    if (!data) {
+      return res.status(400).json({ success: false, error: 'Candidate data is required' });
+    }
+
+    const application = new ApplicationModel({
+      driveId,
+      collegeId,
+      data,
+      status: 'shortlisted',
+      referenceNumber: `MAN-${Date.now().toString().slice(-6)}`,
+      submittedAt: new Date()
+    });
+
+    await application.save();
+
+    return res.status(201).json({ success: true, data: application });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: message });
+  }
+};

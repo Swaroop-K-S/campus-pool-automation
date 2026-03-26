@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { DriveModel, ApplicationModel } from '../models';
+import { DriveModel, ApplicationModel, FormFieldModel } from '../models';
 import mongoose from 'mongoose';
 import { asyncHandler } from '../utils/async-handler';
 import { DriveStatusEnum } from '@campuspool/shared';
@@ -55,6 +55,20 @@ export const createDrive = asyncHandler(async (req: Request, res: Response) => {
       branches: req.body.eligibilityCriteria?.allowedBranches || []
     },
     rounds: [],
+  });
+
+  // Seed default form fields for the new drive
+  await FormFieldModel.create({
+    driveId: newDrive._id,
+    collegeId,
+    fields: [
+      { id: 'field_name', type: 'text', label: 'Full Name', required: true, locked: true, order: 0 },
+      { id: 'field_usn', type: 'text', label: 'USN', required: true, locked: true, order: 1, validation: { pattern: '^[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}$', customErrorMessage: 'Must be a valid USN (e.g., 1RV22CS111)' } },
+      { id: 'field_email', type: 'email', label: 'Email Address', required: true, locked: true, order: 2, validation: { pattern: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$', customErrorMessage: 'Valid email required' } },
+      { id: 'field_phone', type: 'phone', label: 'Phone Number', required: true, locked: true, order: 3, validation: { pattern: '^\\d{10}$', customErrorMessage: 'Must be exactly 10 digits' } },
+      { id: 'field_branch', type: 'dropdown', label: 'Branch', required: true, locked: true, order: 4, options: ['CSE', 'CSE (AIML)', 'CSE (Data Science)', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'OTHER'] },
+      { id: 'field_cgpa', type: 'number', label: 'CGPA', required: true, locked: true, order: 5, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' } },
+    ]
   });
 
   res.status(201).json({

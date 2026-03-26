@@ -7,6 +7,7 @@ import formRoutes from './form.routes';
 import qrRoutes from './qr.routes';
 import applicationRoutes from './application.routes';
 import exportRoutes from './export.routes';
+import ssoRoutes from './sso.routes';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/platform', platformRoutes);
 router.use('/', formRoutes);
 router.use('/event', qrRoutes);
 router.use('/drives', applicationRoutes);
+router.use('/sso', ssoRoutes);
 
 export default router;

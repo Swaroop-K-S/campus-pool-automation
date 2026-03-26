@@ -7,11 +7,13 @@ const formFieldDefinitionSchema = new Schema({
   label: { type: String, required: true },
   placeholder: String,
   required: { type: Boolean, default: false },
+  locked: { type: Boolean, default: false },
   options: [{ type: String }],
   validation: {
     min: Number,
     max: Number,
     pattern: String,
+    customErrorMessage: String,
     minLength: Number,
     maxLength: Number
   },

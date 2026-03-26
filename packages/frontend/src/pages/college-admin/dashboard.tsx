@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Users, UserCheck, Trophy, Plus, ChevronRight, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, BarChart2, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2 } from 'lucide-react';
+import { Briefcase, Users, UserCheck, Trophy, Plus, ChevronRight, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, BarChart2, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2, Link } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
@@ -466,6 +466,19 @@ export default function AdminDashboardPage() {
                  }`}>
                    {drive.status.replace('_', ' ')}
                  </div>
+                 {drive.formToken && (
+                   <button 
+                     onClick={(e) => {
+                       e.stopPropagation();
+                       navigator.clipboard.writeText(`${window.location.origin}/apply/${drive.formToken}`);
+                       toast.success('Public link copied!');
+                     }}
+                     className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                     title="Copy Public Link"
+                   >
+                     <Link size={16} />
+                   </button>
+                 )}
                  <div onClick={e => e.stopPropagation()}>
                     <DriveOptionsMenu drive={drive} onEdit={handleEditDrive} onDelete={handleDeleteDrive} onDuplicate={handleDuplicateDrive} onChangeStatus={handleChangeStatus} />
                  </div>
@@ -499,6 +512,19 @@ export default function AdminDashboardPage() {
                       {drive.status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
                       {drive.status.replace('_', ' ')}
                     </span>
+                    {drive.formToken && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(`${window.location.origin}/apply/${drive.formToken}`);
+                          toast.success('Public link copied!');
+                        }}
+                        className="p-1 px-1.5 text-slate-400 hover:text-indigo-600 bg-white hover:bg-indigo-50 rounded-lg border border-transparent hover:border-indigo-100 transition-colors"
+                        title="Copy Public Link"
+                      >
+                        <Link size={16} />
+                      </button>
+                    )}
                     <DriveOptionsMenu drive={drive} onEdit={handleEditDrive} onDelete={handleDeleteDrive} onDuplicate={handleDuplicateDrive} onChangeStatus={handleChangeStatus} />
                   </div>
                 </div>

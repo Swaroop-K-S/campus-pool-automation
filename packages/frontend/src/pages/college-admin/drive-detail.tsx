@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronRight, Circle, CheckSquare, Calendar, FileText, 
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
   Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search,
-  Send, Loader2, Info, MessageSquare
+  Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
@@ -28,6 +28,7 @@ const FIELD_TYPES = [
   { type: 'date', label: 'Date', icon: Calendar },
   { type: 'file_pdf', label: 'PDF Upload', icon: FileText },
   { type: 'file_image', label: 'Image Upload', icon: ImageIcon },
+  { type: 'page_break', label: 'Page Break', icon: SplitSquareHorizontal },
 ];
 
 const CountdownTimer = ({ closeDate }: { closeDate: string }) => {
@@ -74,15 +75,15 @@ const CountdownTimer = ({ closeDate }: { closeDate: string }) => {
 };
 
 const DEFAULT_FIELDS = [
-  { id: 'default_name', type: 'text', label: 'Full Name', required: true, locked: true },
-  { id: 'default_usn', type: 'text', label: 'USN', required: true, locked: true },
-  { id: 'default_branch', type: 'text', label: 'Branch', required: true, locked: true },
-  { id: 'default_cgpa', type: 'number', label: 'CGPA', required: true, locked: true },
-  { id: 'default_email', type: 'email', label: 'Email', required: true, locked: true },
-  { id: 'default_phone', type: 'phone', label: 'Phone', required: true, locked: true },
+  { id: 'field_name', type: 'text', label: 'Full Name', required: true, locked: true, order: 0 },
+  { id: 'field_usn', type: 'text', label: 'USN', required: true, locked: true, order: 1, validation: { pattern: '^[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}$', customErrorMessage: 'Must be a valid USN (e.g., 1RV22CS111)' } },
+  { id: 'field_email', type: 'email', label: 'Email Address', required: true, locked: true, order: 2, validation: { pattern: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$', customErrorMessage: 'Valid email required' } },
+  { id: 'field_phone', type: 'phone', label: 'Phone Number', required: true, locked: true, order: 3, validation: { pattern: '^\\d{10}$', customErrorMessage: 'Must be exactly 10 digits' } },
+  { id: 'field_branch', type: 'dropdown', label: 'Branch', required: true, locked: true, order: 4, options: ['CSE', 'CSE (AIML)', 'CSE (Data Science)', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'OTHER'] },
+  { id: 'field_cgpa', type: 'number', label: 'CGPA', required: true, locked: true, order: 5, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' } },
 ];
 
-const SortableFieldItem = ({ field, isActive, onSelect, onDelete }: any) => {
+const SortableFieldItem = ({ field, isActive, onSelect, onDelete, onDuplicate }: any) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: field.id });
   
   const style = {
@@ -96,7 +97,7 @@ const SortableFieldItem = ({ field, isActive, onSelect, onDelete }: any) => {
     <div 
       ref={setNodeRef} style={style} 
       onClick={() => onSelect(field)}
-      className={`bg-white rounded-lg border-2 p-4 mb-3 flex items-center gap-4 cursor-default transition-colors ${isActive ? 'border-indigo-500 shadow-sm' : 'border-slate-200 hover:border-indigo-300'}`}
+      className={`rounded-lg border-2 p-4 mb-3 flex items-center gap-4 cursor-default transition-colors ${isActive ? 'border-indigo-500 shadow-sm bg-white' : field.type === 'page_break' ? 'border-dashed border-slate-300 bg-slate-50 hover:border-indigo-300' : 'bg-white border-slate-200 hover:border-indigo-300'}`}
     >
       <div {...attributes} {...listeners} className="cursor-grab text-slate-400 hover:text-slate-700">
         <GripVertical size={20} />
@@ -115,9 +116,14 @@ const SortableFieldItem = ({ field, isActive, onSelect, onDelete }: any) => {
           <Edit2 size={16} />
         </button>
         {!field.locked && (
-          <button onClick={(e) => { e.stopPropagation(); onDelete(field.id); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-            <Trash2 size={16} />
-          </button>
+          <>
+            <button onClick={(e) => { e.stopPropagation(); onDuplicate(field); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg" title="Duplicate Field">
+              <Copy size={16} />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onDelete(field.id); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete Field">
+              <Trash2 size={16} />
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -156,6 +162,12 @@ export default function DriveDetailPage() {
   const [appSearchQuery, setAppSearchQuery] = useState('');
   const [selectedApp, setSelectedApp] = useState<any>(null);
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
+  const [isEditingApp, setIsEditingApp] = useState(false);
+  const [editedAppData, setEditedAppData] = useState<any>({});
+  const [isSavingApp, setIsSavingApp] = useState(false);
+  const [showAddCandidateModal, setShowAddCandidateModal] = useState(false);
+  const [manualCandidateData, setManualCandidateData] = useState<Record<string, string>>({});
+  const [isAddingCandidate, setIsAddingCandidate] = useState(false);
 
   // Shortlist State
   const [uploadResult, setUploadResult] = useState<any>(null);
@@ -177,6 +189,12 @@ export default function DriveDetailPage() {
   const [reportTime, setReportTime] = useState<string>('');
   const [rooms, setRooms] = useState<any[]>([]);
   const [showAddRoom, setShowAddRoom] = useState<string | null>(null);
+
+  // Import Form State
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [allDrives, setAllDrives] = useState<any[]>([]);
+  const [importingDriveId, setImportingDriveId] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: '', floor: '', capacity: 0, panelists: '' });
   const [liveStats, setLiveStats] = useState({ invited: 0, checkedIn: 0, activeRound: '', roomsOpen: 0 });
   const [expandedRounds, setExpandedRounds] = useState<Record<string, boolean>>({});
@@ -309,6 +327,39 @@ export default function DriveDetailPage() {
     }
   };
 
+  const saveApplicationData = async () => {
+    if (!selectedApp) return;
+    setIsSavingApp(true);
+    try {
+      await api.put(`/drives/${driveId}/applications/${selectedApp._id}`, { data: editedAppData });
+      toast.success('Student details updated!');
+      setIsEditingApp(false);
+      fetchApplications();
+      // Update local state to reflect change without forcing a full refresh of drawer
+      setSelectedApp({ ...selectedApp, data: editedAppData });
+    } catch (err) {
+      toast.error('Failed to update details');
+    } finally {
+      setIsSavingApp(false);
+    }
+  };
+
+  const saveManualCandidate = async () => {
+    setIsAddingCandidate(true);
+    try {
+      await api.post(`/drives/${driveId}/applications/manual`, { data: manualCandidateData });
+      toast.success('Candidate added manually!');
+      setShowAddCandidateModal(false);
+      setManualCandidateData({});
+      fetchShortlisted();
+      fetchApplications();
+    } catch {
+      toast.error('Failed to add candidate');
+    } finally {
+      setIsAddingCandidate(false);
+    }
+  };
+
   const fetchApplications = async () => {
     setAppLoading(true);
     try {
@@ -332,6 +383,39 @@ export default function DriveDetailPage() {
     } catch (err) { }
   };
 
+  const fetchDrivesForImport = async () => {
+    try {
+      const res = await api.get('/drives');
+      if ((res as any).success) {
+        setAllDrives((res as any).data.filter((d: any) => d._id !== driveId));
+      }
+    } catch (error) {
+      toast.error('Failed to fetch drives');
+    }
+  };
+
+  const importFormFields = async () => {
+    if (!importingDriveId) return toast.error('Select a drive to import from');
+    setIsImporting(true);
+    try {
+      const res = await api.get(`/drives/${importingDriveId}/form`);
+      if ((res as any).success && (res as any).data?.length > 0) {
+        const importedFields = (res as any).data.map((f: any) => ({
+          ...f,
+          id: 'field_' + Math.random().toString(36).substring(2, 9)
+        }));
+        setFields(importedFields);
+        toast.success(`Imported ${(res as any).data.length} fields! Please save the form.`);
+        setShowImportModal(false);
+      } else {
+        toast.error('Selected drive has no form configured');
+      }
+    } catch (error) {
+      toast.error('Failed to import form structure');
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
 
   // ── Smart messaging helpers ─────────────────
@@ -546,6 +630,16 @@ export default function DriveDetailPage() {
         return arrayMove(items, oldIndex, newIndex);
       });
     }
+  };
+
+  const duplicateField = (field: any) => {
+    const newField = { ...field, id: `field_${Date.now()}` };
+    const fieldIndex = fields.findIndex(f => f.id === field.id);
+    const newFields = [...fields];
+    newFields.splice(fieldIndex + 1, 0, newField);
+    setFields(newFields);
+    setActiveFieldId(newField.id);
+    toast.success('Field duplicated!');
   };
 
   const addField = (type: string) => {
@@ -798,10 +892,15 @@ export default function DriveDetailPage() {
             {/* CENTER PANEL */}
             <div className="flex-1 flex flex-col p-6 overflow-y-auto relative">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-black text-slate-800">Form Preview</h2>
-                <span className="px-3 py-1 bg-slate-200 text-slate-700 rounded-full text-xs font-bold">
-                  {fields.length} Fields
-                </span>
+                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">Form Preview</h2>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => { setShowImportModal(true); fetchDrivesForImport(); }} className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1">
+                    <Copy size={14}/> Import Form
+                  </button>
+                  <span className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold">
+                    {fields.length} Fields
+                  </span>
+                </div>
               </div>
 
               {/* FORM VALIDITY PERIOD CARD */}
@@ -870,6 +969,7 @@ export default function DriveDetailPage() {
                         isActive={activeFieldId === field.id}
                         onSelect={(f: any) => setActiveFieldId(f.id)}
                         onDelete={deleteField}
+                        onDuplicate={duplicateField}
                       />
                     ))}
                     
@@ -919,31 +1019,88 @@ export default function DriveDetailPage() {
                     <div>
                       <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Field Label *</label>
                       <input 
-                        type="text" value={activeField.label} disabled={activeField.locked}
+                        type="text" value={activeField.label}
                         onChange={e => updateActiveField({ label: e.target.value })}
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800 disabled:opacity-50"
                       />
                     </div>
                     
-                    {!['file_pdf', 'file_image', 'checkbox', 'radio', 'dropdown'].includes(activeField.type) && (
+                    {!['file_pdf', 'file_image', 'checkbox', 'radio', 'dropdown', 'page_break'].includes(activeField.type) && (
                       <div>
                         <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Placeholder</label>
                         <input 
-                          type="text" value={activeField.placeholder || ''} disabled={activeField.locked}
+                          type="text" value={activeField.placeholder || ''}
                           onChange={e => updateActiveField({ placeholder: e.target.value })}
                           className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800 disabled:opacity-50"
                         />
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2">
-                       <input 
-                         type="checkbox" id="req" checked={activeField.required} disabled={activeField.locked}
-                         onChange={e => updateActiveField({ required: e.target.checked })}
-                         className="w-4 h-4 text-indigo-600 rounded cursor-pointer disabled:opacity-50"
-                       />
-                       <label htmlFor="req" className="text-sm font-bold text-slate-700 cursor-pointer">Required Field</label>
-                    </div>
+                    {activeField.type !== 'page_break' && (
+                      <div className="flex items-center gap-2">
+                         <input 
+                           type="checkbox" id="req" checked={activeField.required} disabled={activeField.locked}
+                           onChange={e => updateActiveField({ required: e.target.checked })}
+                           className="w-4 h-4 text-indigo-600 rounded cursor-pointer disabled:opacity-50"
+                         />
+                         <label htmlFor="req" className="text-sm font-bold text-slate-700 cursor-pointer">Required Field</label>
+                      </div>
+                    )}
+
+                    {['text', 'email', 'phone'].includes(activeField.type) && (
+                      <div className="pt-4 border-t border-slate-200">
+                        <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Validation Rule (Regex)</label>
+                        <select 
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800 mb-2 disabled:opacity-50"
+                          disabled={activeField.locked}
+                          value={
+                            !activeField.validation?.pattern ? '' :
+                            activeField.validation.pattern === '^\\d{10}$' ? 'phone' :
+                            activeField.validation.pattern === '^[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}$' ? 'usn' :
+                            activeField.validation.pattern === '^https?:\\/\\/(www\\.)?linkedin\\.com\\/.*$' ? 'linkedin' :
+                            activeField.validation.pattern === '^https?:\\/\\/(www\\.)?github\\.com\\/.*$' ? 'github' :
+                            'custom'
+                          }
+                          onChange={e => {
+                            const val = e.target.value;
+                            let pattern = ''; let msg = 'Invalid format';
+                            if (val === 'phone') { pattern = '^\\d{10}$'; msg = 'Must be exactly 10 digits'; }
+                            else if (val === 'usn') { pattern = '^[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}$'; msg = 'Must be a valid USN (e.g., 1RV22CS111)'; }
+                            else if (val === 'linkedin') { pattern = '^https?:\\/\\/(www\\.)?linkedin\\.com\\/.*$'; msg = 'Must be a valid LinkedIn URL'; }
+                            else if (val === 'github') { pattern = '^https?:\\/\\/(www\\.)?github\\.com\\/.*$'; msg = 'Must be a valid GitHub URL'; }
+                            
+                            updateActiveField({ 
+                              validation: val ? { ...activeField.validation, pattern, customErrorMessage: msg } : { ...activeField.validation, pattern: undefined, customErrorMessage: undefined } 
+                            });
+                          }}
+                        >
+                          <option value="">None</option>
+                          <option value="phone">Phone Number (10 digits)</option>
+                          <option value="usn">USN Format</option>
+                          <option value="linkedin">LinkedIn URL</option>
+                          <option value="github">GitHub URL</option>
+                          <option value="custom">Custom Regex...</option>
+                        </select>
+                        {(activeField.validation?.pattern && !['^\\d{10}$', '^[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}$', '^https?:\\/\\/(www\\.)?linkedin\\.com\\/.*$', '^https?:\\/\\/(www\\.)?github\\.com\\/.*$'].includes(activeField.validation.pattern)) && (
+                          <input 
+                            type="text" 
+                            placeholder="e.g. ^[0-9]+$" 
+                            value={activeField.validation.pattern || ''}
+                            onChange={e => updateActiveField({ validation: { ...activeField.validation, pattern: e.target.value } })}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800 font-mono mb-2"
+                          />
+                        )}
+                        {(activeField.validation?.pattern) && (
+                          <input 
+                            type="text" 
+                            placeholder="Custom error message" 
+                            value={activeField.validation.customErrorMessage || ''}
+                            onChange={e => updateActiveField({ validation: { ...activeField.validation, customErrorMessage: e.target.value } })}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800"
+                          />
+                        )}
+                      </div>
+                    )}
 
                     {['dropdown', 'radio', 'checkbox'].includes(activeField.type) && (
                       <div className="pt-4 border-t border-slate-200">
@@ -1490,10 +1647,23 @@ export default function DriveDetailPage() {
                           : 'bg-slate-100 text-slate-600'
                         }`}>{app.status}</span>
                       </div>
-                      <button onClick={() => { setShowDetailDrawer(false); setSelectedApp(null); }}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
-                        <X size={20}/>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {!isEditingApp ? (
+                          <button onClick={() => { setIsEditingApp(true); setEditedAppData(app.data); }}
+                            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors flex-shrink-0" title="Edit Application">
+                            <Edit2 size={18}/>
+                          </button>
+                        ) : (
+                          <button onClick={() => setIsEditingApp(false)}
+                            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0" title="Cancel Edit">
+                            <X size={18}/>
+                          </button>
+                        )}
+                        <button onClick={() => { setShowDetailDrawer(false); setSelectedApp(null); setIsEditingApp(false); }}
+                          className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
+                          <X size={20}/>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Scrollable Content */}
@@ -1539,18 +1709,33 @@ export default function DriveDetailPage() {
 
                       {/* All Form Fields */}
                       <div>
-                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Application Details</h3>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Application Details</h3>
+                          {isEditingApp && (
+                            <button onClick={saveApplicationData} disabled={isSavingApp} className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow-sm text-xs font-bold disabled:opacity-50">
+                              {isSavingApp ? 'Saving...' : 'Save Changes'}
+                            </button>
+                          )}
+                        </div>
                         <div className="bg-slate-50 rounded-xl divide-y divide-slate-200 overflow-hidden border border-slate-200">
                           {dataFields.length > 0 ? (
                             dataFields.map((field: any) => {
-                              const val = getFieldValue(app, field);
-                              if (val === '—' || val === null || val === '') return null;
+                              const rawVal = isEditingApp ? editedAppData[field.id] : getFieldValue(app, field);
+                              const val = rawVal === '—' || rawVal === null ? '' : rawVal;
+                              if (!isEditingApp && val === '') return null;
                               const isCgpa = field.type === 'number' && field.label.toLowerCase().includes('cgpa');
                               return (
-                                <div key={field.id} className="flex items-start gap-4 px-4 py-3">
+                                <div key={field.id} className="flex items-start gap-4 px-4 py-3 hover:bg-slate-100/50 transition-colors">
                                   <div className="text-xs text-slate-500 w-32 flex-shrink-0 pt-0.5 font-medium leading-relaxed">{field.label}</div>
                                   <div className="flex-1 text-sm text-slate-800 font-medium break-words">
-                                    {isCgpa ? (
+                                    {isEditingApp ? (
+                                      <input 
+                                        type="text" 
+                                        value={val || ''} 
+                                        onChange={(e) => setEditedAppData({...editedAppData, [field.id]: e.target.value})}
+                                        className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-white"
+                                      />
+                                    ) : isCgpa ? (
                                       <span className={`font-bold ${parseFloat(val) >= 8 ? 'text-green-600' : parseFloat(val) >= 6 ? 'text-amber-600' : 'text-red-500'}`}>{val} / 10</span>
                                     ) : field.type === 'email' ? (
                                       <a href={`mailto:${val}`} className="text-indigo-600 hover:underline">{val}</a>
@@ -1566,13 +1751,23 @@ export default function DriveDetailPage() {
                           ) : (
                             Object.entries(app.data || {})
                               .filter(([, value]) => {
-                                // Skip non-displayable values (FileList, objects, etc.)
                                 return typeof value === 'string' || typeof value === 'number' || (Array.isArray(value) && value.every(v => typeof v === 'string' || typeof v === 'number'));
                               })
                               .map(([key, value]) => (
                               <div key={key} className="flex items-start gap-4 px-4 py-3">
                                 <div className="text-xs text-slate-500 w-32 flex-shrink-0 pt-0.5 font-medium capitalize">{key.replace(/_/g, ' ')}</div>
-                                <div className="flex-1 text-sm text-slate-800 font-medium">{safeStr(value)}</div>
+                                <div className="flex-1 text-sm text-slate-800 font-medium break-words">
+                                  {isEditingApp ? (
+                                    <input 
+                                      type="text" 
+                                      value={String(editedAppData[key] || '')} 
+                                      onChange={(e) => setEditedAppData({...editedAppData, [key]: e.target.value})}
+                                      className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-white"
+                                    />
+                                  ) : (
+                                    safeStr(value)
+                                  )}
+                                </div>
                               </div>
                             ))
                           )}
@@ -1633,8 +1828,13 @@ export default function DriveDetailPage() {
           <div className="p-8 h-full overflow-y-auto w-full max-w-5xl mx-auto">
             {/* SECTION 1: Upload Shortlist */}
             <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8 shadow-sm">
-              <h3 className="text-lg font-bold text-slate-800 mb-4">Upload Shortlist</h3>
-              <div 
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-slate-800">Upload Shortlist</h3>
+                <button onClick={() => setShowAddCandidateModal(true)} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors">
+                  <UserPlus size={16}/> Add Candidate Manually
+                </button>
+              </div>
+              <div  
                 {...getRootProps()} 
                 className={`bg-slate-50 border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors ${isDragActive ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/50'}`}
               >
@@ -2380,6 +2580,79 @@ export default function DriveDetailPage() {
           </div>
         </div>
       )}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-black text-lg text-slate-800 flex items-center gap-2"><Copy size={18} className="text-indigo-600"/> Import Form Template</h3>
+              <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600 bg-white hover:bg-slate-200 p-1.5 rounded-lg border border-slate-200 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4 font-medium">Select a previous drive to clone its form structure. <strong className="text-amber-600">Warning: This will overwrite your current unsaved fields.</strong></p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Previous Drives</label>
+                  <select 
+                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800"
+                    value={importingDriveId}
+                    onChange={e => setImportingDriveId(e.target.value)}
+                  >
+                    <option value="">-- Select Drive --</option>
+                    {allDrives.map(d => (
+                      <option key={d._id} value={d._id}>{d.companyName} ({new Date(d.createdAt).toLocaleDateString()})</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <button 
+                  onClick={importFormFields}
+                  disabled={!importingDriveId || isImporting}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  {isImporting ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                  Import Configuration
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Add Candidate Modal */}
+      {showAddCandidateModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-800 mb-4">Add Candidate Manually</h3>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1 pb-4">
+              {formFields.filter(f => f.type !== 'file_pdf' && f.type !== 'file_image').map(f => (
+                <div key={f.id}>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">{f.label}</label>
+                  <input
+                    type={f.type === 'number' ? 'number' : 'text'}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    placeholder={`Enter ${f.label}`}
+                    value={manualCandidateData[f.id] || ''}
+                    onChange={e => setManualCandidateData({ ...manualCandidateData, [f.id]: e.target.value })}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+              <button onClick={() => setShowAddCandidateModal(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 rounded-xl">Cancel</button>
+              <button 
+                onClick={saveManualCandidate} 
+                disabled={isAddingCandidate}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl disabled:opacity-50"
+              >
+                {isAddingCandidate ? 'Adding...' : 'Add Candidate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -24,5 +24,5 @@ export type NotificationChannel = z.infer<typeof NotificationChannelEnum>;
 export const NotificationStatusEnum = z.enum(["sent", "failed"]);
 export type NotificationStatus = z.infer<typeof NotificationStatusEnum>;
 
-export const FormFieldTypeEnum = z.enum(["text", "textarea", "number", "email", "phone", "dropdown", "radio", "checkbox", "date", "file_pdf", "file_image"]);
+export const FormFieldTypeEnum = z.enum(["text", "textarea", "number", "email", "phone", "dropdown", "radio", "checkbox", "date", "file_pdf", "file_image", "page_break"]);
 export type FormFieldType = z.infer<typeof FormFieldTypeEnum>;

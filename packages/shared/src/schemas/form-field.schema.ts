@@ -8,11 +8,13 @@ export const FormFieldDefinitionSchema = z.object({
   label: z.string().min(1),
   placeholder: z.string().optional(),
   required: z.boolean(),
+  locked: z.boolean().optional(),
   options: z.array(z.string()).optional(),
   validation: z.object({
     min: z.number().optional(),
     max: z.number().optional(),
     pattern: z.string().optional(),
+    customErrorMessage: z.string().optional(),
     minLength: z.number().optional(),
     maxLength: z.number().optional()
   }).optional(),
