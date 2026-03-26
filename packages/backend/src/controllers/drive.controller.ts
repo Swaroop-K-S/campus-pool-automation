@@ -251,3 +251,59 @@ export const markCompleted = asyncHandler(async (req: Request, res: Response) =>
   if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
   res.status(200).json({ success: true, data: drive });
 });
+
+// POST /api/v1/drives/:driveId/clone
+export const cloneDrive = asyncHandler(async (req: Request, res: Response) => {
+  const { driveId } = req.params;
+  const collegeId = (req as any).user.collegeId;
+
+  // 1. Fetch the source drive
+  const sourceDrive = await DriveModel.findOne({ _id: driveId, collegeId }).lean();
+  if (!sourceDrive) {
+    return res.status(404).json({ success: false, error: 'Source drive not found' });
+  }
+
+  // 2. Fetch the source form config
+  const sourceForm = await FormFieldModel.findOne({ driveId }).lean();
+
+  // 3. Build the cloned drive (strip IDs, dates, status)
+  const clonedDriveData: any = {
+    collegeId,
+    companyName: `${sourceDrive.companyName} (Copy)`,
+    jobRole: sourceDrive.jobRole,
+    ctc: sourceDrive.ctc,
+    locations: sourceDrive.locations || [],
+    description: (sourceDrive as any).description,
+    eligibility: sourceDrive.eligibility,
+    rounds: (sourceDrive.rounds || []).map((r: any) => ({
+      type: r.type,
+      label: r.label,
+      order: r.order,
+      status: 'pending',
+      isCustom: r.isCustom
+    })),
+    schedule: (sourceDrive.schedule || []).map((s: any) => ({
+      roundType: s.roundType,
+      startTime: s.startTime,
+      duration: s.duration
+    })),
+    status: 'draft',
+    formStatus: 'not_configured',
+  };
+
+  const newDrive = await DriveModel.create(clonedDriveData);
+
+  // 4. Clone form fields if they exist
+  if (sourceForm && sourceForm.fields) {
+    await FormFieldModel.create({
+      driveId: newDrive._id,
+      collegeId,
+      fields: sourceForm.fields.map((f: any) => ({
+        ...f,
+        id: f.id // keep same IDs for consistency
+      }))
+    });
+  }
+
+  res.status(201).json({ success: true, data: newDrive });
+});

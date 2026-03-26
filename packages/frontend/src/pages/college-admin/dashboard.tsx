@@ -216,15 +216,12 @@ export default function AdminDashboardPage() {
 
   const handleDuplicateDrive = async (drive: any) => {
     try {
-      const res = await api.post('/drives', {
-        companyName: drive.companyName + ' (Copy)', jobRole: drive.jobRole, ctc: drive.ctc,
-        locations: drive.locations, eligibility: drive.eligibility,
-        rounds: drive.rounds?.map((r: any) => ({ type: r.type, order: r.order, status: 'pending' })) || [],
-        status: 'draft'
-      });
-      toast.success('Drive duplicated as draft!');
-      fetchData();
-      navigate(`/admin/drives/${(res as any).data._id}`);
+      const res = await api.post(`/drives/${drive._id}/clone`);
+      if ((res as any).success) {
+        toast.success(`"${drive.companyName}" cloned as a new draft!`);
+        fetchData();
+        navigate(`/admin/drives/${(res as any).data._id}`);
+      }
     } catch { toast.error('Failed to duplicate drive'); }
   };
 
@@ -258,6 +255,8 @@ export default function AdminDashboardPage() {
       fetchData();
     } catch { toast.error('Failed to update status'); }
   };
+
+
 
   useEffect(() => {
     fetchData();

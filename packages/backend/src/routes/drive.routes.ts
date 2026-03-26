@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDrives, createDrive, getDriveById, updateDrive, activateDrive } from '../controllers/drive.controller';
+import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive } from '../controllers/drive.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import shortlistRoutes from './shortlist.routes';
 import eventRoutes from './event.routes';
@@ -19,6 +19,7 @@ router.route('/:driveId')
   .delete(deleteDrive);
 
 router.patch('/:driveId/activate', activateDrive);
+router.post('/:driveId/clone', cloneDrive);
 router.patch('/:driveId/start-event', startEventDay);
 router.patch('/:driveId/complete', markCompleted);
 
