@@ -91,10 +91,86 @@ function addInfoHeader(sheet: ExcelJS.Worksheet, info: { label: string; value: s
   sheet.addRow([]);
 }
 
-// ── HELPER: resolve name from app.data ───
-function resolveName(d: any): string {
-  if (!d) return '—';
-  return d.fullName || d.full_name || d.name || d.Name || d.Full_Name || '—';
+// ── HELPER: resolve common field values ──
+function getCommonFieldValue(appData: Record<string, any>, fieldLabel: string): string | null {
+  if (!appData) return null;
+  const label = fieldLabel.toLowerCase();
+  
+  // Name variants
+  if (label.includes('name') && !label.includes('company')) {
+    const nameKeys = ['name', 'full_name', 'fullname', 'student_name', 'Full Name', 'FullName', 'full name'];
+    for (const k of nameKeys) if (appData[k]) return String(appData[k]);
+  }
+  
+  // USN variants
+  if (label.includes('usn') || label.includes('roll') || label.includes('reg')) {
+    const usnKeys = ['usn', 'USN', 'roll_no', 'rollno', 'reg_no', 'registration'];
+    for (const k of usnKeys) if (appData[k]) return String(appData[k]);
+  }
+  
+  // Email variants
+  if (label.includes('email')) {
+    const emailKeys = ['email', 'Email', 'email_id', 'emailid'];
+    for (const k of emailKeys) if (appData[k]) return String(appData[k]);
+  }
+  
+  // Phone variants
+  if (label.includes('phone') || label.includes('mobile') || label.includes('contact')) {
+    const phoneKeys = ['phone', 'Phone', 'mobile', 'contact', 'phone_no', 'phone_number'];
+    for (const k of phoneKeys) if (appData[k]) return String(appData[k]);
+  }
+  
+  // Branch variants
+  if (label.includes('branch') || label.includes('department')) {
+    const branchKeys = ['branch', 'Branch', 'department', 'dept'];
+    for (const k of branchKeys) if (appData[k]) return String(appData[k]);
+  }
+  
+  // CGPA variants
+  if (label.includes('cgpa') || label.includes('gpa')) {
+    const cgpaKeys = ['cgpa', 'CGPA', 'gpa', 'GPA', 'grade'];
+    for (const k of cgpaKeys) if (appData[k]) return String(appData[k]);
+  }
+  
+  return null;
+}
+
+// ── HELPER: smart field lookup ────
+function getFieldValue(appData: Record<string, any>, field: { id: string; label: string }): string {
+  if (!appData) return '—';
+  
+  // 1. Check common fields first
+  const common = getCommonFieldValue(appData, field.label);
+  if (common !== null) return common;
+  
+  // 2. Try exact field ID
+  if (appData[field.id] !== undefined && appData[field.id] !== '') {
+    return Array.isArray(appData[field.id]) ? appData[field.id].join(', ') : String(appData[field.id]);
+  }
+  
+  // 3. Try label-based keys
+  const labelKeys = [
+    field.label,
+    field.label.toLowerCase(),
+    field.label.toLowerCase().replace(/\s+/g, '_'),
+    field.label.toLowerCase().replace(/\s+/g, ''),
+  ];
+  for (const k of labelKeys) {
+    if (appData[k] !== undefined && appData[k] !== '') {
+      return Array.isArray(appData[k]) ? appData[k].join(', ') : String(appData[k]);
+    }
+  }
+  
+  // 4. Fuzzy match on key
+  const labelWords = field.label.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  for (const [key, val] of Object.entries(appData)) {
+    if (!val) continue;
+    if (labelWords.every(w => key.toLowerCase().includes(w))) {
+      return Array.isArray(val) ? val.join(', ') : String(val);
+    }
+  }
+  
+  return '—';
 }
 
 // ── HELPER: send workbook as download ────
@@ -184,22 +260,7 @@ export const exportApplications = asyncHandler(async (req: Request, res: Respons
 
     // Resolve dynamic field values
     dynamicFields.forEach((field: any) => {
-      const keys = [
-        field.label?.replace(/\s+/g, '_'),
-        field.label?.toLowerCase().replace(/\s+/g, '_'),
-        field.label?.toLowerCase().replace(/\s+/g, ''),
-        field.label,
-        field.id
-      ].filter(Boolean);
-
-      let value: any = '—';
-      for (const k of keys) {
-        if (app.data?.[k] !== undefined && app.data[k] !== '') {
-          value = Array.isArray(app.data[k]) ? app.data[k].join(', ') : String(app.data[k]);
-          break;
-        }
-      }
-      rowData[field.id] = value;
+      rowData[field.id] = getFieldValue(app.data || {}, { id: field.id, label: field.label || field.id });
     });
 
     const row = sheet.addRow(columns.map(c => rowData[c.key] ?? ''));
@@ -267,12 +328,12 @@ export const exportShortlisted = asyncHandler(async (req: Request, res: Response
     const row = sheet.addRow([
       idx + 1,
       app.driveStudentId || '—',
-      resolveName(d),
-      d.usn || d.USN || d.roll_no || '—',
-      d.branch || d.Branch || '—',
-      d.cgpa || d.CGPA || '—',
-      d.email || d.Email || '—',
-      d.phone || d.Phone || d.contact || '—',
+      getFieldValue(d, { id: 'name', label: 'Full Name' }),
+      getFieldValue(d, { id: 'usn', label: 'USN' }),
+      getFieldValue(d, { id: 'branch', label: 'Branch' }),
+      getFieldValue(d, { id: 'cgpa', label: 'CGPA' }),
+      getFieldValue(d, { id: 'email', label: 'Email' }),
+      getFieldValue(d, { id: 'phone', label: 'Phone' }),
       app.referenceNumber || '—'
     ]);
     styleDataRow(row, idx, COLORS.shortlisted);
@@ -329,10 +390,10 @@ export const exportAttended = asyncHandler(async (req: Request, res: Response) =
     const row = sheet.addRow([
       idx + 1,
       app.driveStudentId || '—',
-      resolveName(d),
-      d.usn || d.USN || '—',
-      d.branch || d.Branch || '—',
-      d.cgpa || d.CGPA || '—',
+      getFieldValue(d, { id: 'name', label: 'Full Name' }),
+      getFieldValue(d, { id: 'usn', label: 'USN' }),
+      getFieldValue(d, { id: 'branch', label: 'Branch' }),
+      getFieldValue(d, { id: 'cgpa', label: 'CGPA' }),
       app.attendedAt ? new Date(app.attendedAt).toLocaleString('en-IN') : '—',
       (app.status || '—').toUpperCase()
     ]);
@@ -420,10 +481,10 @@ export const exportRoundStudents = asyncHandler(async (req: Request, res: Respon
     const row = sheet1.addRow([
       idx + 1,
       app.driveStudentId || '—',
-      resolveName(d),
-      d.usn || d.USN || '—',
-      d.branch || d.Branch || '—',
-      d.cgpa || d.CGPA || '—',
+      getFieldValue(d, { id: 'name', label: 'Full Name' }),
+      getFieldValue(d, { id: 'usn', label: 'USN' }),
+      getFieldValue(d, { id: 'branch', label: 'Branch' }),
+      getFieldValue(d, { id: 'cgpa', label: 'CGPA' }),
       appRoomMap.get(id) || '—',
       result
     ]);
@@ -446,8 +507,10 @@ export const exportRoundStudents = asyncHandler(async (req: Request, res: Respon
       const row = sheet2.addRow([
         idx + 1,
         app.driveStudentId || '—',
-        resolveName(d),
-        d.usn || '—', d.branch || '—', d.cgpa || '—',
+        getFieldValue(d, { id: 'name', label: 'Full Name' }),
+        getFieldValue(d, { id: 'usn', label: 'USN' }),
+        getFieldValue(d, { id: 'branch', label: 'Branch' }),
+        getFieldValue(d, { id: 'cgpa', label: 'CGPA' }),
         appRoomMap.get(app._id.toString()) || '—',
         'PASSED'
       ]);
@@ -513,12 +576,12 @@ export const exportSelected = asyncHandler(async (req: Request, res: Response) =
     const row = sheet.addRow([
       idx + 1,
       app.driveStudentId || '—',
-      resolveName(d),
-      d.usn || d.USN || '—',
-      d.branch || d.Branch || '—',
-      d.cgpa || d.CGPA || '—',
-      d.email || d.Email || '—',
-      d.phone || d.Phone || '—',
+      getFieldValue(d, { id: 'name', label: 'Full Name' }),
+      getFieldValue(d, { id: 'usn', label: 'USN' }),
+      getFieldValue(d, { id: 'branch', label: 'Branch' }),
+      getFieldValue(d, { id: 'cgpa', label: 'CGPA' }),
+      getFieldValue(d, { id: 'email', label: 'Email' }),
+      getFieldValue(d, { id: 'phone', label: 'Phone' }),
       app.referenceNumber || '—'
     ]);
     styleDataRow(row, idx, 'F0FDF4');
@@ -702,24 +765,9 @@ export const exportCustomColumns = asyncHandler(async (req: Request, res: Respon
       } else if (colId === 'submittedAt') {
         rowData[colId] = fmtDate(app.submittedAt);
       } else {
-        // Form field — try multiple key formats
-        const field = formFieldMap.get(colId);
-        const keys = field ? [
-          field.id,
-          field.label?.replace(/\s+/g, '_'),
-          field.label?.toLowerCase().replace(/\s+/g, '_'),
-          field.label?.toLowerCase().replace(/\s+/g, ''),
-          field.label
-        ].filter(Boolean) : [colId];
-
-        let value: any = '—';
-        for (const k of keys) {
-          if (app.data?.[k] !== undefined && app.data[k] !== '') {
-            value = Array.isArray(app.data[k]) ? app.data[k].join(', ') : String(app.data[k]);
-            break;
-          }
-        }
-        rowData[colId] = value;
+        // Form field — pass to smart lookup
+        const field = formFieldMap.get(colId) || { id: colId, label: String(colId) };
+        rowData[colId] = getFieldValue(app.data || {}, { id: field.id, label: field.label || field.id });
       }
     });
 

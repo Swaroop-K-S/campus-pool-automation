@@ -989,19 +989,67 @@ export default function DriveDetailPage() {
               })
             : applications;
 
-          // Helper to get field value from app.data
+          // Helper to get field value from app.data (smart lookup)
           const getFieldValue = (app: any, field: any) => {
+            const appData = app.data;
+            if (!appData) return '—';
+            
+            // 1. Try exact field ID first (most reliable — UUIDs as keys)
+            if (appData[field.id] !== undefined && appData[field.id] !== '') {
+              return safeStr(appData[field.id]);
+            }
+            
+            // 2. Common field shortcuts
+            const label = (field.label || '').toLowerCase();
+            if (label.includes('name') && !label.includes('company')) {
+              const v = appData.name || appData.Name || appData.full_name || appData.fullName || appData['Full Name'] || appData.student_name;
+              if (v) return safeStr(v);
+            }
+            if (label.includes('usn') || label.includes('roll') || label.includes('reg')) {
+              const v = appData.usn || appData.USN || appData.roll_no || appData.rollno || appData.reg_no;
+              if (v) return safeStr(v);
+            }
+            if (label.includes('email')) {
+              const v = appData.email || appData.Email || appData.email_id;
+              if (v) return safeStr(v);
+            }
+            if (label.includes('phone') || label.includes('mobile') || label.includes('contact')) {
+              const v = appData.phone || appData.Phone || appData.mobile || appData.contact;
+              if (v) return safeStr(v);
+            }
+            if (label.includes('cgpa') || label.includes('gpa')) {
+              const v = appData.cgpa || appData.CGPA || appData.gpa;
+              if (v) return safeStr(v);
+            }
+            if (label.includes('branch') || label.includes('department')) {
+              const v = appData.branch || appData.Branch || appData.department || appData.dept;
+              if (v) return safeStr(v);
+            }
+            
+            // 3. Try label-based keys
             const keys = [
-              field.id,
+              field.label,
+              field.label?.toLowerCase(),
               field.label?.toLowerCase().replace(/\s+/g, '_'),
               field.label?.toLowerCase().replace(/\s+/g, ''),
-              field.label,
             ];
             for (const key of keys) {
-              if (key && app.data?.[key] !== undefined) {
-                return safeStr(app.data[key]);
+              if (key && appData[key] !== undefined && appData[key] !== '') {
+                return safeStr(appData[key]);
               }
             }
+            
+            // 4. Fuzzy match on key
+            const labelWords = (field.label || '').toLowerCase().split(/\s+/).filter((w: string) => w.length > 2);
+            if (labelWords.length > 0) {
+              for (const [key, val] of Object.entries(appData)) {
+                if (!val) continue;
+                if (labelWords.every((w: string) => key.toLowerCase().includes(w))) {
+                  return safeStr(val);
+                }
+              }
+            }
+            
             return '—';
           };
 
@@ -1569,9 +1617,9 @@ export default function DriveDetailPage() {
                    <tbody>
                      {shortlistedStudents.map(app => (
                        <tr key={app._id} className="border-b border-slate-100 hover:bg-slate-50">
-                         <td className="px-4 py-3 font-bold text-slate-800 text-sm">{app.data?.fullName || app.data?.name || 'N/A'}</td>
-                         <td className="px-4 py-3 text-slate-600 text-sm">{app.data?.email || (app as any).candidateEmail || 'N/A'}</td>
-                         <td className="px-4 py-3 text-slate-600 text-sm">{app.data?.phone || 'N/A'}</td>
+                         <td className="px-4 py-3 font-bold text-slate-800 text-sm">{(() => { const d = app.data || {}; const nk = Object.keys(d).find(k => k.toLowerCase() === 'fullname') || Object.keys(d).find(k => k.toLowerCase() === 'full_name') || Object.keys(d).find(k => k.toLowerCase() === 'name') || Object.keys(d).find(k => k.toLowerCase().includes('name') && !k.toLowerCase().includes('email')); return (nk ? d[nk] : null) || d.name || d.Name || d.full_name || 'N/A'; })()}</td>
+                          <td className="px-4 py-3 text-slate-600 text-sm">{(() => { const d = app.data || {}; return d.email || d.Email || d.email_id || Object.values(d).find(v => typeof v === 'string' && v.includes('@')) || (app as any).candidateEmail || 'N/A'; })()}</td>
+                          <td className="px-4 py-3 text-slate-600 text-sm">{(() => { const d = app.data || {}; return d.phone || d.Phone || d.mobile || d.contact || 'N/A'; })()}</td>
                          <td className="px-4 py-3 text-slate-500 text-sm">{new Date(app.createdAt || Date.now()).toLocaleDateString()}</td>
                        </tr>
                      ))}
