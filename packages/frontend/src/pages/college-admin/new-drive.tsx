@@ -61,7 +61,9 @@ export default function NewDriveWizard() {
   const [step, setStep] = useState(1);
   const [locations, setLocations] = useState<string[]>([]);
   const [locInput, setLocInput] = useState('');
-  
+
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');  
   const [eligibility, setEligibility] = useState({
     cgpa: 6.5,
     branches: [...BRANCH_OPTIONS],
@@ -99,7 +101,7 @@ export default function NewDriveWizard() {
     }
   };
 
-  /* ── Location helpers ── */
+  /* ── Location & Tag helpers ── */
   const handleKeyDownLocation = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -108,6 +110,20 @@ export default function NewDriveWizard() {
         setLocInput('');
       }
     }
+  };
+
+  const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && tagInput.trim()) {
+      e.preventDefault();
+      if (!tags.includes(tagInput.trim())) {
+        setTags([...tags, tagInput.trim()]);
+      }
+      setTagInput('');
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setTags(tags.filter(t => t !== tagToRemove));
   };
 
   /* ── Round helpers ── */
@@ -197,7 +213,8 @@ export default function NewDriveWizard() {
           order: r.order,
           status: 'pending',
           isCustom: r.isCustom
-        }))
+        })),
+        tags
       };
       const res = await api.post('/drives', payload);
       toast.dismiss(loadingToast);
@@ -265,6 +282,24 @@ export default function NewDriveWizard() {
                     </span>
                   ))}
                   {locations.length === 0 && <span className="text-xs text-slate-400 font-medium">No locations added yet</span>}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Drive Tags / Categories</label>
+                <div className="p-2 border border-slate-200 rounded-xl bg-white min-h-[50px] flex flex-wrap gap-2 items-center focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-50">
+                  {tags.map((tag: string) => (
+                    <span key={tag} className="bg-indigo-50 text-indigo-700 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1">
+                      {tag} <button type="button" onClick={() => removeTag(tag)} className="hover:text-red-500"><X size={12}/></button>
+                    </span>
+                  ))}
+                  <input 
+                    value={tagInput}
+                    onChange={e => setTagInput(e.target.value)}
+                    onKeyDown={handleAddTag}
+                    placeholder={tags.length === 0 ? "Type a tag (e.g. Dream, Phase-1) and press Enter" : "Add another tag"}
+                    className="flex-1 min-w-[200px] outline-none text-sm px-2 py-1 bg-transparent text-slate-800 placeholder-slate-400"
+                  />
                 </div>
               </div>
             </div>

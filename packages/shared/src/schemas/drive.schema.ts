@@ -54,6 +54,7 @@ export const DriveSchema = z.object({
     startTime: z.string(),
     duration: z.number()
   })).optional(),
+  tags: z.array(z.string()).optional(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional()
 });

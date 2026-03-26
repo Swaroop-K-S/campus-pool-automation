@@ -56,7 +56,8 @@ const driveSchema = new Schema({
     newCloseDate: Date,
     reason: String,
     extendedAt: Date
-  }]
+  }],
+  tags: [{ type: String }]
 }, {
   timestamps: true
 });

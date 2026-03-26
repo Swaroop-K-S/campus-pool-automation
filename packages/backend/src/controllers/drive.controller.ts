@@ -289,6 +289,7 @@ export const cloneDrive = asyncHandler(async (req: Request, res: Response) => {
     })),
     status: 'draft',
     formStatus: 'not_configured',
+    tags: (sourceDrive as any).tags || [],
   };
 
   const newDrive = await DriveModel.create(clonedDriveData);

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Users, UserCheck, Trophy, Plus, ChevronRight, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, BarChart2, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2, Link } from 'lucide-react';
+import { Briefcase, Users, UserCheck, Trophy, Plus, ChevronRight, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, BarChart2, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2, Link, Tag } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
@@ -96,11 +96,28 @@ const DriveOptionsMenu = ({ drive, onEdit, onDelete, onDuplicate, onChangeStatus
 const EditDriveModal = ({ drive, onClose, onSave }: any) => {
   const [form, setForm] = useState({
     companyName: drive.companyName, jobRole: drive.jobRole, ctc: drive.ctc,
-    locations: drive.locations, eligibility: drive.eligibility || { minCGPA: 6.5, branches: ['CSE', 'ISE', 'ECE', 'ME', 'CV', 'EEE'] }, eventDate: drive.eventDate
+    locations: drive.locations, eligibility: drive.eligibility || { minCGPA: 6.5, branches: ['CSE', 'ISE', 'ECE', 'ME', 'CV', 'EEE'] }, eventDate: drive.eventDate,
+    tags: drive.tags || []
   });
+  const [tagInput, setTagInput] = useState('');
+
+  const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && tagInput.trim()) {
+      e.preventDefault();
+      if (!form.tags.includes(tagInput.trim())) {
+        setForm({ ...form, tags: [...form.tags, tagInput.trim()] });
+      }
+      setTagInput('');
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setForm({ ...form, tags: form.tags.filter((t: string) => t !== tagToRemove) });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-lg font-bold text-slate-800">Edit Drive</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100"><X size={18}/></button>
@@ -122,6 +139,23 @@ const EditDriveModal = ({ drive, onClose, onSave }: any) => {
             <div>
               <label className="text-sm font-medium text-slate-700 mb-1.5 block">Event Date</label>
               <input type="date" value={form.eventDate ? new Date(form.eventDate).toISOString().split('T')[0] : ''} onChange={e => setForm({...form, eventDate: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400"/>
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-1.5 block">Drive Tags / Categories</label>
+            <div className="p-2 border border-slate-200 rounded-xl bg-white min-h-[50px] flex flex-wrap gap-2 items-center focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-50">
+              {form.tags.map((tag: string) => (
+                <span key={tag} className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1">
+                  {tag} <button onClick={() => removeTag(tag)} className="hover:text-red-500"><X size={12}/></button>
+                </span>
+              ))}
+              <input 
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={handleAddTag}
+                placeholder={form.tags.length === 0 ? "Type a tag (e.g. Dream, Phase-1) and press Enter" : "Add another tag"}
+                className="flex-1 min-w-[120px] outline-none text-sm px-2 py-1 bg-transparent"
+              />
             </div>
           </div>
           <div>
@@ -182,6 +216,7 @@ export default function AdminDashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [viewMode, setViewMode] = useState<'grid'|'list'>((localStorage.getItem('dashboardView') as 'grid'|'list') || 'grid');
+  const [tagFilter, setTagFilter] = useState('All');
 
   const [editingDrive, setEditingDrive] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -277,9 +312,16 @@ export default function AdminDashboardPage() {
     return drives.filter(d => {
       const matchSearch = d.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) || d.jobRole?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchStatus = statusFilter === 'All' ? true : d.status.toLowerCase() === statusFilter.toLowerCase().replace(' ', '_');
-      return matchSearch && matchStatus;
+      const matchTag = tagFilter === 'All' ? true : (d.tags || []).includes(tagFilter);
+      return matchSearch && matchStatus && matchTag;
     });
-  }, [drives, searchQuery, statusFilter]);
+  }, [drives, searchQuery, statusFilter, tagFilter]);
+
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    drives.forEach(d => (d.tags || []).forEach((t: string) => tags.add(t)));
+    return Array.from(tags).sort();
+  }, [drives]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return 'TBD';
@@ -414,6 +456,23 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {/* TAG FILTER ROW */}
+      {allTags.length > 0 && (
+        <div className="flex items-center gap-2 mb-6 flex-wrap">
+          <Tag size={14} className="text-slate-400 shrink-0" />
+          <button onClick={() => setTagFilter('All')}
+            className={`px-3 py-1 rounded-full text-xs font-bold transition-colors border ${
+              tagFilter === 'All' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+            }`}>All Tags</button>
+          {allTags.map(tag => (
+            <button key={tag} onClick={() => setTagFilter(tag)}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-colors border ${
+                tagFilter === tag ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+              }`}>{tag}</button>
+          ))}
+        </div>
+      )}
+
       {/* DRIVES RENDER */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 opacity-60">
@@ -444,7 +503,13 @@ export default function AdminDashboardPage() {
                </div>
                <div className="flex-1 min-w-0">
                  <h3 className="font-bold text-slate-800 truncate leading-tight">{drive.companyName}</h3>
-                 <p className="text-slate-500 text-xs font-semibold mt-0.5 truncate">{drive.jobRole}</p>
+                 <div className="flex items-center gap-2 mt-0.5">
+                   <p className="text-slate-500 text-xs font-semibold truncate">{drive.jobRole}</p>
+                   {drive.tags?.slice(0, 2).map((tag: string) => (
+                     <span key={tag} className="bg-indigo-50/80 text-indigo-600 px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0">{tag}</span>
+                   ))}
+                   {drive.tags?.length > 2 && <span className="text-[10px] text-slate-400 font-bold">+{drive.tags.length - 2}</span>}
+                 </div>
                </div>
                <div className="hidden md:flex gap-6 shrink-0 text-center">
                  <div>
@@ -541,6 +606,12 @@ export default function AdminDashboardPage() {
                     </span>
                   ))}
                   {drive.locations?.length > 2 && <span className="text-xs font-bold text-slate-400">+{drive.locations.length - 2}</span>}
+                  {drive.tags?.slice(0, 2).map((tag: string) => (
+                    <span key={tag} className="bg-indigo-50 text-indigo-700 border border-indigo-100/50 text-xs px-2.5 py-1 rounded-md font-bold flex items-center gap-1">
+                      <Tag size={10} /> {tag}
+                    </span>
+                  ))}
+                  {drive.tags?.length > 2 && <span className="text-xs font-bold text-slate-400">+{drive.tags.length - 2}</span>}
                 </div>
                 
                 <div className="border-t border-slate-100 my-4 grow" />
