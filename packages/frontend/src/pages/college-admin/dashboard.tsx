@@ -5,6 +5,7 @@ import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
 import { useRef } from 'react';
+import { DriveCalendar } from '../../components/admin/DriveCalendar';
 
 const StatCard = ({ label, value, icon, color, onClick, trend, sublabel }: any) => (
   <div onClick={onClick}
@@ -215,7 +216,7 @@ export default function AdminDashboardPage() {
   const [showSelectedDrawer, setShowSelectedDrawer] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [viewMode, setViewMode] = useState<'grid'|'list'>((localStorage.getItem('dashboardView') as 'grid'|'list') || 'grid');
+  const [viewMode, setViewMode] = useState<'grid'|'list'|'calendar'>((localStorage.getItem('dashboardView') as 'grid'|'list'|'calendar') || 'grid');
   const [tagFilter, setTagFilter] = useState('All');
 
   const [editingDrive, setEditingDrive] = useState<any>(null);
@@ -447,11 +448,14 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="ml-auto flex bg-white border border-slate-200 rounded-lg p-1">
-          <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+          <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`} title="Grid View">
             <GridIcon size={16} />
           </button>
-          <button onClick={() => setViewMode('list')} className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}>
+          <button onClick={() => setViewMode('list')} className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`} title="List View">
             <ListIcon size={16} />
+          </button>
+          <button onClick={() => setViewMode('calendar')} className={`p-1.5 rounded ${viewMode === 'calendar' ? 'bg-indigo-100 text-indigo-800' : 'text-slate-400 hover:text-slate-600'}`} title="Calendar View">
+            <Calendar size={16} />
           </button>
         </div>
       </div>
@@ -493,6 +497,8 @@ export default function AdminDashboardPage() {
         <div className="text-center py-12 text-slate-500 font-bold border border-slate-200 rounded-2xl bg-white border-dashed">
            No drives match your filters.
         </div>
+      ) : viewMode === 'calendar' ? (
+        <DriveCalendar drives={filteredDrives} onDriveClick={(id) => navigate(`/admin/drives/${id}`)} />
       ) : viewMode === 'list' ? (
         <div className="flex flex-col gap-3">
           {filteredDrives.map(drive => (
