@@ -1966,13 +1966,25 @@ export default function DriveDetailPage() {
                         <div className="flex items-center gap-1">
                           <Clock size={14} className="text-slate-400" />
                           <input type="time" value={sched.startTime}
-                            onChange={e => setScheduleState(prev => ({ ...prev, [r.type]: { ...sched, startTime: e.target.value } }))}
-                            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:ring-1 focus:ring-indigo-500 outline-none" />
+                            onChange={e => {
+                              const val = e.target.value;
+                              setScheduleState(prev => {
+                                const cur = prev[r.type] || { startTime: '', duration: 90 };
+                                return { ...prev, [r.type]: { ...cur, startTime: val } };
+                              });
+                            }}
+                            className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:border-indigo-400 min-w-[110px]" />
                         </div>
                         <div className="flex items-center gap-1">
                           <input type="number" placeholder="90" value={sched.duration || ''}
-                            onChange={e => setScheduleState(prev => ({ ...prev, [r.type]: { ...sched, duration: Number(e.target.value) } }))}
-                            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-20 focus:ring-1 focus:ring-indigo-500 outline-none" />
+                            onChange={e => {
+                              const val = parseInt(e.target.value) || 0;
+                              setScheduleState(prev => {
+                                const cur = prev[r.type] || { startTime: '', duration: 90 };
+                                return { ...prev, [r.type]: { ...cur, duration: val } };
+                              });
+                            }}
+                            className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:border-indigo-400 w-20" />
                           <span className="text-slate-400 text-sm">mins</span>
                         </div>
                       </div>
