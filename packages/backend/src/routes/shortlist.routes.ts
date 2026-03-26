@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
-import { uploadShortlist, getShortlisted, massNotify, singleNotify, exportApplications } from '../controllers/shortlist.controller';
+import { uploadShortlist, getShortlisted, massNotify, singleNotify, exportApplications, bulkNotifyWithTemplate } from '../controllers/shortlist.controller';
 
 const router = Router({ mergeParams: true });
 const upload = multer({ storage: multer.memoryStorage() });
@@ -11,6 +11,7 @@ router.use(authenticate);
 router.post('/shortlist/upload', upload.single('file'), uploadShortlist);
 router.get('/shortlisted', getShortlisted);
 router.post('/notify/mass', massNotify);
+router.post('/notify/bulk', bulkNotifyWithTemplate);
 router.post('/notify/:appId', singleNotify);
 
 router.get('/export/applications', exportApplications);

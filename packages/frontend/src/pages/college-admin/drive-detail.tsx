@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
-import { 
+import {
   ArrowLeft, AlignLeft, AlignJustify, Hash,
   ChevronDown, ChevronRight, Circle, CheckSquare, Calendar, FileText, 
-  Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, MessageCircle, Mail,
-  Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search
+  Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
+  Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search,
+  Send, Loader2, Info, MessageSquare
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
@@ -159,9 +160,15 @@ export default function DriveDetailPage() {
   // Shortlist State
   const [uploadResult, setUploadResult] = useState<any>(null);
   const [shortlistedStudents, setShortlistedStudents] = useState<any[]>([]);
-  const [notifyChannels, setNotifyChannels] = useState<string[]>(['email', 'whatsapp']);
-  const [notifyProgress, setNotifyProgress] = useState<{ sent: number, total: number } | null>(null);
   const [isUploadingShortlist, setIsUploadingShortlist] = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [selectAllShortlist, setSelectAllShortlist] = useState(false);
+  const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
+  const [sendChannel, setSendChannel] = useState<'email'|'whatsapp'|'both'>('both');
+  const [emailSubject, setEmailSubject] = useState('Invitation: {{companyName}} Campus Drive — {{eventDate}}');
+  const [emailTemplate, setEmailTemplate] = useState(`<p>Dear {{name}},</p>\n<p>Congratulations! You have been shortlisted for the <strong>{{companyName}}</strong> campus placement drive.</p>\n<table style="border-collapse:collapse;margin:16px 0;"><tr><td style="padding:6px 12px;font-weight:bold;">Company</td><td style="padding:6px 12px;">{{companyName}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">Role</td><td style="padding:6px 12px;">{{jobRole}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">CTC</td><td style="padding:6px 12px;">{{ctc}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">Date</td><td style="padding:6px 12px;">{{eventDate}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">Venue</td><td style="padding:6px 12px;">{{venueName}}</td></tr></table>\n<p><strong>Your Drive ID: {{driveId}}</strong><br/>Keep this ID safe. You will need it on event day.</p>\n<p>Please carry your college ID and updated resume.</p>\n<p>Best regards,<br/>{{collegeName}}</p>`);
+  const [whatsappTemplate, setWhatsappTemplate] = useState(`Hi {{name}}! 🎉\n\nYou have been *shortlisted* for the *{{companyName}}* campus placement drive.\n\n📋 *Details:*\n- Role: {{jobRole}}\n- CTC: {{ctc}}\n- Date: {{eventDate}}\n- Venue: {{venueName}}\n\n🪪 *Your Drive ID: {{driveId}}*\nSave this ID — you will need it on event day to scan QR and check in.\n\nPlease carry your college ID and resume.\n\n- {{collegeName}}`);
+  const [sendProgress, setSendProgress] = useState<{sent:number;total:number;failed:number;active:boolean}|null>(null);
 
   // Event Day State
   const [eventDate, setEventDate] = useState<string>('');
@@ -247,11 +254,9 @@ export default function DriveDetailPage() {
   useEffect(() => {
     // Socket Connection
     socket.emit('join:drive', driveId);
-    socket.on('notify:progress', (data: { sent: number, total: number }) => {
-      setNotifyProgress(data);
-      if (data.sent >= data.total) {
-        toast.success('Notifications blast completed!');
-        setTimeout(() => setNotifyProgress(null), 3000);
+    socket.on('notify:progress', (data: any) => {
+      if (data.done) {
+        toast.success('Notifications completed!');
       }
     });
     socket.on('round:status_changed', (data: any) => {
@@ -327,15 +332,91 @@ export default function DriveDetailPage() {
     } catch (err) { }
   };
 
-  const handleNotifyMass = async () => {
-    if (notifyChannels.length === 0) return toast.error('Select at least one channel');
+
+
+  // ── Smart messaging helpers ─────────────────
+  // Smart field lookup: try field ID from formFields first, then common key names
+  const getFieldFromFormFields = (labelMatch: string, data: Record<string, any>): string | null => {
+    if (!data) return null;
+    const match = formFields.find((f: any) => f.label?.toLowerCase().includes(labelMatch));
+    if (match && data[match.id] !== undefined && data[match.id] !== '') {
+      return Array.isArray(data[match.id]) ? data[match.id].join(', ') : String(data[match.id]);
+    }
+    return null;
+  };
+
+  const getStudentName = (s: any) => {
+    const d = s.data || {};
+    // Try field ID from formFields first
+    const fromField = getFieldFromFormFields('name', d);
+    if (fromField && !fromField.toLowerCase().includes('company')) return fromField;
+    // Fallback to key-name search
+    const nk = Object.keys(d).find(k => k.toLowerCase() === 'fullname') || Object.keys(d).find(k => k.toLowerCase() === 'full_name') || Object.keys(d).find(k => k.toLowerCase() === 'name') || Object.keys(d).find(k => k.toLowerCase().includes('name') && !k.toLowerCase().includes('email'));
+    return (nk ? d[nk] : null) || d.name || d.Name || d.full_name || 'Unknown';
+  };
+  const getStudentEmail = (s: any) => { const d = s.data || {}; const f = getFieldFromFormFields('email', d); if (f) return f; return d.email || d.Email || d.email_id || Object.values(d).find(v => typeof v === 'string' && String(v).includes('@')) || (s as any).candidateEmail || ''; };
+  const getStudentPhone = (s: any) => { const d = s.data || {}; const f = getFieldFromFormFields('phone', d) || getFieldFromFormFields('mobile', d); if (f) return f; return d.phone || d.Phone || d.mobile || d.contact || ''; };
+  const getStudentUSN = (s: any) => { const d = s.data || {}; const f = getFieldFromFormFields('usn', d) || getFieldFromFormFields('roll', d); if (f) return f; return d.usn || d.USN || d.roll_no || '—'; };
+  const getStudentBranch = (s: any) => { const d = s.data || {}; const f = getFieldFromFormFields('branch', d) || getFieldFromFormFields('department', d); if (f) return f; return d.branch || d.Branch || '—'; };
+  const getStudentCGPA = (s: any) => { const d = s.data || {}; const f = getFieldFromFormFields('cgpa', d) || getFieldFromFormFields('gpa', d); if (f) return f; return String(d.cgpa || d.CGPA || '—'); };
+
+  const toggleStudentSelect = (id: string) => {
+    setSelectedStudentIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const resolvePreview = (template: string, student: any): string => {
+    if (!student) return template;
+    const vars: Record<string, string> = {
+      name: getStudentName(student), usn: getStudentUSN(student), branch: getStudentBranch(student),
+      cgpa: getStudentCGPA(student), email: String(getStudentEmail(student)), phone: String(getStudentPhone(student)),
+      driveId: student.driveStudentId || '—', referenceNumber: student.referenceNumber || '—',
+      companyName: drive?.companyName || '—', jobRole: drive?.jobRole || '—', ctc: drive?.ctc || '—',
+      eventDate: drive?.eventDate ? new Date(drive.eventDate).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'TBA',
+      venueName: (drive as any)?.venueDetails?.hallName || 'TBA', collegeName: 'Your College',
+    };
+    let result = template;
+    Object.entries(vars).forEach(([k, v]) => { result = result.replace(new RegExp(`{{\\s*${k}\\s*}}`, 'gi'), v); });
+    return result;
+  };
+
+  const buildQuickEmailBody = (student: any) => {
+    const name = getStudentName(student);
+    const did = student.driveStudentId || '';
+    return `Dear ${name},\n\nYou have been shortlisted for the ${drive?.companyName} campus placement drive.\n\nYour Drive ID: ${did}\n\nPlease save this ID for event day check-in.\n\nBest regards`;
+  };
+
+  const AVAILABLE_VARS = [
+    { key: 'name', label: 'Student Name' }, { key: 'usn', label: 'USN' }, { key: 'branch', label: 'Branch' },
+    { key: 'cgpa', label: 'CGPA' }, { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' },
+    { key: 'driveId', label: 'Drive ID' }, { key: 'companyName', label: 'Company' }, { key: 'jobRole', label: 'Job Role' },
+    { key: 'ctc', label: 'CTC' }, { key: 'eventDate', label: 'Event Date' }, { key: 'venueName', label: 'Venue' },
+    { key: 'collegeName', label: 'College Name' },
+  ];
+
+  const handleTemplateSend = async () => {
+    const ids = selectedStudentIds.size > 0 ? [...selectedStudentIds] : [];
+    const total = ids.length > 0 ? ids.length : shortlistedStudents.length;
+    setSendProgress({ sent: 0, total, failed: 0, active: true });
+
+    socket.on('notify:progress', ({ sent, total: t, failed, done }: any) => {
+      setSendProgress({ sent, total: t, failed, active: !done });
+      if (done) {
+        socket.off('notify:progress');
+        toast.success(`Sent ${sent} messages!` + (failed > 0 ? ` (${failed} failed)` : ''));
+      }
+    });
+
     try {
-      setNotifyProgress({ sent: 0, total: shortlistedStudents.length || 1 });
-      await api.post(`/drives/${driveId}/notify/mass`, { channels: notifyChannels });
-      toast.success('Pushing notifications background task...');
-    } catch (err) {
-      toast.error('Failed to trigger blast');
-      setNotifyProgress(null);
+      await api.post(`/drives/${driveId}/notify/bulk`, {
+        applicationIds: ids, channel: sendChannel, emailSubject, emailTemplate, whatsappTemplate
+      });
+    } catch {
+      toast.error('Failed to start sending');
+      setSendProgress(null);
     }
   };
 
@@ -1267,23 +1348,31 @@ export default function DriveDetailPage() {
                         </td>
                       </tr>
                     ) : displayApps.map((app: any, index: number) => {
-                      const nameKeys = Object.keys(app.data || {});
-                      const nameKey = nameKeys.find(k => k.toLowerCase() === 'fullname') || nameKeys.find(k => k.toLowerCase() === 'full_name') || nameKeys.find(k => k.toLowerCase() === 'name') || nameKeys.find(k => k.toLowerCase().includes('name') && !k.toLowerCase().includes('email'));
-                      let fullName = (nameKey ? app.data[nameKey] : null);
-                      // Handle legacy nested data: {Full: {Name: "abc"}} from old submissions where spaces caused nesting
-                      if (!fullName || typeof fullName === 'object') {
-                        const nested = nameKeys.reduce((acc: string, k: string) => {
-                          if (acc) return acc;
-                          const v = app.data[k];
-                          if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-                            const innerKey = Object.keys(v).find(ik => ik.toLowerCase().includes('name'));
-                            if (innerKey && typeof v[innerKey] === 'string') return v[innerKey];
-                          }
-                          return acc;
-                        }, '');
-                        fullName = nested || fullName || 'Unknown';
+                      // Smart name resolution: try formFields field ID first, then key-name search
+                      const nameField = formFields.find((f: any) => {
+                        const lbl = (f.label || '').toLowerCase();
+                        return lbl.includes('name') && !lbl.includes('company');
+                      });
+                      let fullName = nameField ? getFieldValue(app, nameField) : '—';
+                      if (fullName === '—') {
+                        // Fallback to key-name search
+                        const nameKeys = Object.keys(app.data || {});
+                        const nameKey = nameKeys.find(k => k.toLowerCase() === 'fullname') || nameKeys.find(k => k.toLowerCase() === 'full_name') || nameKeys.find(k => k.toLowerCase() === 'name') || nameKeys.find(k => k.toLowerCase().includes('name') && !k.toLowerCase().includes('email'));
+                        let resolved = (nameKey ? app.data[nameKey] : null);
+                        if (!resolved || typeof resolved === 'object') {
+                          const nested = nameKeys.reduce((acc: string, k: string) => {
+                            if (acc) return acc;
+                            const v = app.data[k];
+                            if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+                              const innerKey = Object.keys(v).find(ik => ik.toLowerCase().includes('name'));
+                              if (innerKey && typeof v[innerKey] === 'string') return v[innerKey];
+                            }
+                            return acc;
+                          }, '');
+                          resolved = nested || resolved || 'Unknown';
+                        }
+                        fullName = typeof resolved === 'string' ? resolved : 'Unknown';
                       }
-                      if (typeof fullName !== 'string') fullName = 'Unknown';
                       const initials = fullName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
                       return (
                         <tr key={app._id}
@@ -1345,24 +1434,33 @@ export default function DriveDetailPage() {
             {/* ── Candidate Detail Drawer ── */}
             {showDetailDrawer && selectedApp && (() => {
               const app = selectedApp;
-              const dataFields = formFields.filter((f: any) => f.type !== 'file_pdf' && f.type !== 'file_image');
-              const dNameKeys = Object.keys(app.data || {});
-              const dNameKey = dNameKeys.find(k => k.toLowerCase() === 'fullname') || dNameKeys.find(k => k.toLowerCase() === 'full_name') || dNameKeys.find(k => k.toLowerCase() === 'name') || dNameKeys.find(k => k.toLowerCase().includes('name') && !k.toLowerCase().includes('email'));
-              let drawerName = (dNameKey ? app.data[dNameKey] : null);
-              if (!drawerName || typeof drawerName === 'object') {
-                const nested = dNameKeys.reduce((acc: string, k: string) => {
-                  if (acc) return acc;
-                  const v = app.data[k];
-                  if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
-                    const innerKey = Object.keys(v).find(ik => ik.toLowerCase().includes('name'));
-                    if (innerKey && typeof v[innerKey] === 'string') return v[innerKey];
-                  }
-                  return acc;
-                }, '');
-                drawerName = nested || drawerName || 'Unknown';
+               // Smart name resolution for drawer: use same logic as table
+              const drawerNameField = formFields.find((f: any) => {
+                const lbl = (f.label || '').toLowerCase();
+                return lbl.includes('name') && !lbl.includes('company');
+              });
+              let drawerName = drawerNameField ? getFieldValue(app, drawerNameField) : '—';
+              if (drawerName === '—') {
+                const dNameKeys = Object.keys(app.data || {});
+                const dNameKey = dNameKeys.find(k => k.toLowerCase() === 'fullname') || dNameKeys.find(k => k.toLowerCase() === 'full_name') || dNameKeys.find(k => k.toLowerCase() === 'name') || dNameKeys.find(k => k.toLowerCase().includes('name') && !k.toLowerCase().includes('email'));
+                let resolved = (dNameKey ? app.data[dNameKey] : null);
+                if (!resolved || typeof resolved === 'object') {
+                  const nested = dNameKeys.reduce((acc: string, k: string) => {
+                    if (acc) return acc;
+                    const v = app.data[k];
+                    if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+                      const innerKey = Object.keys(v).find(ik => ik.toLowerCase().includes('name'));
+                      if (innerKey && typeof v[innerKey] === 'string') return v[innerKey];
+                    }
+                    return acc;
+                  }, '');
+                  resolved = nested || resolved || 'Unknown';
+                }
+                drawerName = typeof resolved === 'string' ? resolved : 'Unknown';
               }
-              if (typeof drawerName !== 'string') drawerName = 'Unknown';
               const drawerInitials = drawerName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+
+              const dataFields = formFields.filter((f: any) => f.type !== 'file_pdf' && f.type !== 'file_image');
 
               return (
                 <>
@@ -1566,76 +1664,240 @@ export default function DriveDetailPage() {
               )}
             </div>
 
-            {/* SECTION 2: Shortlisted Students Table */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
-                <h3 className="text-lg font-bold text-slate-800">Shortlisted Students ({shortlistedStudents.length})</h3>
-                
-                <div className="flex items-center gap-4">
-                   <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
-                     <input type="checkbox" checked={notifyChannels.includes('email')} onChange={(e) => setNotifyChannels(prev => e.target.checked ? [...prev, 'email'] : prev.filter(c => c !== 'email'))} className="w-4 h-4 text-indigo-600 rounded" />
-                     <Mail size={16} /> Email
-                   </label>
-                   <label className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-pointer">
-                     <input type="checkbox" checked={notifyChannels.includes('whatsapp')} onChange={(e) => setNotifyChannels(prev => e.target.checked ? [...prev, 'whatsapp'] : prev.filter(c => c !== 'whatsapp'))} className="w-4 h-4 text-green-600 rounded" />
-                     <MessageCircle size={16} /> WhatsApp
-                   </label>
-
-                   <button onClick={handleNotifyMass} disabled={shortlistedStudents.length === 0 || notifyChannels.length === 0} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors shadow-sm disabled:opacity-50">
-                     Notify All
-                   </button>
-                   <DownloadButton
-                     url={`/drives/${driveId}/export/shortlisted`}
-                     label="Download Shortlist"
-                     size="sm"
-                   />
+            {/* SECTION 2: Shortlisted Students + Messaging */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              {/* Header */}
+              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-slate-800">Shortlisted Students</h3>
+                  <span className="bg-indigo-100 text-indigo-700 text-sm px-2.5 py-0.5 rounded-full font-semibold">{shortlistedStudents.length}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  {selectedStudentIds.size > 0 && (
+                    <span className="text-sm text-slate-500">{selectedStudentIds.size} selected</span>
+                  )}
+                  <DownloadButton url={`/drives/${driveId}/export/shortlisted`} label="Download" size="sm"/>
+                  <button onClick={() => setShowTemplateBuilder(true)} disabled={shortlistedStudents.length === 0}
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-40 shadow-sm">
+                    <Send size={15}/>
+                    {selectedStudentIds.size > 0 ? `Send to ${selectedStudentIds.size} selected` : 'Send to All'}
+                  </button>
                 </div>
               </div>
 
-              {notifyProgress && (
-                <div className="mb-6 bg-indigo-50 border border-indigo-100 rounded-lg p-4">
-                   <div className="flex justify-between text-sm font-bold text-indigo-800 mb-2">
-                     <span>Sending mass notifications...</span>
-                     <span>{notifyProgress.sent} / {notifyProgress.total}</span>
-                   </div>
-                   <div className="w-full bg-indigo-200 rounded-full h-2.5">
-                     <div className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${(notifyProgress.sent / notifyProgress.total) * 100}%` }}></div>
-                   </div>
-                </div>
-              )}
-
+              {/* Table */}
               <div className="overflow-x-auto">
-                 <table className="w-full text-left">
-                   <thead>
-                     <tr className="bg-slate-50 border-b border-slate-200">
-                       <th className="px-4 py-3 font-bold text-slate-600 text-sm">Candidate</th>
-                       <th className="px-4 py-3 font-bold text-slate-600 text-sm">Email</th>
-                       <th className="px-4 py-3 font-bold text-slate-600 text-sm">Phone</th>
-                       <th className="px-4 py-3 font-bold text-slate-600 text-sm">Applied At</th>
-                     </tr>
-                   </thead>
-                   <tbody>
-                     {shortlistedStudents.map(app => (
-                       <tr key={app._id} className="border-b border-slate-100 hover:bg-slate-50">
-                         <td className="px-4 py-3 font-bold text-slate-800 text-sm">{(() => { const d = app.data || {}; const nk = Object.keys(d).find(k => k.toLowerCase() === 'fullname') || Object.keys(d).find(k => k.toLowerCase() === 'full_name') || Object.keys(d).find(k => k.toLowerCase() === 'name') || Object.keys(d).find(k => k.toLowerCase().includes('name') && !k.toLowerCase().includes('email')); return (nk ? d[nk] : null) || d.name || d.Name || d.full_name || 'N/A'; })()}</td>
-                          <td className="px-4 py-3 text-slate-600 text-sm">{(() => { const d = app.data || {}; return d.email || d.Email || d.email_id || Object.values(d).find(v => typeof v === 'string' && v.includes('@')) || (app as any).candidateEmail || 'N/A'; })()}</td>
-                          <td className="px-4 py-3 text-slate-600 text-sm">{(() => { const d = app.data || {}; return d.phone || d.Phone || d.mobile || d.contact || 'N/A'; })()}</td>
-                         <td className="px-4 py-3 text-slate-500 text-sm">{new Date(app.createdAt || Date.now()).toLocaleDateString()}</td>
-                       </tr>
-                     ))}
-                     {shortlistedStudents.length === 0 && (
-                       <tr><td colSpan={4} className="text-center py-16">
-                         <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
-                           <Users size={28} />
-                         </div>
-                         <h3 className="text-lg font-bold text-slate-700 mb-1 tracking-tight">No Shortlist Uploaded</h3>
-                         <p className="text-slate-500 text-sm font-medium">Upload an Excel/CSV file above to shortlist students.</p>
-                       </td></tr>
-                     )}
-                   </tbody>
-                 </table>
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                      <th className="w-10 px-4 py-3">
+                        <div onClick={() => {
+                          if (selectAllShortlist) { setSelectedStudentIds(new Set()); } else { setSelectedStudentIds(new Set(shortlistedStudents.map((s: any) => s._id))); }
+                          setSelectAllShortlist(!selectAllShortlist);
+                        }} className={`w-[18px] h-[18px] rounded border-2 cursor-pointer flex items-center justify-center transition-all ${selectAllShortlist ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 hover:border-indigo-400'}`}>
+                          {selectAllShortlist && <Check size={11} className="text-white" strokeWidth={3}/>}
+                        </div>
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Candidate</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">USN</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Branch</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">CGPA</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Drive ID</th>
+                      <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {shortlistedStudents.length === 0 ? (
+                      <tr><td colSpan={7} className="text-center py-16">
+                        <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100"><Users size={28}/></div>
+                        <h3 className="text-lg font-bold text-slate-700 mb-1">No Shortlist Uploaded</h3>
+                        <p className="text-slate-500 text-sm">Upload an Excel/CSV file above to shortlist students.</p>
+                      </td></tr>
+                    ) : shortlistedStudents.map((student: any) => {
+                      const studentName = getStudentName(student);
+                      const initials = studentName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+                      const cgpa = getStudentCGPA(student);
+                      const phone = String(getStudentPhone(student));
+                      const email = String(getStudentEmail(student));
+                      return (
+                        <tr key={student._id} className={`hover:bg-slate-50 transition-colors ${selectedStudentIds.has(student._id) ? 'bg-indigo-50/50' : ''}`}>
+                          <td className="px-4 py-3">
+                            <div onClick={() => toggleStudentSelect(student._id)} className={`w-[18px] h-[18px] rounded border-2 cursor-pointer flex items-center justify-center transition-all ${selectedStudentIds.has(student._id) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 hover:border-indigo-400'}`}>
+                              {selectedStudentIds.has(student._id) && <Check size={11} className="text-white" strokeWidth={3}/>}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 text-sm font-bold flex items-center justify-center flex-shrink-0">{initials}</div>
+                              <div>
+                                <div className="text-sm font-semibold text-slate-800">{studentName}</div>
+                                <div className="text-xs text-slate-400">{email || 'No email'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{getStudentUSN(student)}</td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{getStudentBranch(student)}</td>
+                          <td className="px-4 py-3">
+                            <span className={`text-sm font-semibold ${parseFloat(cgpa) >= 8 ? 'text-green-600' : parseFloat(cgpa) >= 6 ? 'text-amber-600' : cgpa === '—' ? 'text-slate-400' : 'text-red-500'}`}>{cgpa}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {student.driveStudentId ? (
+                              <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">{student.driveStudentId}</span>
+                            ) : <span className="text-slate-400 text-sm">—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              {phone && (
+                                <a href={`https://wa.me/91${phone.replace(/\D/g, '').slice(-10)}`} target="_blank" rel="noreferrer" title="Open WhatsApp"
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition-colors">
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                </a>
+                              )}
+                              {email && (
+                                <a href={`mailto:${email}?subject=${encodeURIComponent(`${drive?.companyName} Campus Drive Invitation`)}&body=${encodeURIComponent(buildQuickEmailBody(student))}`} title="Send Email"
+                                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors">
+                                  <Mail size={15}/>
+                                </a>
+                              )}
+                              <button onClick={() => { setSelectedStudentIds(new Set([student._id])); setShowTemplateBuilder(true); }} title="Send with template"
+                                className="w-8 h-8 flex items-center justify-center rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition-colors">
+                                <MessageSquare size={15}/>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
+
+            {/* ── TEMPLATE BUILDER MODAL ── */}
+            {showTemplateBuilder && (() => {
+              const targetCount = selectedStudentIds.size > 0 ? selectedStudentIds.size : shortlistedStudents.length;
+              const isAll = selectedStudentIds.size === 0;
+              const previewStudent = shortlistedStudents[0];
+              return (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowTemplateBuilder(false); }}>
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col">
+                    {/* Header */}
+                    <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                      <div>
+                        <h2 className="text-xl font-bold text-slate-800">Message Template</h2>
+                        <p className="text-sm text-slate-500 mt-0.5">Sending to <strong className="text-indigo-600">{isAll ? `all ${targetCount} shortlisted students` : `${targetCount} selected student${targetCount > 1 ? 's' : ''}`}</strong></p>
+                      </div>
+                      <button onClick={() => setShowTemplateBuilder(false)} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400"><X size={20}/></button>
+                    </div>
+
+                    <div className="flex-1 overflow-hidden flex">
+                      {/* LEFT: Template Editor */}
+                      <div className="flex-1 p-6 overflow-y-auto border-r border-slate-100">
+                        {/* Channel selector */}
+                        <div className="flex gap-1 mb-5 p-1 bg-slate-100 rounded-xl w-fit">
+                          {(['whatsapp', 'email', 'both'] as const).map(c => (
+                            <button key={c} onClick={() => setSendChannel(c)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${sendChannel === c ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                              {c === 'both' ? '📱📧 Both' : c === 'whatsapp' ? '📱 WhatsApp' : '📧 Email'}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* WhatsApp template */}
+                        {(sendChannel === 'whatsapp' || sendChannel === 'both') && (
+                          <div className="mb-5">
+                            <label className="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-2">
+                              <span className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-white text-xs">W</span>
+                              WhatsApp Message
+                            </label>
+                            <textarea value={whatsappTemplate} onChange={e => setWhatsappTemplate(e.target.value)} rows={8}
+                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-green-400 focus:ring-2 focus:ring-green-50 font-mono resize-none"/>
+                            <p className="text-xs text-slate-400 mt-1">Use *text* for bold in WhatsApp</p>
+                          </div>
+                        )}
+
+                        {/* Email template */}
+                        {(sendChannel === 'email' || sendChannel === 'both') && (
+                          <div className="mb-5">
+                            <label className="text-sm font-semibold text-slate-700 mb-2 block">📧 Email Subject</label>
+                            <input value={emailSubject} onChange={e => setEmailSubject(e.target.value)}
+                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm mb-3 focus:outline-none focus:border-blue-400"/>
+                            <label className="text-sm font-semibold text-slate-700 mb-2 block">Email Body (HTML)</label>
+                            <textarea value={emailTemplate} onChange={e => setEmailTemplate(e.target.value)} rows={10}
+                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 font-mono resize-none"/>
+                          </div>
+                        )}
+
+                        {/* Variables reference */}
+                        <div className="bg-slate-50 rounded-xl p-4">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Available Variables (click to insert)</p>
+                          <div className="flex flex-wrap gap-2">
+                            {AVAILABLE_VARS.map(v => (
+                              <button key={v.key} type="button" onClick={() => {
+                                const tag = `{{${v.key}}}`;
+                                if (sendChannel === 'whatsapp') setWhatsappTemplate(t => t + tag);
+                                else setEmailTemplate(t => t + tag);
+                              }} className="flex items-center gap-1 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 rounded-lg px-2.5 py-1.5 text-xs font-mono text-indigo-600 transition-all">
+                                <span className="text-indigo-400">{'{{'}</span>{v.key}<span className="text-indigo-400">{'}}'}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* RIGHT: Preview Panel */}
+                      <div className="w-80 p-6 overflow-y-auto bg-slate-50/50">
+                        <h3 className="text-sm font-semibold text-slate-700 mb-4">Preview</h3>
+                        {previewStudent && (
+                          <>
+                            {(sendChannel === 'whatsapp' || sendChannel === 'both') && (
+                              <div className="mb-4">
+                                <div className="text-xs text-slate-500 font-medium mb-2 flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded-full"/>WhatsApp</div>
+                                <div className="bg-[#DCF8C6] rounded-2xl rounded-tl-none p-3 text-sm text-slate-800 whitespace-pre-wrap leading-relaxed shadow-sm" style={{fontSize:'13px'}}>
+                                  {resolvePreview(whatsappTemplate, previewStudent)}
+                                </div>
+                              </div>
+                            )}
+                            {(sendChannel === 'email' || sendChannel === 'both') && (
+                              <div>
+                                <div className="text-xs text-slate-500 font-medium mb-2 flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded-full"/>Email</div>
+                                <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+                                  <div className="text-xs font-semibold text-slate-600 mb-1.5 pb-1.5 border-b border-slate-100">Subject: {resolvePreview(emailSubject, previewStudent)}</div>
+                                  <div className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed" dangerouslySetInnerHTML={{ __html: resolvePreview(emailTemplate, previewStudent) }}/>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="border-t border-slate-100 p-5 flex items-center justify-between bg-white rounded-b-2xl">
+                      {sendProgress?.active ? (
+                        <div className="flex-1 mr-4">
+                          <div className="flex justify-between text-xs text-slate-600 mb-1">
+                            <span>Sending... {sendProgress.sent} / {sendProgress.total}</span>
+                            {sendProgress.failed > 0 && <span className="text-red-500">{sendProgress.failed} failed</span>}
+                          </div>
+                          <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-600 rounded-full transition-all duration-300" style={{ width: `${Math.round((sendProgress.sent + sendProgress.failed) / sendProgress.total * 100)}%` }}/>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-sm text-slate-500"><Info size={14}/>Messages will be personalized for each student</div>
+                      )}
+                      <div className="flex gap-3 flex-shrink-0">
+                        <button onClick={() => setShowTemplateBuilder(false)} className="px-5 py-2.5 border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 text-sm font-medium">Cancel</button>
+                        <button onClick={handleTemplateSend} disabled={sendProgress?.active}
+                          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm">
+                          {sendProgress?.active ? (<><Loader2 size={15} className="animate-spin"/>Sending...</>) : (<><Send size={15}/>Send to {targetCount} {sendChannel === 'both' ? '(Email + WhatsApp)' : sendChannel === 'email' ? '(Email)' : '(WhatsApp)'}</>)}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
