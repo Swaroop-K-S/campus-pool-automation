@@ -21,8 +21,9 @@ export async function generateQRDataUrl(token: string, driveId: string): Promise
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   const url = `${frontendUrl}/event/${driveId}/verify?token=${token}`;
   return QRCode.toDataURL(url, {
-    width: 400,
-    margin: 2,
+    width: 320,
+    margin: 1,
+    errorCorrectionLevel: 'M',
     color: { dark: '#000000', light: '#FFFFFF' }
   });
 }

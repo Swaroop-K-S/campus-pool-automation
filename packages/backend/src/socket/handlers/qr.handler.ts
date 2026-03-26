@@ -4,6 +4,19 @@ import { QRSessionModel } from '../../models';
 
 const activeRotations = new Map<string, NodeJS.Timeout>();
 
+// Pre-generated next QR per drive
+const nextQRCache = new Map<string, { token: string; qrDataUrl: string }>();
+
+async function preGenerateNext(driveId: string): Promise<void> {
+  try {
+    const token = generateQRToken(driveId);
+    const qrDataUrl = await generateQRDataUrl(token, driveId);
+    nextQRCache.set(driveId, { token, qrDataUrl });
+  } catch {
+    // Silently fail - will fallback to live generation
+  }
+}
+
 async function emitNewQR(driveId: string, io: Server) {
   const token = generateQRToken(driveId);
   const qrDataUrl = await generateQRDataUrl(token, driveId);
@@ -30,12 +43,40 @@ export async function startQRRotation(driveId: string, io: Server) {
     clearInterval(activeRotations.get(driveId)!);
   }
 
-  // Emit immediately
+  // Emit first QR immediately
   await emitNewQR(driveId, io);
+
+  // Pre-generate the next one right away
+  preGenerateNext(driveId);
 
   // Rotate every 30 seconds
   const interval = setInterval(async () => {
-    await emitNewQR(driveId, io);
+    const cached = nextQRCache.get(driveId);
+    if (cached) {
+      // Use pre-generated QR
+      const { token, qrDataUrl } = cached;
+      nextQRCache.delete(driveId);
+
+      const expiresAt = Date.now() + 35000;
+      await QRSessionModel.findOneAndUpdate(
+        { driveId },
+        { driveId, token, expiresAt: new Date(expiresAt) },
+        { upsert: true }
+      );
+
+      io.to(`drive:${driveId}:qr`).emit('qr:rotate', {
+        qrDataUrl,
+        expiresAt,
+        rotatesIn: 30
+      });
+
+      // Pre-generate the next one immediately
+      preGenerateNext(driveId);
+    } else {
+      // Fallback if pre-gen failed
+      await emitNewQR(driveId, io);
+      preGenerateNext(driveId);
+    }
   }, 30000);
 
   activeRotations.set(driveId, interval);
@@ -46,4 +87,5 @@ export function stopQRRotation(driveId: string) {
     clearInterval(activeRotations.get(driveId)!);
     activeRotations.delete(driveId);
   }
+  nextQRCache.delete(driveId);
 }

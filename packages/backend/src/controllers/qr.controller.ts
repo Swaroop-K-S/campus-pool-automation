@@ -1,10 +1,37 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { DriveModel, ApplicationModel, RoomModel, PushSubscriptionModel } from '../models';
-import { verifyQRToken } from '../services/qr.service';
+import { DriveModel, ApplicationModel, RoomModel, PushSubscriptionModel, QRSessionModel } from '../models';
+import { verifyQRToken, generateQRDataUrl } from '../services/qr.service';
 import { startQRRotation, stopQRRotation } from '../socket/handlers/qr.handler';
 import { getIO } from '../socket';
 import { env } from '../config/env';
+
+// GET /event/:driveId/qr/current (PUBLIC — no auth)
+export const getCurrentQR = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driveId } = req.params;
+    const session = await QRSessionModel.findOne({
+      driveId,
+      expiresAt: { $gt: new Date() }
+    }).lean() as any;
+
+    if (!session) {
+      res.json({ success: false, error: 'QR not started' });
+      return;
+    }
+
+    const qrDataUrl = await generateQRDataUrl(session.token, driveId);
+    res.json({
+      success: true,
+      data: {
+        qrDataUrl,
+        expiresAt: new Date(session.expiresAt).getTime()
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
 // POST /event/:driveId/qr/start
 export const startQR = async (req: Request, res: Response): Promise<void> => {

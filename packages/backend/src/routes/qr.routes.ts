@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { startQR, stopQR, verifyStudent, getWelcomeData, getDriveInfo, pushSubscribe } from '../controllers/qr.controller';
+import { startQR, stopQR, verifyStudent, getWelcomeData, getDriveInfo, pushSubscribe, getCurrentQR } from '../controllers/qr.controller';
 import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
 
 // Public endpoints (no auth)
 router.get('/:driveId/info', getDriveInfo);
+router.get('/:driveId/qr/current', getCurrentQR);
 router.post('/:driveId/verify', verifyStudent);
 
 // Session token auth (student)

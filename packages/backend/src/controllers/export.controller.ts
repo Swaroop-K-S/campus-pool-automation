@@ -616,3 +616,125 @@ export const exportAnalyticsSummary = asyncHandler(async (req: Request, res: Res
   const filename = `CampusPool_Placement_Summary_${new Date().toISOString().split('T')[0]}.xlsx`;
   await sendWorkbook(res, workbook, filename);
 });
+
+// ════════════════════════════════════════
+// EXPORT 7: Custom Column Export
+// POST /drives/:driveId/export/applications/custom
+// Body: { columns: string[], status: string, formFields: { id, label, type }[] }
+// ════════════════════════════════════════
+export const exportCustomColumns = asyncHandler(async (req: Request, res: Response) => {
+  const { driveId } = req.params;
+  const { columns, status = 'all', formFields } = req.body;
+  const collegeId = req.user?.collegeId;
+
+  const drive = await DriveModel.findOne({ _id: driveId, collegeId }).lean() as any;
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  const filter: any = { driveId, collegeId };
+  if (status !== 'all') filter.status = status;
+
+  const applications = await ApplicationModel.find(filter).sort({ submittedAt: -1 }).lean() as any[];
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'CampusPool';
+
+  const sheet = workbook.addWorksheet('Applications');
+
+  addInfoHeader(sheet, [
+    { label: 'Company', value: drive.companyName },
+    { label: 'Filter', value: status.toUpperCase() },
+    { label: 'Columns', value: String(columns?.length || 0) },
+    { label: 'Records', value: String(applications.length) },
+    { label: 'Generated', value: new Date().toLocaleString('en-IN') }
+  ]);
+
+  // System column definitions
+  const systemCols: Record<string, { header: string; width: number }> = {
+    driveStudentId: { header: 'Drive ID', width: 18 },
+    referenceNumber: { header: 'Reference', width: 18 },
+    status: { header: 'Status', width: 14 },
+    submittedAt: { header: 'Submitted On', width: 18 }
+  };
+
+  // Map form field IDs to metadata
+  const formFieldMap = new Map<string, any>(
+    (formFields || []).map((f: any) => [f.id, f])
+  );
+
+  // Build workbook columns in the order the user selected
+  const sheetCols = (columns || []).map((colId: string) => {
+    if (systemCols[colId]) {
+      return { header: systemCols[colId].header, key: colId, width: systemCols[colId].width };
+    }
+    const field = formFieldMap.get(colId);
+    return {
+      header: field?.label || colId,
+      key: colId,
+      width: Math.max(14, Math.min((field?.label?.length || 10) + 6, 32))
+    };
+  });
+
+  // Always add # as first column
+  sheet.columns = [
+    { header: '#', key: '_sno', width: 6 },
+    ...sheetCols
+  ];
+
+  const allColDefs = sheet.columns;
+  const headerRow = sheet.addRow(allColDefs.map((c: any) => c.header));
+  styleHeaderRow(headerRow);
+
+  // Freeze header
+  const infoRowCount = 6; // 5 info rows + 1 blank
+  sheet.views = [{ state: 'frozen', ySplit: infoRowCount + 1, xSplit: 0 }];
+
+  // Data rows
+  applications.forEach((app: any, idx: number) => {
+    const rowData: any = { _sno: idx + 1 };
+
+    (columns || []).forEach((colId: string) => {
+      if (colId === 'driveStudentId') {
+        rowData[colId] = app.driveStudentId || '—';
+      } else if (colId === 'referenceNumber') {
+        rowData[colId] = app.referenceNumber || '—';
+      } else if (colId === 'status') {
+        rowData[colId] = (app.status || '—').toUpperCase();
+      } else if (colId === 'submittedAt') {
+        rowData[colId] = fmtDate(app.submittedAt);
+      } else {
+        // Form field — try multiple key formats
+        const field = formFieldMap.get(colId);
+        const keys = field ? [
+          field.id,
+          field.label?.replace(/\s+/g, '_'),
+          field.label?.toLowerCase().replace(/\s+/g, '_'),
+          field.label?.toLowerCase().replace(/\s+/g, ''),
+          field.label
+        ].filter(Boolean) : [colId];
+
+        let value: any = '—';
+        for (const k of keys) {
+          if (app.data?.[k] !== undefined && app.data[k] !== '') {
+            value = Array.isArray(app.data[k]) ? app.data[k].join(', ') : String(app.data[k]);
+            break;
+          }
+        }
+        rowData[colId] = value;
+      }
+    });
+
+    const row = sheet.addRow(allColDefs.map((c: any) => rowData[c.key] ?? ''));
+    styleDataRow(row, idx, getStatusColor(app.status));
+  });
+
+  // Auto filter
+  if (applications.length > 0) {
+    sheet.autoFilter = {
+      from: { row: infoRowCount + 1, column: 1 },
+      to: { row: infoRowCount + 1 + applications.length, column: allColDefs.length }
+    };
+  }
+
+  const filename = `${drive.companyName}_Applications_${status}_${new Date().toISOString().split('T')[0]}.xlsx`;
+  await sendWorkbook(res, workbook, filename);
+});

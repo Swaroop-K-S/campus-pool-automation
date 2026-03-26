@@ -11,6 +11,7 @@ import {
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
 import { DownloadButton } from '../../components/shared/DownloadButton';
+import { useAuthStore } from '../../store/auth.store';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -179,6 +180,13 @@ export default function DriveDetailPage() {
   // Applications tab state
   const [appStatusFilter, setAppStatusFilter] = useState('all');
 
+  // Column picker state
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+  const [columnsInitialized, setColumnsInitialized] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState('all');
+  const [downloadLoading, setDownloadLoading] = useState(false);
+
   const socket = useSocket();
 
   // Dropzone
@@ -214,6 +222,18 @@ export default function DriveDetailPage() {
     fetchDriveDetails();
     fetchFormConfig();
   }, [driveId]);
+
+  // Auto-select all columns when form fields first load
+  useEffect(() => {
+    if (formFields.length > 0 && !columnsInitialized) {
+      const fixed = ['driveStudentId', 'referenceNumber', 'status', 'submittedAt'];
+      const dynamic = formFields
+        .filter((f: any) => f.type !== 'file_pdf' && f.type !== 'file_image')
+        .map((f: any) => f.id);
+      setSelectedColumns([...fixed, ...dynamic]);
+      setColumnsInitialized(true);
+    }
+  }, [formFields, columnsInitialized]);
 
   useEffect(() => {
     if (activeTab === 'Applications') {
@@ -993,13 +1013,145 @@ export default function DriveDetailPage() {
                 <h3 className="text-xl font-bold text-slate-800">Student Applications</h3>
                 <span className="bg-slate-100 text-slate-600 text-sm px-2.5 py-1 rounded-full font-medium">{appTotal}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <DownloadButton
-                  url={`/drives/${driveId}/export/applications?status=${appStatusFilter}`}
-                  label={appStatusFilter === 'all' ? 'Download All' : `Download ${appStatusFilter}`}
-                  size="sm"
-                  variant={appStatusFilter === 'all' ? 'outline' : 'primary'}
-                />
+              <div className="relative">
+                <button
+                  onClick={() => setShowColumnPicker(!showColumnPicker)}
+                  className="flex items-center gap-2 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium transition-colors"
+                >
+                  <Download size={15}/>
+                  Download XLSX
+                  <ChevronDown size={13} className={`transition-transform ${showColumnPicker ? 'rotate-180' : ''}`}/>
+                </button>
+
+                {/* Close overlay */}
+                {showColumnPicker && (
+                  <div className="fixed inset-0 z-40" onClick={() => setShowColumnPicker(false)}/>
+                )}
+
+                {/* Column Picker Popover */}
+                {showColumnPicker && (() => {
+                  const fixedColumns = [
+                    { id: 'driveStudentId', label: 'Drive ID' },
+                    { id: 'referenceNumber', label: 'Reference Number' },
+                    { id: 'status', label: 'Status' },
+                    { id: 'submittedAt', label: 'Submitted Date' },
+                  ];
+                  const formColumns = formFields
+                    .filter((f: any) => f.type !== 'file_pdf' && f.type !== 'file_image')
+                    .map((f: any) => ({ id: f.id, label: f.label, type: f.type }));
+                  const allCols = [...fixedColumns, ...formColumns];
+                  const toggleCol = (id: string) => setSelectedColumns(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+                  const selectAll = () => setSelectedColumns(allCols.map(c => c.id));
+                  const selectNone = () => setSelectedColumns([]);
+
+                  return (
+                    <div className="absolute right-0 top-11 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50">
+                      {/* Header */}
+                      <div className="flex items-center justify-between p-4 border-b border-slate-100">
+                        <div>
+                          <h3 className="font-semibold text-slate-800 text-sm">Choose Columns to Export</h3>
+                          <p className="text-xs text-slate-400 mt-0.5">{selectedColumns.length} of {allCols.length} selected</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={selectAll} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">All</button>
+                          <span className="text-slate-300">|</span>
+                          <button onClick={selectNone} className="text-xs text-slate-500 hover:text-slate-700 font-medium">None</button>
+                        </div>
+                      </div>
+
+                      {/* Column list */}
+                      <div className="max-h-72 overflow-y-auto p-2">
+                        {/* System columns */}
+                        <div className="px-2 py-1.5">
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">System Fields</p>
+                          {fixedColumns.map(col => (
+                            <label key={col.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-50 cursor-pointer group">
+                              <div
+                                onClick={() => toggleCol(col.id)}
+                                className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-all ${selectedColumns.includes(col.id) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white group-hover:border-indigo-400'}`}>
+                                {selectedColumns.includes(col.id) && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+                              </div>
+                              <span className="text-sm text-slate-700 flex-1">{col.label}</span>
+                              <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">system</span>
+                            </label>
+                          ))}
+                        </div>
+
+                        {/* Form fields */}
+                        {formColumns.length > 0 && (
+                          <div className="px-2 py-1.5 border-t border-slate-100 mt-1">
+                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 mt-1">Form Fields</p>
+                            {formColumns.map((col: any) => (
+                              <label key={col.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-50 cursor-pointer group">
+                                <div
+                                  onClick={() => toggleCol(col.id)}
+                                  className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-all ${selectedColumns.includes(col.id) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white group-hover:border-indigo-400'}`}>
+                                  {selectedColumns.includes(col.id) && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+                                </div>
+                                <span className="text-sm text-slate-700 flex-1">{col.label}</span>
+                                <span className={`text-xs px-1.5 py-0.5 rounded ${col.type === 'email' ? 'bg-blue-50 text-blue-600' : col.type === 'phone' ? 'bg-green-50 text-green-600' : col.type === 'number' ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>{col.type}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="p-4 border-t border-slate-100">
+                        <div className="mb-3">
+                          <label className="text-xs font-medium text-slate-600 block mb-1.5">Download Which Students?</label>
+                          <select value={downloadStatus} onChange={e => setDownloadStatus(e.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:border-indigo-400">
+                            <option value="all">All Students ({appTotal})</option>
+                            <option value="applied">Applied Only</option>
+                            <option value="shortlisted">Shortlisted Only</option>
+                            <option value="attended">Attended Only</option>
+                            <option value="selected">Selected Only</option>
+                          </select>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (selectedColumns.length === 0) return;
+                            setDownloadLoading(true);
+                            try {
+                              const token = useAuthStore.getState().accessToken;
+                              const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+                              const response = await fetch(`${apiBase}/drives/${driveId}/export/applications/custom`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                body: JSON.stringify({
+                                  columns: selectedColumns,
+                                  status: downloadStatus,
+                                  formFields: formFields.map((f: any) => ({ id: f.id, label: f.label, type: f.type }))
+                                })
+                              });
+                              if (!response.ok) throw new Error('Failed');
+                              const disp = response.headers.get('Content-Disposition') || '';
+                              const match = disp.match(/filename="(.+?)"/);
+                              const fname = match?.[1] || 'applications.xlsx';
+                              const blob = await response.blob();
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url; a.download = fname;
+                              document.body.appendChild(a); a.click();
+                              document.body.removeChild(a); URL.revokeObjectURL(url);
+                              toast.success('Downloaded!');
+                              setShowColumnPicker(false);
+                            } catch { toast.error('Download failed'); }
+                            finally { setDownloadLoading(false); }
+                          }}
+                          disabled={selectedColumns.length === 0 || downloadLoading}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 transition-all"
+                        >
+                          {downloadLoading ? (
+                            <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Generating...</>
+                          ) : (
+                            <><Download size={15}/> Download {selectedColumns.length} columns</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 

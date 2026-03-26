@@ -10,10 +10,22 @@ const QRDisplayPage: React.FC = () => {
   const [drive, setDrive] = useState<any>(null);
 
   useEffect(() => {
-    // Join QR room
-    socket.emit('join:drive:qr', driveId);
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
-    // Listen for QR rotation
+    // Fetch current QR via REST immediately (don't wait for Socket.io)
+    fetch(`${apiBase}/event/${driveId}/qr/current`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data.qrDataUrl) {
+          setQrDataUrl(data.data.qrDataUrl);
+          const secondsLeft = Math.floor((data.data.expiresAt - Date.now()) / 1000);
+          setTimeLeft(Math.max(0, secondsLeft));
+        }
+      })
+      .catch(() => {});
+
+    // Also join socket room for live updates
+    socket.emit('join:drive:qr', driveId);
     socket.on('qr:rotate', ({ qrDataUrl, expiresAt }: any) => {
       setQrDataUrl(qrDataUrl);
       const secondsLeft = Math.floor((expiresAt - Date.now()) / 1000);
@@ -21,7 +33,6 @@ const QRDisplayPage: React.FC = () => {
     });
 
     // Fetch drive info for display
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
     fetch(`${apiBase}/event/${driveId}/info`)
       .then(r => r.json())
       .then(d => { if (d.success) setDrive(d.data); })
@@ -107,14 +118,32 @@ const QRDisplayPage: React.FC = () => {
           boxShadow: '0 25px 60px rgba(0,0,0,0.5)'
         }}>
           {qrDataUrl ? (
-            <img src={qrDataUrl} width={352} height={352} style={{ borderRadius: 12 }} alt="QR Code" />
+            <img src={qrDataUrl} width={352} height={352} style={{ borderRadius: 12, transition: 'opacity 0.4s ease' }} alt="QR Code" />
           ) : (
-            <div style={{ color: '#94A3B8', textAlign: 'center' }}>
-              <div style={{ fontSize: 56, marginBottom: 16 }}>⏳</div>
-              <div style={{ fontSize: 18, fontWeight: 600 }}>Waiting for QR...</div>
-              <div style={{ fontSize: 13, marginTop: 8, color: '#CBD5E1' }}>
-                Start QR rotation from admin panel
-              </div>
+            <div style={{
+              background: '#1E293B',
+              width: 320, height: 320,
+              borderRadius: 16,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px dashed #334155'
+            }}>
+              <div style={{
+                width: 40, height: 40,
+                border: '3px solid #6366F1',
+                borderTopColor: 'transparent',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite',
+                marginBottom: 16
+              }}/>
+              <p style={{ color: '#64748B', fontSize: 14, textAlign: 'center', padding: '0 16px', margin: '0 0 8px' }}>
+                Waiting for admin to start QR rotation...
+              </p>
+              <p style={{ color: '#475569', fontSize: 12, margin: 0 }}>
+                Start from the admin panel
+              </p>
             </div>
           )}
         </div>
@@ -156,6 +185,8 @@ const QRDisplayPage: React.FC = () => {
             })
           : ''}
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };
