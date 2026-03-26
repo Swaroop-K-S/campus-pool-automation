@@ -95,9 +95,23 @@ export const getDrivesHistory = asyncHandler(async (req: Request, res: Response)
   const countMap: any = {};
   for (const c of appCounts) {
     const key = c._id.driveId.toString();
-    if (!countMap[key]) countMap[key] = { total: 0, selected: 0 };
+    if (!countMap[key]) countMap[key] = { total: 0, shortlisted: 0, attended: 0, selected: 0 };
     countMap[key].total += c.count;
-    if (c._id.status === 'selected') countMap[key].selected += c.count;
+    
+    if (c._id.status === 'selected') {
+      countMap[key].selected += c.count;
+      countMap[key].attended += c.count;
+      countMap[key].shortlisted += c.count;
+    } else if (c._id.status === 'attended') {
+      countMap[key].attended += c.count;
+      countMap[key].shortlisted += c.count;
+    } else if (c._id.status === 'shortlisted') {
+      countMap[key].shortlisted += c.count;
+    } else if (c._id.status && c._id.status.includes('_passed')) {
+       // intermediate round passes imply they attended
+       countMap[key].attended += c.count;
+       countMap[key].shortlisted += c.count;
+    }
   }
 
   res.json({
@@ -110,6 +124,8 @@ export const getDrivesHistory = asyncHandler(async (req: Request, res: Response)
       eventDate: d.eventDate,
       createdAt: d.createdAt,
       applicationCount: countMap[d._id.toString()]?.total || 0,
+      shortlistedCount: countMap[d._id.toString()]?.shortlisted || 0,
+      attendedCount: countMap[d._id.toString()]?.attended || 0,
       selectedCount: countMap[d._id.toString()]?.selected || 0
     }))
   });

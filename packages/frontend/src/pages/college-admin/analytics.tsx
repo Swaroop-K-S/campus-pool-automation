@@ -129,37 +129,41 @@ export default function AnalyticsPage() {
               <tr>
                 <th className="text-left p-3 font-semibold text-slate-600">Company</th>
                 <th className="text-left p-3 font-semibold text-slate-600">Role</th>
-                <th className="text-left p-3 font-semibold text-slate-600">Applications</th>
-                <th className="text-left p-3 font-semibold text-slate-600">Selected</th>
-                <th className="text-left p-3 font-semibold text-slate-600">Conversion</th>
-                <th className="text-left p-3 font-semibold text-slate-600">Status</th>
+                <th className="text-center p-3 font-semibold text-slate-600">Applied</th>
+                <th className="text-center p-3 font-semibold text-slate-600">L1 Passed</th>
+                <th className="text-center p-3 font-semibold text-slate-600">Attended</th>
+                <th className="text-center p-3 font-semibold text-slate-600" title="Final Offers">Offered</th>
+                <th className="text-right p-3 font-semibold text-slate-600">Conversion</th>
+                <th className="text-right p-3 font-semibold text-slate-600">Status</th>
               </tr>
             </thead>
             <tbody>
               {drivesHistory.map((d: any) => {
                 const conv = d.applicationCount > 0 ? ((d.selectedCount / d.applicationCount) * 100).toFixed(1) : '0.0';
                 const convNum = parseFloat(conv);
-                const convColor = convNum > 20 ? 'text-green-600' : convNum > 10 ? 'text-amber-600' : 'text-red-500';
+                const convColor = convNum > 20 ? 'text-green-600' : convNum > 10 ? 'text-amber-600' : 'text-slate-500';
                 return (
                   <tr key={d._id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                    <td className="p-3 font-medium text-slate-800">{d.companyName}</td>
-                    <td className="p-3 text-slate-600">{d.jobRole}</td>
-                    <td className="p-3 text-slate-600">{d.applicationCount}</td>
-                    <td className="p-3 font-bold text-slate-800">{d.selectedCount}</td>
-                    <td className={`p-3 font-bold ${convColor}`}>{conv}%</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase ${
+                    <td className="p-3 font-black text-slate-800">{d.companyName}</td>
+                    <td className="p-3 text-slate-600 font-medium">{d.jobRole}</td>
+                    <td className="p-3 text-center text-slate-500 font-medium bg-slate-50/50">{d.applicationCount || 0}</td>
+                    <td className="p-3 text-center text-indigo-600 font-semibold bg-indigo-50/30">{d.shortlistedCount || 0}</td>
+                    <td className="p-3 text-center text-amber-600 font-semibold bg-amber-50/30">{d.attendedCount || 0}</td>
+                    <td className="p-3 text-center text-green-700 font-black bg-green-50/30">{d.selectedCount || 0}</td>
+                    <td className={`p-3 text-right font-bold ${convColor}`}>{conv}%</td>
+                    <td className="p-3 text-right">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                         d.status === 'active' ? 'bg-green-100 text-green-700' :
                         d.status === 'event_day' ? 'bg-indigo-100 text-indigo-700' :
                         d.status === 'completed' ? 'bg-slate-100 text-slate-600' :
                         'bg-amber-100 text-amber-700'
-                      }`}>{d.status}</span>
+                      }`}>{d.status.replace('_', ' ')}</span>
                     </td>
                   </tr>
                 );
               })}
               {drivesHistory.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-slate-400">No drives yet</td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-slate-400">No drives yet</td></tr>
               )}
             </tbody>
           </table>
