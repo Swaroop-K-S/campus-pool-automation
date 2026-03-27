@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, BarChart2, Settings, Bell, LogOut, GraduationCap, Menu, X, Grid3X3, ListChecks, QrCode, Plus, Clock } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
+import { useAppStore } from '../../store/app.store';
 import { api } from '../../services/api';
 import { CommandPalette } from './CommandPalette';
 
@@ -10,6 +11,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const logout = useAuthStore(state => state.logout);
   const user = useAuthStore(state => state.user);
+  const { contextDriveId, setContextDriveId } = useAppStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeDrive, setActiveDrive] = useState<any>(null);
   const [recentDrives, setRecentDrives] = useState<any[]>([]);
@@ -27,15 +29,22 @@ export default function AdminLayout() {
     api.get('/drives').then((d: any) => {
       if (d.success) {
         const allDrives = d.data || [];
-        const eventDrive = allDrives.find((dr: any) => dr.status === 'event_day');
-        setActiveDrive(eventDrive || null);
         
-        // Sort specifically by creation date and limit to top 4 recent drives
-        const sorted = [...allDrives].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setRecentDrives(sorted.slice(0, 4));
+        let selectedId = contextDriveId;
+        if (!selectedId && allDrives.length > 0) {
+           const eventDrive = allDrives.find((dr: any) => dr.status === 'event_day');
+           selectedId = eventDrive?._id || allDrives[0]?._id;
+           setContextDriveId(selectedId);
+        }
+        
+        setActiveDrive(allDrives.find((dr: any) => dr._id === selectedId) || null);
+        
+        // Keep recent drives for the selector and quick links
+        const sorted = [...allDrives].sort((a:any, b:any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setRecentDrives(sorted.slice(0, 10));
       }
     }).catch(() => {});
-  }, [location.pathname]); // re-fetch to keep sidebar updated across navigations
+  }, [location.pathname, contextDriveId, setContextDriveId]); // re-fetch to keep sidebar updated across navigations
 
   const getPageTitle = () => {
     if (location.pathname.includes('/dashboard')) return 'Dashboard';
@@ -105,15 +114,17 @@ export default function AdminLayout() {
             </div>
           </div>
 
-          {/* EVENT DAY — only visible when a drive is in event_day status */}
+          {/* ACTIVE DRIVE CONTEXT — Explicitly scoped down to global switcher */}
           {activeDrive && (
             <div>
-              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-3 flex items-center gap-2">
-                Event Day 
-                <span className="relative flex h-2 w-2">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-3 flex items-center gap-2 truncate">
+                {activeDrive.companyName} Ops
+                {activeDrive.status === 'event_day' && (
+                <span className="relative flex h-2 w-2 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
+                )}
               </div>
               <div className="space-y-1 relative">
                 {/* Active Line indicator */}
@@ -145,8 +156,8 @@ export default function AdminLayout() {
                 <Clock size={12} className="text-slate-600" />
               </div>
               <div className="space-y-1">
-                {recentDrives.map(d => (
-                  <Link key={d._id} to={`/admin/drives/${d._id}`} onClick={() => setSidebarOpen(false)}
+                {recentDrives.slice(0, 5).map(d => (
+                  <Link key={d._id} to={`/admin/drives/${d._id}`} onClick={() => { setSidebarOpen(false); setContextDriveId(d._id); }}
                      className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all font-medium text-sm group
                        ${location.pathname === `/admin/drives/${d._id}` ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 transition-colors
@@ -199,9 +210,30 @@ export default function AdminLayout() {
             <button className={`text-slate-600 hover:text-indigo-600 ${sidebarCollapsed ? '' : 'md:hidden'}`} onClick={() => { setSidebarOpen(true); setSidebarCollapsed(false); }}>
               <Menu size={24} />
             </button>
-            <h1 className="text-xl font-bold text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700">
+            <h1 className="text-xl font-bold text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 mr-2">
               {getPageTitle()}
             </h1>
+            
+            {/* Global Context Switcher */}
+            {recentDrives.length > 0 && (
+              <div className="hidden sm:flex items-center gap-3 border-l border-slate-200 pl-4">
+                <select
+                  value={contextDriveId || ''}
+                  onChange={(e) => {
+                    setContextDriveId(e.target.value);
+                    navigate(`/admin/drives/${e.target.value}`);
+                  }}
+                  className="bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 py-1.5 px-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer w-48 truncate shadow-sm hover:border-indigo-300 transition-colors"
+                >
+                  <option value="" disabled>Select Workspace...</option>
+                  {recentDrives.map(d => (
+                    <option key={d._id} value={d._id}>
+                      {d.companyName} {d.status === 'event_day' ? '🟢' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-4">
              <button className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all border border-transparent hover:border-slate-200 relative">
