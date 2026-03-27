@@ -1,25 +1,41 @@
 import { useState, useEffect } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, BarChart2, Settings, Bell, LogOut, GraduationCap, Menu, X, Grid3X3, ListChecks, QrCode } from 'lucide-react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, BarChart2, Settings, Bell, LogOut, GraduationCap, Menu, X, Grid3X3, ListChecks, QrCode, Plus, Clock } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
 import { api } from '../../services/api';
+import { CommandPalette } from './CommandPalette';
 
 export default function AdminLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const logout = useAuthStore(state => state.logout);
   const user = useAuthStore(state => state.user);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeDrive, setActiveDrive] = useState<any>(null);
+  const [recentDrives, setRecentDrives] = useState<any[]>([]);
 
-  // Check for any drive in event_day status
+  // Auto-collapse sidebar when viewing a drive detail page
+  const isDriveDetailPage = /^\/admin\/drives\/[a-f0-9]+$/i.test(location.pathname);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(isDriveDetailPage);
+
+  useEffect(() => {
+    setSidebarCollapsed(isDriveDetailPage);
+  }, [location.pathname]);
+
+  // Connect sidebar to backend to fetch live drive status and history
   useEffect(() => {
     api.get('/drives').then((d: any) => {
       if (d.success) {
-        const eventDrive = (d.data || []).find((dr: any) => dr.status === 'event_day');
+        const allDrives = d.data || [];
+        const eventDrive = allDrives.find((dr: any) => dr.status === 'event_day');
         setActiveDrive(eventDrive || null);
+        
+        // Sort specifically by creation date and limit to top 4 recent drives
+        const sorted = [...allDrives].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setRecentDrives(sorted.slice(0, 4));
       }
     }).catch(() => {});
-  }, [location.pathname]); // re-check when navigating
+  }, [location.pathname]); // re-fetch to keep sidebar updated across navigations
 
   const getPageTitle = () => {
     if (location.pathname.includes('/dashboard')) return 'Dashboard';
@@ -34,28 +50,43 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
+      <CommandPalette />
       {/* Mobile backdrop */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 md:hidden transition-opacity" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <aside className={`w-60 bg-slate-900 h-screen fixed left-0 flex flex-col z-40 transition-transform duration-200
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+      {/* Sidebar - Premium Dark Mode */}
+      <aside className={`w-64 bg-[#0B1120] border-r border-slate-800/80 h-screen fixed left-0 flex flex-col z-40 transition-transform duration-300 ease-out shadow-2xl shadow-indigo-900/10
+        ${sidebarOpen ? 'translate-x-0' : sidebarCollapsed ? '-translate-x-full' : '-translate-x-full md:translate-x-0'}`}>
+        {/* Top Glow */}
+        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent pointer-events-none" />
+
         {/* Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-slate-800 gap-3 text-white">
-          <GraduationCap className="w-7 h-7 text-indigo-500" />
-          <span className="font-bold text-lg">CampusPool</span>
-          <button className="ml-auto md:hidden text-slate-400" onClick={() => setSidebarOpen(false)}>
+        <div className="h-16 flex items-center px-6 border-b border-slate-800/50 gap-3 text-white relative z-10">
+          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-1.5 rounded-xl shadow-lg shadow-indigo-500/20">
+            <GraduationCap className="w-5 h-5 text-white" />
+          </div>
+          <span className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-200">CampusPool</span>
+          <button className="ml-auto md:hidden text-slate-400 hover:text-white transition-colors" onClick={() => setSidebarOpen(false)}>
             <X size={20} />
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-4 space-y-6 overflow-y-auto">
+        <nav className="flex-1 px-4 py-6 space-y-8 overflow-y-auto relative z-10 custom-scrollbar">
+          
+          {/* QUICK ACTIONS */}
+          <div className="mb-2">
+            <button onClick={() => { setSidebarOpen(false); navigate('/admin/drives/new'); }}
+              className="w-full bg-gradient-to-br from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:scale-95 text-white flex items-center justify-center gap-2 py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all group">
+              <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300"/> New Placement Drive
+            </button>
+          </div>
+
           {/* MAIN */}
           <div>
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Main</div>
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-3">Overview</div>
             <div className="space-y-1">
               {[
                 { name: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
@@ -64,9 +95,9 @@ export default function AdminLayout() {
                 const isActive = location.pathname === item.path || (item.name === 'Dashboard' && location.pathname.startsWith('/admin/drives'));
                 return (
                   <Link key={item.name} to={item.path} onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
-                      ${isActive ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                    <item.icon size={20} />
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium text-sm group
+                      ${isActive ? 'bg-indigo-500/10 text-indigo-400 font-semibold' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
+                    <item.icon size={18} className={isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300 transition-colors'}/>
                     {item.name}
                   </Link>
                 );
@@ -77,63 +108,95 @@ export default function AdminLayout() {
           {/* EVENT DAY — only visible when a drive is in event_day status */}
           {activeDrive && (
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">Event Day</div>
-              <div className="space-y-1">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-3 flex items-center gap-2">
+                Event Day 
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              </div>
+              <div className="space-y-1 relative">
+                {/* Active Line indicator */}
+                <div className="absolute left-[19px] top-6 bottom-6 w-px bg-slate-800" />
+                
                 <Link to={`/admin/drives/${activeDrive._id}/room-assignment`} onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
-                    ${location.pathname.includes('/room-assignment') ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                  <Grid3X3 size={20} /> Room Assignment
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium text-sm group
+                    ${location.pathname.includes('/room-assignment') ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
+                  <Grid3X3 size={18} className="relative z-10 bg-[#0B1120] rounded-full p-0.5" /> Room Assignment
                 </Link>
                 <Link to={`/admin/drives/${activeDrive._id}/rounds`} onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
-                    ${location.pathname.includes('/rounds') ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                  <ListChecks size={20} /> Round Management
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium text-sm group
+                    ${location.pathname.includes('/rounds') ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
+                  <ListChecks size={18} className="relative z-10 bg-[#0B1120] rounded-full p-0.5" /> Round Management
                 </Link>
                 <button onClick={() => window.open(`/event/${activeDrive._id}/qr-display`, '_blank')}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium text-slate-400 hover:bg-slate-800 hover:text-white">
-                  <QrCode size={20} /> QR Display ↗
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium text-sm text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 group">
+                  <QrCode size={18} className="relative z-10 bg-[#0B1120] rounded-full p-0.5" /> QR Display ↗
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* RECENT DRIVES (BACKEND CONNECTED) */}
+          {recentDrives.length > 0 && (
+            <div>
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-3 flex items-center justify-between">
+                Recent Drives
+                <Clock size={12} className="text-slate-600" />
+              </div>
+              <div className="space-y-1">
+                {recentDrives.map(d => (
+                  <Link key={d._id} to={`/admin/drives/${d._id}`} onClick={() => setSidebarOpen(false)}
+                     className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all font-medium text-sm group
+                       ${location.pathname === `/admin/drives/${d._id}` ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
+                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 transition-colors
+                         ${location.pathname === `/admin/drives/${d._id}` ? 'bg-indigo-500/20 text-indigo-400' : 'bg-slate-800 text-slate-500 group-hover:bg-indigo-500/20 group-hover:text-indigo-400'}`}>
+                         {d.companyName.substring(0, 2).toUpperCase()}
+                       </div>
+                       <div className="truncate flex-1">{d.companyName}</div>
+                  </Link>
+                ))}
               </div>
             </div>
           )}
 
           {/* SYSTEM */}
           <div>
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-3 mb-2">System</div>
+            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-3">System</div>
             <div className="space-y-1">
               <Link to="/admin/settings" onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors font-medium
-                  ${location.pathname.includes('/settings') ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                <Settings size={20} /> Settings
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium text-sm group
+                  ${location.pathname.includes('/settings') ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
+                <Settings size={18} className={location.pathname.includes('/settings') ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}/> Settings
               </Link>
             </div>
           </div>
         </nav>
 
         {/* User Info & Logout */}
-        <div className="p-4 border-t border-slate-800 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold shrink-0 shadow-sm">
+        <div className="p-4 border-t border-slate-800/50 relative z-10">
+          <div className="flex items-center gap-3 px-2 py-2 mb-2 rounded-xl group cursor-pointer hover:bg-slate-800/50 transition-colors">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20 text-sm">
                {user?.name?.[0]?.toUpperCase() || 'A'}
             </div>
-            <div className="overflow-hidden">
-               <p className="text-sm font-semibold text-white truncate leading-tight">{user?.name || 'Admin'}</p>
-               <p className="text-xs text-slate-400 truncate mt-0.5">{user?.email || 'admin@campuspool.in'}</p>
+            <div className="flex-1 min-w-0">
+               <div className="text-sm font-semibold text-white truncate">{user?.name || 'Admin'}</div>
+               <div className="text-[11px] text-slate-500 truncate">{user?.email || 'admin@campuspool.com'}</div>
             </div>
           </div>
           <button onClick={logout}
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 bg-slate-800/50 rounded-lg transition-colors border border-slate-700/50">
-             <LogOut size={18} /> Sign Out
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-semibold text-slate-400 hover:text-white hover:bg-red-500/10 rounded-xl transition-all group">
+             <LogOut size={16} className="group-hover:text-red-400 transition-colors"/> Sign Out
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <div className="md:ml-60 flex-1 flex flex-col min-h-screen relative max-w-full">
+      <div className={`flex-1 flex flex-col min-h-screen relative max-w-full transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-60'}`}>
         {/* Top Header */}
         <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-10 w-full">
           <div className="flex items-center gap-3">
-            <button className="md:hidden text-slate-600 hover:text-indigo-600" onClick={() => setSidebarOpen(true)}>
+            <button className={`text-slate-600 hover:text-indigo-600 ${sidebarCollapsed ? '' : 'md:hidden'}`} onClick={() => { setSidebarOpen(true); setSidebarCollapsed(false); }}>
               <Menu size={24} />
             </button>
             <h1 className="text-xl font-bold text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700">

@@ -35,6 +35,7 @@ export const DriveSchema = z.object({
   formToken: z.string().optional(),
   status: DriveStatusEnum.default("draft"),
   eventDate: z.string().or(z.date()).optional(),
+  reportTime: z.string().optional(),
   formOpenDate: z.string().or(z.date()).nullable().optional(),
   formCloseDate: z.string().or(z.date()).nullable().optional(),
   formStatus: z.enum(['not_configured', 'scheduled', 'open', 'closed', 'extended']).default('not_configured'),

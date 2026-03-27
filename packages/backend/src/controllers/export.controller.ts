@@ -786,3 +786,89 @@ export const exportCustomColumns = asyncHandler(async (req: Request, res: Respon
   const filename = `${drive.companyName}_Applications_${status}_${new Date().toISOString().split('T')[0]}.xlsx`;
   await sendWorkbook(res, workbook, filename);
 });
+
+// ════════════════════════════════════════
+// EXPORT 8: Single Room Manifest (Attendance Sheet)
+// GET /drives/:driveId/export/room/:roomId
+// ════════════════════════════════════════
+export const exportRoomManifest = asyncHandler(async (req: Request, res: Response) => {
+  const { driveId, roomId } = req.params;
+  const collegeId = req.user?.collegeId;
+
+  const drive = await DriveModel.findOne({ _id: driveId, collegeId }).lean() as any;
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  const room = await RoomModel.findOne({ _id: roomId, driveId }).lean() as any;
+  if (!room) return res.status(404).json({ success: false, error: 'Room not found' });
+
+  const applications = await ApplicationModel.find({ _id: { $in: room.assignedStudents || [] } })
+    .select('data')
+    .lean() as any[];
+
+  // For GD rounds especially, sorting by name or USN is good. Let's sort by USN broadly.
+  applications.sort((a, b) => {
+    const usnA = String(getCommonFieldValue(a.data || {}, 'usn') || '').toUpperCase();
+    const usnB = String(getCommonFieldValue(b.data || {}, 'usn') || '').toUpperCase();
+    return usnA.localeCompare(usnB);
+  });
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Attendance Sheet', {
+    pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, printTitlesRow: '1:6' }
+  });
+
+  const roundName = (room.round || '').replace(/_/g, ' ').toUpperCase();
+
+  addInfoHeader(sheet, [
+    { label: 'Company', value: drive.companyName },
+    { label: 'Round', value: roundName },
+    { label: 'Room Name', value: room.name },
+    { label: 'Total Allocated', value: String(applications.length) },
+    { label: 'Invigilator / Panelist', value: room.panelists?.map((p: any) => p.name).join(', ') || '—' }
+  ]);
+
+  const columns = [
+    { header: '#', key: 'sno', width: 6 },
+    { header: 'USN', key: 'usn', width: 16 },
+    { header: 'Full Name', key: 'name', width: 28 },
+    { header: 'Gender', key: 'gender', width: 10 },
+    { header: 'Branch', key: 'branch', width: 12 },
+    { header: 'Candidate Signature', key: 'signature', width: 24 },
+  ];
+  sheet.columns = columns;
+
+  const headerRow = sheet.addRow(columns.map(c => c.header));
+  styleHeaderRow(headerRow);
+  
+  // Make the signature column header white-bg with border, so it looks like a printable form
+  headerRow.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
+  headerRow.getCell(6).font = { bold: true, color: { argb: 'FF333333' } };
+
+  applications.forEach((app: any, idx: number) => {
+    const d = app.data || {};
+    const row = sheet.addRow([
+      idx + 1,
+      getFieldValue(d, { id: 'usn', label: 'USN' }),
+      getFieldValue(d, { id: 'name', label: 'Full Name' }),
+      getFieldValue(d, { id: 'gender', label: 'Gender' }),
+      getFieldValue(d, { id: 'branch', label: 'Branch' }),
+      '' // Blank for signature
+    ]);
+    styleDataRow(row, idx, 'FFFFFF');
+    row.height = 36; // give them vertical space to sign
+    row.eachCell({ includeEmpty: true }, cell => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+        right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+      };
+      if (Number(cell.col) === 6) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } }; // Light gray for sig box
+      }
+    });
+  });
+
+  const filename = `${drive.companyName}_${room.name}_Attendance.xlsx`;
+  await sendWorkbook(res, workbook, filename);
+});

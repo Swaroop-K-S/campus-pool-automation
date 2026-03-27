@@ -1,6 +1,14 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { Drive, DriveStatusEnum, RoundTypeEnum, RoundStatusEnum } from '@campuspool/shared';
 
+const roundSchema = new Schema({
+  type: { type: String, required: true },
+  label: { type: String },
+  order: { type: Number },
+  status: { type: String, enum: ['pending', 'active', 'completed'], default: 'pending' },
+  isCustom: { type: Boolean, default: false }
+});
+
 const driveSchema = new Schema({
   collegeId: { type: Schema.Types.ObjectId, ref: 'College', required: true },
   companyName: { type: String, required: true },
@@ -23,13 +31,7 @@ const driveSchema = new Schema({
       minCGPA: { type: Number, default: 0 }
     }
   },
-  rounds: [{
-    type: { type: String, required: true },
-    label: { type: String },
-    order: { type: Number },
-    status: { type: String, enum: ['pending', 'active', 'completed'], default: 'pending' },
-    isCustom: { type: Boolean, default: false }
-  }],
+  rounds: [roundSchema],
   formToken: { type: String, unique: true, sparse: true },
   status: { type: String, enum: Object.values(DriveStatusEnum.enum), default: 'draft' },
   eventDate: { type: Date },

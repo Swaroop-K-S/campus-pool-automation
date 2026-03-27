@@ -322,3 +322,24 @@ export const bulkNotifyWithTemplate = async (req: Request, res: Response): Promi
     res.status(500).json({ success: false, error: msg });
   }
 };
+
+// ════════════════════════════════════════
+// GET AUDIT LOGS (Notifications per Drive)
+// GET /drives/:driveId/audit-logs
+// ════════════════════════════════════════
+export const getAuditLogs = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driveId } = req.params;
+    const collegeId = (req as any).user?.collegeId;
+
+    const logs = await NotificationModel.find({ driveId, collegeId })
+      .sort({ sentAt: -1 })
+      .populate('applicationId', 'data candidateEmail referenceNumber')
+      .lean();
+
+    res.json({ success: true, data: logs });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ success: false, error: msg });
+  }
+};

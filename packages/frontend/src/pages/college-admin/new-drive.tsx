@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ArrowLeft, ArrowRight, Check, X, Plus, CheckCircle, GraduationCap, BookOpen, Award, GripVertical } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, X, Plus, CheckCircle, GraduationCap, BookOpen, Award, GripVertical, Calendar, Clock, MapPin } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -78,6 +78,13 @@ export default function NewDriveWizard() {
   const [selectedRounds, setSelectedRounds] = useState<SelectedRound[]>([]);
   const [customRoundInput, setCustomRoundInput] = useState('');
 
+  const [eventSetup, setEventSetup] = useState({
+    eventDate: '',
+    reportTime: '',
+    hallName: '',
+    capacity: 100
+  });
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const { register, formState: { errors }, trigger, getValues } = useForm({
@@ -98,6 +105,8 @@ export default function NewDriveWizard() {
     } else if (step === 3) {
       if (selectedRounds.length === 0) { toast.error("Select at least one round"); return; }
       setStep(4);
+    } else if (step === 4) {
+      setStep(5);
     }
   };
 
@@ -214,7 +223,13 @@ export default function NewDriveWizard() {
           status: 'pending',
           isCustom: r.isCustom
         })),
-        tags
+        tags,
+        eventDate: eventSetup.eventDate || null,
+        reportTime: eventSetup.reportTime || null,
+        venueDetails: eventSetup.hallName ? {
+          hallName: eventSetup.hallName,
+          capacity: eventSetup.capacity
+        } : null
       };
       const res = await api.post('/drives', payload);
       toast.dismiss(loadingToast);
@@ -227,34 +242,59 @@ export default function NewDriveWizard() {
     }
   };
 
-  const stepLabels = ['INFO', 'ELIGIBILITY', 'ROUNDS', 'CONFIRM'];
+  const stepLabels = ['INFO', 'ELIGIBILITY', 'ROUNDS', 'EVENT SETUP', 'CONFIRM'];
   const allBranches = [...eligibility.branches, ...customBranches];
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 min-h-screen">
-      {/* Header */}
-      <h1 className="text-3xl font-black text-slate-900 mb-8">New Drive</h1>
+    <div className="max-w-5xl mx-auto px-4 py-8 min-h-screen relative">
+      {/* Decorative Glows */}
+      <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[100px] -translate-x-1/2 -translate-y-1/2 pointer-events-none -z-10"></div>
+      <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[120px] translate-x-1/3 translate-y-1/3 pointer-events-none -z-10"></div>
 
-      {/* Stepper */}
-      <div className="flex items-center gap-4 mb-10 max-w-2xl mx-auto">
-        {stepLabels.map((label, i) => (
-          <div key={label} className="flex-1 text-center">
-            <div className={`w-10 h-10 mx-auto rounded-full flex items-center justify-center text-sm font-bold mb-1 transition-all ${
-              i + 1 < step ? 'bg-green-500 text-white' : i + 1 === step ? 'bg-indigo-600 text-white ring-4 ring-indigo-100' : 'bg-slate-200 text-slate-500'
-            }`}>
-              {i + 1 < step ? <Check size={16} strokeWidth={3}/> : i + 1}
+      {/* Header */}
+      <h1 className="text-3xl font-black text-slate-900 mb-10 text-center tracking-tight">Create Placement Drive</h1>
+
+      {/* Visual Progress Stepper */}
+      <div className="flex items-center justify-between mb-12 max-w-3xl mx-auto relative px-4 md:px-8">
+        {/* Connecting Line Track */}
+        <div className="absolute left-[10%] right-[10%] top-6 h-1.5 bg-slate-200/50 -z-10 rounded-full overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-700 ease-in-out" style={{ width: `${((step - 1) / (stepLabels.length - 1)) * 100}%` }}></div>
+        </div>
+        
+        {stepLabels.map((label, i) => {
+          const isCompleted = i + 1 < step;
+          const isCurrent = i + 1 === step;
+          
+          return (
+            <div key={label} className="flex flex-col items-center relative group z-10">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black mb-3 transition-all duration-500 ease-out ${
+                isCompleted 
+                  ? 'bg-gradient-to-br from-emerald-400 to-emerald-500 text-white shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-100 ring-offset-2' 
+                  : isCurrent 
+                  ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-xl shadow-indigo-600/40 scale-110 ring-4 ring-indigo-100' 
+                  : 'bg-white text-slate-400 border-2 border-slate-200/80 shadow-sm'
+              }`}>
+                {isCompleted ? <Check size={20} className="animate-in zoom-in duration-300" strokeWidth={3}/> : i + 1}
+              </div>
+              <span className={`text-[10px] font-extrabold tracking-widest uppercase transition-colors duration-300 ${
+                isCurrent ? 'text-indigo-700 font-black' : isCompleted ? 'text-slate-600' : 'text-slate-400'
+              }`}>
+                {label}
+              </span>
             </div>
-            <span className={`text-xs font-bold tracking-wider ${i + 1 <= step ? 'text-indigo-600' : 'text-slate-400'}`}>{label}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-200/80 shadow-sm p-8 mb-4">
+      <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-slate-200/60 shadow-[0_8px_40px_rgb(0,0,0,0.04)] p-8 md:p-12 mb-8 relative overflow-hidden">
+        
+        {/* Subtle inner top glare */}
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white to-transparent opacity-60"></div>
 
         {/* ═══ STEP 1 — INFO ═══ */}
         {step === 1 && (
-          <form className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300" onSubmit={e => e.preventDefault()}>
-            <h2 className="text-2xl font-black text-slate-800 mb-8">Company Information</h2>
+          <form className="max-w-2xl mx-auto animate-in fade-in slide-in-from-right-4 duration-500" onSubmit={e => e.preventDefault()}>
+            <h2 className="text-2xl font-black text-slate-800 mb-8 tracking-tight">Company Details</h2>
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Company Name</label>
@@ -528,8 +568,48 @@ export default function NewDriveWizard() {
           </div>
         )}
 
-        {/* ═══ STEP 4 — CONFIRM ═══ */}
+        {/* ═══ STEP 4 — EVENT SETUP ═══ */}
         {step === 4 && (
+          <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
+            <h2 className="text-2xl font-black text-slate-800 mb-2">Event Setup</h2>
+            <p className="text-slate-500 mb-8 font-medium">Set the initial event date, report time, and primary seminar/test hall configuration.</p>
+            
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Event Date (Optional)</label>
+                  <div className="relative">
+                    <input type="date" value={eventSetup.eventDate} onChange={e => setEventSetup({...eventSetup, eventDate: e.target.value})} className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50" />
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Reporting Time (Optional)</label>
+                  <div className="relative">
+                    <input type="time" value={eventSetup.reportTime} onChange={e => setEventSetup({...eventSetup, reportTime: e.target.value})} className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50" />
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Primary Hall Name (Optional)</label>
+                <div className="relative">
+                  <input type="text" placeholder="e.g. Main Auditorium" value={eventSetup.hallName} onChange={e => setEventSetup({...eventSetup, hallName: e.target.value})} className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50" />
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Hall Seating Capacity</label>
+                <input type="number" min="10" placeholder="e.g. 500" value={eventSetup.capacity || ''} onChange={e => setEventSetup({...eventSetup, capacity: parseInt(e.target.value) || 0})} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ STEP 5 — CONFIRM ═══ */}
+        {step === 5 && (
           <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
             <div className="text-center mb-8">
               <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -584,26 +664,37 @@ export default function NewDriveWizard() {
                   ))}
                 </div>
               </div>
+
+              {/* Event Details */}
+              {(eventSetup.eventDate || eventSetup.hallName) && (
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                  <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Event Setup</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {eventSetup.eventDate && <div><span className="text-xs font-bold text-slate-400 uppercase">Date & Time</span><p className="font-bold text-slate-800 text-lg">{eventSetup.eventDate} <span className="text-sm font-medium text-slate-500">{eventSetup.reportTime}</span></p></div>}
+                    {eventSetup.hallName && <div><span className="text-xs font-bold text-slate-400 uppercase">Primary Hall</span><p className="font-bold text-slate-800 text-lg">{eventSetup.hallName} <span className="text-sm font-medium text-slate-500">({eventSetup.capacity} seats)</span></p></div>}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
       </div>
 
       {/* Footer Navigation */}
-      <div className="flex justify-between items-center mt-8 px-2">
+      <div className="flex justify-between items-center mt-2 px-2 max-w-3xl mx-auto relative z-10">
         {step > 1 ? (
-          <button onClick={() => setStep(step - 1)} className="px-6 py-3 rounded-xl font-bold text-slate-600 bg-white border-2 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-colors flex items-center gap-2">
-            <ArrowLeft size={18} strokeWidth={3} /> Back
+          <button onClick={() => setStep(step - 1)} className="px-6 py-3.5 rounded-xl font-bold text-slate-600 bg-white/80 backdrop-blur-sm border-2 border-slate-200/60 hover:bg-white hover:border-slate-300 shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 group">
+            <ArrowLeft size={18} strokeWidth={3} className="text-slate-400 group-hover:text-slate-600 group-hover:-translate-x-1 transition-all"/> Back
           </button>
-        ) : <div></div>}
+        ) : <div aria-hidden="true"></div>}
         
-        {step < 4 ? (
-          <button onClick={handleNext} className="px-8 py-3 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-[0_4px_14px_0_rgb(79,70,229,0.39)] hover:shadow-[0_6px_20px_rgba(79,70,229,0.23)] hover:-translate-y-0.5 transition-all flex items-center gap-2">
-            Next Step <ArrowRight size={18} strokeWidth={3} />
+        {step < 5 ? (
+          <button onClick={handleNext} className="px-8 py-3.5 rounded-xl font-bold text-white bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/40 active:scale-95 hover:-translate-y-0.5 transition-all flex items-center gap-2 group">
+            Next Step <ArrowRight size={18} strokeWidth={3} className="group-hover:translate-x-1 transition-transform"/>
           </button>
         ) : (
-          <button onClick={submitDrive} className="px-8 py-3 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-[0_4px_14px_0_rgb(5,150,105,0.39)] hover:shadow-[0_6px_20px_rgba(5,150,105,0.23)] hover:-translate-y-0.5 transition-all flex items-center gap-2">
-            <Check size={18} strokeWidth={3} /> Create Placement Drive
+          <button onClick={submitDrive} className="px-8 py-3.5 rounded-xl font-bold text-white bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-xl shadow-emerald-500/30 hover:shadow-emerald-500/40 active:scale-95 hover:-translate-y-0.5 transition-all flex items-center gap-2 group">
+            <Check size={18} strokeWidth={3} className="group-hover:scale-110 transition-transform"/> Create Placement Drive
           </button>
         )}
       </div>

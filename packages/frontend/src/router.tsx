@@ -11,6 +11,7 @@ import RoomAssignmentPage from './pages/college-admin/room-assignment';
 import RoundManagementPage from './pages/college-admin/round-management';
 import AnalyticsPage from './pages/college-admin/analytics';
 import SettingsPage from './pages/college-admin/settings';
+import PrintManifestPage from './pages/college-admin/print-manifest';
 
 // Public pages
 import PublicApplyPage from './pages/public/apply';
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
         { path: 'drives/:driveId', element: <DriveDetailPage /> },
         { path: 'drives/:driveId/room-assignment', element: <RoomAssignmentPage /> },
         { path: 'drives/:driveId/rounds', element: <RoundManagementPage /> },
+        { path: 'drives/:driveId/rooms/:roomId/print', element: <PrintManifestPage /> },
         { path: 'analytics', element: <AnalyticsPage /> },
         { path: 'settings', element: <SettingsPage /> },
       ]

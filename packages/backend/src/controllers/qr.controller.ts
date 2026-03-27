@@ -7,16 +7,31 @@ import { getIO } from '../socket';
 import { env } from '../config/env';
 
 // GET /event/:driveId/qr/current (PUBLIC — no auth)
+// Auto-starts QR rotation if no active session exists
 export const getCurrentQR = async (req: Request, res: Response): Promise<void> => {
   try {
     const { driveId } = req.params;
-    const session = await QRSessionModel.findOne({
+    let session = await QRSessionModel.findOne({
       driveId,
       expiresAt: { $gt: new Date() }
     }).lean() as any;
 
+    // Auto-start rotation if no active session
     if (!session) {
-      res.json({ success: false, error: 'QR not started' });
+      try {
+        await startQRRotation(driveId, getIO());
+        // Fetch the newly created session
+        session = await QRSessionModel.findOne({
+          driveId,
+          expiresAt: { $gt: new Date() }
+        }).lean() as any;
+      } catch (startErr: any) {
+        console.error('Auto-start QR failed:', startErr.message);
+      }
+    }
+
+    if (!session) {
+      res.json({ success: false, error: 'QR could not be generated' });
       return;
     }
 

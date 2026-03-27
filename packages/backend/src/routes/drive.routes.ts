@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive } from '../controllers/drive.controller';
+import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive, archiveDrive, scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted } from '../controllers/drive.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import shortlistRoutes from './shortlist.routes';
 import eventRoutes from './event.routes';
@@ -20,10 +20,12 @@ router.route('/:driveId')
 
 router.patch('/:driveId/activate', activateDrive);
 router.post('/:driveId/clone', cloneDrive);
+router.get('/:driveId/archive', archiveDrive); // Added this line
 router.patch('/:driveId/start-event', startEventDay);
 router.patch('/:driveId/complete', markCompleted);
 
-import { scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted } from '../controllers/drive.controller';
+// The original file had a duplicate import for these, consolidating them into the first import.
+// import { scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted } from '../controllers/drive.controller';
 router.patch('/:driveId/form/schedule', scheduleForm);
 router.patch('/:driveId/form/extend', extendForm);
 router.patch('/:driveId/form/close', closeForm);

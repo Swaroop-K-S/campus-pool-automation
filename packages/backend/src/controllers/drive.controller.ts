@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { DriveModel, ApplicationModel, FormFieldModel } from '../models';
+import { DriveModel, ApplicationModel, FormFieldModel, RoomModel } from '../models';
 import mongoose from 'mongoose';
 import { asyncHandler } from '../utils/async-handler';
 import { DriveStatusEnum } from '@campuspool/shared';
@@ -52,9 +52,16 @@ export const createDrive = asyncHandler(async (req: Request, res: Response) => {
     status: DriveStatusEnum.enum.draft,
     eligibility: {
       minCGPA: req.body.eligibilityCriteria?.minCgpa || 0,
-      branches: req.body.eligibilityCriteria?.allowedBranches || []
+      branches: req.body.eligibilityCriteria?.allowedBranches || [],
+      tenth: req.body.eligibilityCriteria?.tenth || { required: false, minPercentage: 0 },
+      twelfth: req.body.eligibilityCriteria?.twelfth || { required: false, minPercentage: 0 },
+      diploma: req.body.eligibilityCriteria?.diploma || { required: false, minCGPA: 0 }
     },
-    rounds: [],
+    rounds: req.body.rounds || [],
+    tags: req.body.tags || [],
+    eventDate: req.body.eventDate || null,
+    reportTime: req.body.reportTime || null,
+    venueDetails: req.body.venueDetails || null
   });
 
   // Seed default form fields for the new drive
@@ -63,13 +70,28 @@ export const createDrive = asyncHandler(async (req: Request, res: Response) => {
     collegeId,
     fields: [
       { id: 'field_name', type: 'text', label: 'Full Name', required: true, locked: true, order: 0 },
-      { id: 'field_usn', type: 'text', label: 'USN', required: true, locked: true, order: 1, validation: { pattern: '^[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}$', customErrorMessage: 'Must be a valid USN (e.g., 1RV22CS111)' } },
+      { id: 'field_usn', type: 'text', label: 'USN', required: true, locked: true, order: 1, validation: { pattern: '^[A-Za-z0-9]{5,20}$', customErrorMessage: 'Must be a valid alphanumeric USN/Roll No' } },
       { id: 'field_email', type: 'email', label: 'Email Address', required: true, locked: true, order: 2, validation: { pattern: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$', customErrorMessage: 'Valid email required' } },
       { id: 'field_phone', type: 'phone', label: 'Phone Number', required: true, locked: true, order: 3, validation: { pattern: '^\\d{10}$', customErrorMessage: 'Must be exactly 10 digits' } },
-      { id: 'field_branch', type: 'dropdown', label: 'Branch', required: true, locked: true, order: 4, options: ['CSE', 'CSE (AIML)', 'CSE (Data Science)', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'OTHER'] },
-      { id: 'field_cgpa', type: 'number', label: 'CGPA', required: true, locked: true, order: 5, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' } },
+      { id: 'field_gender', type: 'dropdown', label: 'Gender', required: true, locked: true, order: 4, options: ['Male', 'Female', 'Other'] },
+      { id: 'field_branch', type: 'dropdown', label: 'Branch', required: true, locked: true, order: 5, options: ['CSE', 'CSE (AIML)', 'CSE (Data Science)', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'OTHER'] },
+      { id: 'field_cgpa', type: 'number', label: 'CGPA', required: true, locked: true, order: 6, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' } },
     ]
   });
+
+  // Automatically create a Room if venue details are provided
+  if (req.body.venueDetails && req.body.venueDetails.hallName) {
+    const initialRoundType = (req.body.rounds && req.body.rounds.length > 0) ? req.body.rounds[0].type : 'ppt';
+    await RoomModel.create({
+      driveId: newDrive._id,
+      collegeId,
+      round: initialRoundType,
+      name: req.body.venueDetails.hallName,
+      floor: 'Ground', // Default value
+      capacity: req.body.venueDetails.capacity || 100,
+      panelists: []
+    });
+  }
 
   res.status(201).json({
     success: true,
@@ -250,6 +272,97 @@ export const markCompleted = asyncHandler(async (req: Request, res: Response) =>
 
   if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
   res.status(200).json({ success: true, data: drive });
+});
+
+// GET /api/v1/drives/:driveId/archive
+// 1-Click Archive & Compliance Report
+import exceljs from 'exceljs';
+import { NotificationModel } from '../models/notification.model';
+
+export const archiveDrive = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  const drive = await DriveModel.findOneAndUpdate(
+    { _id: driveId, collegeId },
+    { status: 'archived' },
+    { new: true }
+  );
+
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  const workbook = new exceljs.Workbook();
+  const apps = await ApplicationModel.find({ driveId }).lean();
+  const notifications = await NotificationModel.find({ driveId }).populate('applicationId', 'data candidateEmail referenceNumber').lean();
+
+  // Sheet 1: All Applications
+  const sheet1 = workbook.addWorksheet('All Applications');
+  sheet1.columns = [
+    { header: 'Ref#', key: 'ref', width: 20 },
+    { header: 'Name', key: 'name', width: 25 },
+    { header: 'Status', key: 'status', width: 15 },
+    { header: 'Email', key: 'email', width: 25 },
+    { header: 'Phone', key: 'phone', width: 15 },
+    { header: 'Applied At', key: 'date', width: 20 }
+  ];
+  sheet1.getRow(1).font = { bold: true };
+  sheet1.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+  apps.forEach(app => {
+    sheet1.addRow({
+      ref: (app as any).referenceNumber || '-',
+      name: app.data?.name || app.data?.fullName || '-',
+      status: app.status,
+      email: app.data?.email || (app as any).candidateEmail || '-',
+      phone: app.data?.phone || '-',
+      date: new Date((app as any).createdAt || Date.now()).toLocaleString()
+    });
+  });
+
+  // Sheet 2: Shortlist & Selected
+  const sheet2 = workbook.addWorksheet('Offers & Shortlists');
+  sheet2.columns = [
+    { header: 'Ref#', key: 'ref', width: 20 },
+    { header: 'Name', key: 'name', width: 25 },
+    { header: 'Final Status', key: 'status', width: 15 }
+  ];
+  sheet2.getRow(1).font = { bold: true };
+  sheet2.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF10B981' } };
+  apps.filter(a => a.status === 'selected' || a.status === 'shortlisted').forEach(app => {
+    sheet2.addRow({
+      ref: (app as any).referenceNumber || '-',
+      name: app.data?.name || app.data?.fullName || '-',
+      status: app.status.toUpperCase()
+    });
+  });
+
+  // Sheet 3: Communications Audit
+  const sheet3 = workbook.addWorksheet('Audit Log');
+  sheet3.columns = [
+    { header: 'Date', key: 'date', width: 25 },
+    { header: 'Candidate Ref', key: 'ref', width: 20 },
+    { header: 'Channel', key: 'channel', width: 15 },
+    { header: 'Type', key: 'type', width: 15 },
+    { header: 'Delivery Status', key: 'status', width: 15 },
+    { header: 'Error (if any)', key: 'error', width: 30 }
+  ];
+  sheet3.getRow(1).font = { bold: true };
+  sheet3.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF59E0B' } };
+  notifications.forEach(log => {
+      sheet3.addRow({
+          date: log.sentAt ? new Date(log.sentAt).toLocaleString() : '-',
+          ref: (log.applicationId as any)?.referenceNumber || '-',
+          channel: log.channel,
+          type: log.recipientType,
+          status: log.status,
+          error: log.errorMessage || '-'
+      });
+  });
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename=${(drive?.companyName || 'Drive').replace(/\s+/g,'_')}_Compliance_Archive.xlsx`);
+
+  await workbook.xlsx.write(res);
+  res.end();
 });
 
 // POST /api/v1/drives/:driveId/clone

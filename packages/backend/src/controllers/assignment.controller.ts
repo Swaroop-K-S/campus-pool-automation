@@ -9,11 +9,36 @@ import * as XLSX from 'xlsx';
 export const autoAssign = async (req: Request, res: Response): Promise<void> => {
   try {
     const { driveId, roundType } = req.params;
+    const { enforceGenderRatio, isFirstRound } = req.body;
 
+    // Determine the pool of students based on round type
+    let statusFilter: string[];
+    if (isFirstRound) {
+      statusFilter = ['shortlisted']; // For round 1, we seat the shortlisted students
+    } else {
+      // For subsequent rounds, we seat those who 'attended' or passed the previous round
+      statusFilter = ['attended', `${roundType}_pending`, `${roundType}_passed`]; // _pending is hypothetical, but we use what we have
+    }
+
+    // Always fetch the students based on filter, plus any already passed for this specific round just in case
     const students = await ApplicationModel.find({
       driveId,
-      status: { $in: ['attended', 'shortlisted', 'invited', 'applied', `${roundType}_passed`] }
-    }).select('_id data.branch data.name data.fullName').lean();
+      status: { $in: isFirstRound ? statusFilter : ['attended', 'shortlisted', 'invited', 'applied', `${roundType}_passed`] }
+    }).select('_id data.branch data.name data.fullName data.gender').lean();
+
+    // Since we need exact control, let's refine the filter explicitly in memory if needed
+    let eligibleStudents = students;
+    if (isFirstRound) {
+       eligibleStudents = students.filter(s => s.status === 'shortlisted' || s.status === 'invited');
+    } else {
+       // Only allow those who possess the 'attended' marker or uniquely passed this round via XLSX upload
+       eligibleStudents = students.filter(s => s.status === 'attended' || s.status === `${roundType}_passed`);
+    }
+
+    // Fallback if empty (e.g. testing)
+    if (eligibleStudents.length === 0) {
+       eligibleStudents = students;
+    }
 
     const rooms = await RoomModel.find({ driveId, round: roundType }).lean();
 
@@ -23,28 +48,47 @@ export const autoAssign = async (req: Request, res: Response): Promise<void> => 
     }
 
     const totalCapacity = rooms.reduce((s, r) => s + (r.capacity || 0), 0);
-    if (totalCapacity < students.length) {
+    if (totalCapacity < eligibleStudents.length) {
       res.status(400).json({
         success: false,
         error: 'Insufficient room capacity',
-        studentsCount: students.length,
+        studentsCount: eligibleStudents.length,
         totalCapacity,
-        shortage: students.length - totalCapacity
+        shortage: eligibleStudents.length - totalCapacity
       });
       return;
     }
 
-    const studentIds = students.map(s => s._id.toString());
     const roomInputs = rooms.map(r => ({
       _id: r._id.toString(),
       capacity: r.capacity,
       name: r.name
     }));
 
-    const assignments = randomAssign(studentIds, roomInputs);
+    let assignments: any[] = [];
+
+    if (enforceGenderRatio) {
+      // Separate by gender
+      const boys = eligibleStudents.filter(s => (s.data?.gender || '').toString().toLowerCase().includes('male') && !(s.data?.gender || '').toString().toLowerCase().includes('female'));
+      const girls = eligibleStudents.filter(s => (s.data?.gender || '').toString().toLowerCase().includes('female'));
+      const others = eligibleStudents.filter(s => !boys.includes(s) && !girls.includes(s));
+
+      // Simple round robin to ensure equal mix
+      const splitIds: string[] = [];
+      const maxLen = Math.max(boys.length, girls.length, others.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (girls[i]) splitIds.push(girls[i]._id.toString());
+        if (boys[i]) splitIds.push(boys[i]._id.toString());
+        if (others[i]) splitIds.push(others[i]._id.toString());
+      }
+      assignments = randomAssign(splitIds, roomInputs);
+    } else {
+      const studentIds = eligibleStudents.map(s => s._id.toString());
+      assignments = randomAssign(studentIds, roomInputs);
+    }
 
     // Enrich with student names
-    const studentMap = new Map(students.map(s => [
+    const studentMap = new Map(eligibleStudents.map(s => [
       s._id.toString(),
       { name: s.data?.fullName || s.data?.name || 'Unknown', branch: s.data?.branch || '' }
     ]));
@@ -53,7 +97,7 @@ export const autoAssign = async (req: Request, res: Response): Promise<void> => 
     const enriched = assignments.map(a => ({
       ...a,
       roomName: roomMap.get(a.roomId) || '',
-      students: a.studentIds.map(id => ({
+      students: a.studentIds.map((id: string) => ({
         _id: id,
         ...(studentMap.get(id) || { name: 'Unknown', branch: '' })
       }))
@@ -63,8 +107,8 @@ export const autoAssign = async (req: Request, res: Response): Promise<void> => 
       success: true,
       data: {
         assignments: enriched,
-        totalStudents: students.length,
-        overflow: Math.max(0, students.length - totalCapacity),
+        totalStudents: eligibleStudents.length,
+        overflow: Math.max(0, eligibleStudents.length - totalCapacity),
         message: 'Preview generated. Confirm to save.'
       }
     });

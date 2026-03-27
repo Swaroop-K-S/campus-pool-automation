@@ -12,18 +12,15 @@ import {
 
 const router = Router();
 
-// All export routes require authentication
-router.use(authenticate);
-
 // Drive-specific exports
-router.get('/drives/:driveId/export/applications', exportApplications);
-router.post('/drives/:driveId/export/applications/custom', exportCustomColumns);
-router.get('/drives/:driveId/export/shortlisted', exportShortlisted);
-router.get('/drives/:driveId/export/attended', exportAttended);
-router.get('/drives/:driveId/export/round/:roundType', exportRoundStudents);
-router.get('/drives/:driveId/export/selected', exportSelected);
+router.get('/drives/:driveId/export/applications', authenticate, exportApplications);
+router.post('/drives/:driveId/export/applications/custom', authenticate, exportCustomColumns);
+router.get('/drives/:driveId/export/shortlisted', authenticate, exportShortlisted);
+router.get('/drives/:driveId/export/attended', authenticate, exportAttended);
+router.get('/drives/:driveId/export/round/:roundType', authenticate, exportRoundStudents);
+router.get('/drives/:driveId/export/selected', authenticate, exportSelected);
 
 // Analytics export
-router.get('/analytics/export/summary', exportAnalyticsSummary);
+router.get('/analytics/export/summary', authenticate, exportAnalyticsSummary);
 
 export default router;

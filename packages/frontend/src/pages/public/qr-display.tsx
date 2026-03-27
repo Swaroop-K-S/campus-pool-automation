@@ -9,20 +9,40 @@ const QRDisplayPage: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [drive, setDrive] = useState<any>(null);
 
+  // Get auth token from zustand persisted store
+  const getAuthHeaders = (): HeadersInit => {
+    try {
+      const stored = localStorage.getItem('auth-storage');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const token = parsed?.state?.accessToken;
+        if (token) return { 'Authorization': `Bearer ${token}` };
+      }
+    } catch {}
+    return {};
+  };
+
   useEffect(() => {
     const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+    const headers = getAuthHeaders();
 
-    // Fetch current QR via REST immediately (don't wait for Socket.io)
-    fetch(`${apiBase}/event/${driveId}/qr/current`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.data.qrDataUrl) {
-          setQrDataUrl(data.data.qrDataUrl);
-          const secondsLeft = Math.floor((data.data.expiresAt - Date.now()) / 1000);
-          setTimeLeft(Math.max(0, secondsLeft));
-        }
-      })
-      .catch(() => {});
+    // Fetch current QR via REST immediately
+    const fetchQR = () => {
+      fetch(`${apiBase}/event/${driveId}/qr/current`, { headers })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.data.qrDataUrl) {
+            setQrDataUrl(data.data.qrDataUrl);
+            const secondsLeft = Math.floor((data.data.expiresAt - Date.now()) / 1000);
+            setTimeLeft(Math.max(0, secondsLeft));
+          } else {
+            // Retry after 2 seconds if not ready yet
+            setTimeout(fetchQR, 2000);
+          }
+        })
+        .catch(() => { setTimeout(fetchQR, 3000); });
+    };
+    fetchQR();
 
     // Also join socket room for live updates
     socket.emit('join:drive:qr', driveId);
@@ -33,7 +53,7 @@ const QRDisplayPage: React.FC = () => {
     });
 
     // Fetch drive info for display
-    fetch(`${apiBase}/event/${driveId}/info`)
+    fetch(`${apiBase}/event/${driveId}/info`, { headers })
       .then(r => r.json())
       .then(d => { if (d.success) setDrive(d.data); })
       .catch(() => {});
@@ -139,10 +159,10 @@ const QRDisplayPage: React.FC = () => {
                 marginBottom: 16
               }}/>
               <p style={{ color: '#64748B', fontSize: 14, textAlign: 'center', padding: '0 16px', margin: '0 0 8px' }}>
-                Waiting for admin to start QR rotation...
+                Generating QR code...
               </p>
               <p style={{ color: '#475569', fontSize: 12, margin: 0 }}>
-                Start from the admin panel
+                This will only take a moment
               </p>
             </div>
           )}

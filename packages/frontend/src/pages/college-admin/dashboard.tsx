@@ -1,35 +1,63 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Users, UserCheck, Trophy, Plus, ChevronRight, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, BarChart2, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2, Link, Tag } from 'lucide-react';
+import { Briefcase, Users, UserCheck, Trophy, Plus, ChevronRight, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, BarChart2, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2, Link, Tag, TrendingUp } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
 import { useRef } from 'react';
 import { DriveCalendar } from '../../components/admin/DriveCalendar';
 
+const CountUp = ({ end, duration = 1500 }: { end: number, duration?: number }) => {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let startTimestamp: number | null = null;
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      // easeOutExpo for slick deceleration
+      const easeProgress = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+      setCount(Math.floor(easeProgress * end));
+      
+      if (progress < 1) window.requestAnimationFrame(step);
+    };
+    window.requestAnimationFrame(step);
+  }, [end, duration]);
+
+  return <>{count.toLocaleString()}</>;
+};
+
 const StatCard = ({ label, value, icon, color, onClick, trend, sublabel }: any) => (
   <div onClick={onClick}
-    className={`bg-white rounded-2xl border border-slate-100 p-5 shadow-sm cursor-pointer hover:shadow-md hover:border-${color}-200 hover:-translate-y-0.5 transition-all group`}>
+    className={`bg-white/80 backdrop-blur-md rounded-2xl border border-slate-200/60 p-5 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] cursor-pointer hover:shadow-xl hover:shadow-${color}-500/10 hover:border-${color}-300 hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 ease-out group relative overflow-hidden`}>
     
-    <div className="flex items-start justify-between mb-3">
-      <div className={`w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center group-hover:bg-slate-100 transition-colors`}>
+    {/* Subtle Background Glow */}
+    <div className={`absolute -right-6 -top-6 w-24 h-24 bg-${color}-500/5 rounded-full blur-2xl group-hover:bg-${color}-500/10 transition-colors pointer-events-none`} />
+
+    <div className="flex items-start justify-between mb-4 relative z-10">
+      <div className={`w-12 h-12 rounded-[14px] bg-gradient-to-br from-${color}-50 to-${color}-100/50 flex items-center justify-center group-hover:bg-${color}-100 transition-colors border border-${color}-100 shadow-inner`}>
         {icon}
       </div>
       {trend && (
-        <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full font-medium">
-          {trend}
+        <span className="text-[11px] text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-full font-bold shadow-sm border border-emerald-200/50 flex items-center gap-1">
+          <TrendingUp size={12} className="text-emerald-600"/> {trend}
         </span>
       )}
     </div>
     
-    <div className="text-3xl font-black text-slate-800 mb-0.5">{value}</div>
-    <div className="text-sm font-bold text-slate-600">{label}</div>
-    {sublabel && (
-      <div className="text-xs font-semibold tracking-wide text-slate-400 mt-0.5">{sublabel}</div>
-    )}
+    <div className="relative z-10">
+      <div className="text-3xl font-black text-slate-800 tracking-tight mb-1">
+        {typeof value === 'number' ? <CountUp end={value} /> : value}
+      </div>
+      <div className="text-sm font-bold text-slate-500 uppercase tracking-wide">{label}</div>
+      {sublabel && (
+        <div className="text-xs font-semibold text-slate-400 mt-1">{sublabel}</div>
+      )}
+    </div>
     
-    <div className="mt-3 text-xs text-indigo-600 font-bold flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-      View all <ChevronRight size={12}/>
+    <div className={`mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-${color}-600 opacity-0 group-hover:opacity-100 transition-opacity translate-y-2 group-hover:translate-y-0 duration-300`}>
+      <span>View detailed report</span>
+      <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform"/>
     </div>
   </div>
 );
@@ -342,18 +370,26 @@ export default function AdminDashboardPage() {
   return (
     <div className="page-enter p-8 max-w-7xl mx-auto min-h-full">
       
-      {/* HEADER ROW */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800">Placement Drives</h1>
-          <p className="text-slate-500 font-medium text-sm mt-1">
-            {collegeDetails?.name || 'Your College'} • {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+      {/* Premium Glassmorphic Hero header */}
+      <div className="bg-white/70 backdrop-blur-xl border border-slate-200/50 rounded-3xl p-8 mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+        {/* Subtle decorative glows */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4 pointer-events-none"></div>
+
+        <div className="relative z-10">
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight leading-tight">
+            Welcome back, {collegeDetails?.name?.split(' ')[0] || 'Admin'} 👋
+          </h1>
+          <p className="text-slate-500 mt-2 font-medium max-w-xl text-sm leading-relaxed">
+            Here's what's happening across <span className="text-indigo-600 font-bold">{collegeDetails?.name || 'your campus'}</span> today. Track, analyze, and scale your recruitment drives effortlessly.
           </p>
         </div>
-        <button onClick={() => navigate('/admin/drives/new')}
-          className="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-sm shadow-indigo-200 transition-all">
-          <Plus size={18}/> New Drive
-        </button>
+        <div className="relative z-10 w-full md:w-auto">
+          <button onClick={() => navigate('/admin/drives/new')}
+            className="w-full md:w-auto bg-gradient-to-br from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:scale-95 transition-all text-white px-7 py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 whitespace-nowrap group">
+            <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300"/> Create New Drive
+          </button>
+        </div>
       </div>
 
       {/* STAT CARDS ROW */}
@@ -483,19 +519,23 @@ export default function AdminDashboardPage() {
            {[1,2,3,4].map(n => <div key={n} className="h-64 bg-slate-200 rounded-2xl animate-pulse"></div>)}
         </div>
       ) : drives.length === 0 ? (
-        <div className="text-center py-20 px-6 max-w-md mx-auto">
-          <div className="w-24 h-24 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <GraduationCap size={48} />
+        <div className="text-center py-20 px-6 max-w-md mx-auto relative mt-8">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 rounded-[3rem] -z-10 blur-xl"></div>
+          <div className="w-28 h-28 bg-white shadow-xl shadow-indigo-500/10 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-8 relative border border-slate-100">
+            <div className="absolute inset-0 bg-indigo-500/10 rounded-full animate-ping opacity-20"></div>
+            <GraduationCap size={44} />
           </div>
-          <h2 className="text-2xl font-black text-slate-800 mb-2">No placement drives yet</h2>
-          <p className="text-slate-500 font-medium mb-8">Create your first placement drive to start collecting student applications and managing rounds.</p>
-          <button onClick={() => navigate('/admin/drives/new')} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold shadow-sm shadow-indigo-200 w-full md:w-auto transition-all">
-            Create New Drive
+          <h2 className="text-2xl font-black text-slate-800 mb-3 tracking-tight">No placement drives yet</h2>
+          <p className="text-slate-500 font-medium mb-10 text-sm leading-relaxed">Create your first placement drive to start collecting student applications, managing rounds, and tracking offers globally.</p>
+          <button onClick={() => navigate('/admin/drives/new')} className="bg-gradient-to-br from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-600/20 active:scale-95 transition-all w-full md:w-auto flex items-center justify-center gap-2 mx-auto">
+            <Plus size={18}/> Create New Drive
           </button>
         </div>
       ) : filteredDrives.length === 0 ? (
-        <div className="text-center py-12 text-slate-500 font-bold border border-slate-200 rounded-2xl bg-white border-dashed">
-           No drives match your filters.
+        <div className="text-center py-16 text-slate-500 font-semibold border-2 border-slate-200/60 rounded-3xl bg-slate-50/50 border-dashed m-4 flex flex-col items-center justify-center">
+           <Search size={32} className="text-slate-300 mb-3"/>
+           <span className="text-slate-600">No drives match your filters.</span>
+           <button onClick={() => { setStatusFilter('All'); setTagFilter('All'); setSearchQuery(''); }} className="mt-4 text-indigo-600 hover:text-indigo-700 text-sm font-bold">Clear Filters</button>
         </div>
       ) : viewMode === 'calendar' ? (
         <DriveCalendar drives={filteredDrives} onDriveClick={(id) => navigate(`/admin/drives/${id}`)} />
@@ -503,7 +543,7 @@ export default function AdminDashboardPage() {
         <div className="flex flex-col gap-3">
           {filteredDrives.map(drive => (
             <div key={drive._id} onClick={() => navigate(`/admin/drives/${drive._id}`)} 
-              className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group">
+              className="bg-white rounded-2xl border border-slate-200/60 p-4 flex items-center gap-4 hover:border-indigo-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-0.5 active:scale-[0.99] transition-all cursor-pointer group">
                <div className="w-12 h-12 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-black text-lg shrink-0">
                  {drive.companyName.substring(0, 2).toUpperCase()}
                </div>
@@ -528,12 +568,20 @@ export default function AdminDashboardPage() {
                  </div>
                </div>
                <div className="shrink-0 flex items-center gap-3 w-32 justify-end">
-                 <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                    drive.status === 'active' ? 'bg-green-100 text-green-700' :
-                    drive.status === 'event_day' ? 'bg-indigo-100 text-indigo-700' :
-                    drive.status === 'draft' ? 'bg-slate-100 text-slate-500' :
-                    'bg-slate-200 text-slate-500'
+                 <div className={`px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest flex items-center gap-2 border shadow-sm ${
+                    drive.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    drive.status === 'event_day' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                    drive.status === 'draft' ? 'bg-slate-50 text-slate-500 border-slate-200' :
+                    'bg-slate-100 text-slate-600 border-slate-200'
                  }`}>
+                   {(drive.status === 'active' || drive.status === 'event_day') && (
+                     <span className="relative flex h-1.5 w-1.5">
+                       <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${drive.status === 'active' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
+                       <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${drive.status === 'active' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
+                     </span>
+                   )}
+                   {drive.status === 'draft' && <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />}
+                   {drive.status === 'completed' && <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />}
                    {drive.status.replace('_', ' ')}
                  </div>
                  {drive.formToken && (
@@ -574,13 +622,21 @@ export default function AdminDashboardPage() {
                     {drive.companyName.substring(0, 2).toUpperCase()}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
-                      drive.status === 'active' ? 'bg-green-100 text-green-700' :
-                      drive.status === 'event_day' ? 'bg-indigo-100 text-indigo-700' :
-                      drive.status === 'draft' ? 'bg-slate-100 text-slate-500' : 'bg-slate-200 text-slate-600'
+                    <span className={`px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest flex items-center gap-2 border shadow-sm ${
+                      drive.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
+                      drive.status === 'event_day' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60' :
+                      drive.status === 'draft' ? 'bg-slate-50 text-slate-500 border-slate-200/80' : 
+                      'bg-slate-100 text-slate-600 border-slate-200'
                     }`}>
-                      {drive.status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
-                      {drive.status.replace('_', ' ')}
+                      {(drive.status === 'active' || drive.status === 'event_day') && (
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${drive.status === 'active' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
+                          <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${drive.status === 'active' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
+                        </span>
+                      )}
+                      {drive.status === 'draft' && <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />}
+                      {drive.status === 'completed' && <span className="w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0" />}
+                      <span className="truncate max-w-[80px]">{drive.status.replace('_', ' ')}</span>
                     </span>
                     {drive.formToken && (
                       <button 

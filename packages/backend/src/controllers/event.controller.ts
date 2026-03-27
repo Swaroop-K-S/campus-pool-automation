@@ -59,6 +59,21 @@ export const getRooms = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+export const getRoomWithStudents = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const room = await RoomModel.findOne({ _id: req.params.roomId, driveId: req.params.driveId })
+      .populate('assignedStudents', 'data referenceNumber status');
+    
+    if (!room) {
+      res.status(404).json({ success: false, error: 'Room not found' });
+      return;
+    }
+    res.json({ success: true, data: room });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to get room details' });
+  }
+};
+
 export const updateRoom = async (req: Request, res: Response): Promise<void> => {
   try {
     const room = await RoomModel.findOneAndUpdate({ _id: req.params.roomId, driveId: req.params.driveId }, req.body, { new: true });
@@ -157,5 +172,107 @@ export const startEventDay = async (req: Request, res: Response): Promise<void> 
   } catch (error: any) {
     console.error("startEventDay ERROR:", error);
     res.status(500).json({ success: false, error: error.message || 'Failed to start event day' });
+  }
+};
+import * as xlsx from 'xlsx';
+import { ApplicationModel } from '../models';
+
+export const advanceRound = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driveId, roundType } = req.params;
+    const drive = await DriveModel.findById(driveId);
+    if (!drive) {
+      res.status(404).json({ success: false, error: 'Drive not found' });
+      return;
+    }
+
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'Excel file is required' });
+      return;
+    }
+
+    // 1. Parse Excel
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json<any>(sheet);
+
+    // Collect all identifiers (emails or reference numbers)
+    const passedIdentifiers = new Set<string>();
+    rows.forEach(row => {
+      const vals = Object.values(row);
+      vals.forEach((v: any) => {
+        if (typeof v === 'string') {
+          passedIdentifiers.add(v.trim().toLowerCase());
+        }
+      });
+    });
+
+    const identifiersArray = Array.from(passedIdentifiers);
+
+    if (identifiersArray.length === 0) {
+      res.status(400).json({ success: false, error: 'No valid identifiers found in Excel' });
+      return;
+    }
+
+    // 2. Find Rounds info
+    const currentRoundIndex = drive.rounds ? drive.rounds.findIndex(r => r.type === roundType) : -1;
+    if (currentRoundIndex === -1) {
+      res.status(404).json({ success: false, error: 'Round not found in drive' });
+      return;
+    }
+
+    const nextRound = drive.rounds ? drive.rounds[currentRoundIndex + 1] : null;
+
+    // 3. Update passed candidates
+    const passedQuery = { 
+      driveId, 
+      $or: [
+        { referenceNumber: { $in: identifiersArray.map(i => new RegExp(`^${i}$`, 'i')) } },
+        { 'data.email': { $in: identifiersArray.map(i => new RegExp(`^${i}$`, 'i')) } },
+        { 'data.usn': { $in: identifiersArray.map(i => new RegExp(`^${i}$`, 'i')) } }
+      ]
+    };
+
+    const updatePassed = nextRound 
+      ? { currentRound: nextRound.type, status: 'shortlisted' }
+      : { currentRound: 'completed', status: 'selected' };
+
+    await ApplicationModel.updateMany(passedQuery, { $set: updatePassed });
+
+    // 4. Update failed candidates
+    // Anyone who was active but NOT in the passed list
+    const failedQuery = {
+      driveId,
+      status: { $nin: ['rejected', 'selected'] }, // they are still active
+      $nor: [
+        { referenceNumber: { $in: identifiersArray.map(i => new RegExp(`^${i}$`, 'i')) } },
+        { 'data.email': { $in: identifiersArray.map(i => new RegExp(`^${i}$`, 'i')) } },
+        { 'data.usn': { $in: identifiersArray.map(i => new RegExp(`^${i}$`, 'i')) } }
+      ]
+    };
+
+    await ApplicationModel.updateMany(failedQuery, { $set: { status: 'rejected' } });
+
+    // 5. Autocomplete the drive round
+    if (drive.rounds) {
+      drive.rounds[currentRoundIndex].status = 'completed';
+      if (nextRound) {
+        drive.rounds[currentRoundIndex + 1].status = 'pending';
+      }
+      await drive.save();
+    }
+
+    res.json({ 
+      success: true, 
+      data: { 
+        message: `Advanced candidates to ${nextRound ? nextRound.type : 'selected'}`,
+        nextRound: nextRound ? nextRound.type : null
+      }
+    });
+
+  } catch (error: any) {
+    console.error("advanceRound ERROR:", error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to advance round' });
   }
 };
