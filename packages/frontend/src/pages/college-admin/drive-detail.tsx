@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronRight, Circle, CheckSquare, Calendar, FileText, 
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
   Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search,
-  Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus
+  Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Printer, Play, QrCode, Menu
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
@@ -17,6 +17,8 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import type { DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import DriveAuditLog from '../../components/admin/DriveAuditLog';
+import { EventDayRoadmap } from '../../components/admin/EventDayRoadmap';
 
 const FIELD_TYPES = [
   { type: 'text', label: 'Text Field', icon: AlignLeft },
@@ -76,11 +78,12 @@ const CountdownTimer = ({ closeDate }: { closeDate: string }) => {
 
 const DEFAULT_FIELDS = [
   { id: 'field_name', type: 'text', label: 'Full Name', required: true, locked: true, order: 0 },
-  { id: 'field_usn', type: 'text', label: 'USN', required: true, locked: true, order: 1, validation: { pattern: '^[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}$', customErrorMessage: 'Must be a valid USN (e.g., 1RV22CS111)' } },
+  { id: 'field_usn', type: 'text', label: 'USN', required: true, locked: true, order: 1, validation: { pattern: '^[A-Za-z0-9]{5,20}$', customErrorMessage: 'Must be a valid alphanumeric USN/Roll No' } },
   { id: 'field_email', type: 'email', label: 'Email Address', required: true, locked: true, order: 2, validation: { pattern: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$', customErrorMessage: 'Valid email required' } },
   { id: 'field_phone', type: 'phone', label: 'Phone Number', required: true, locked: true, order: 3, validation: { pattern: '^\\d{10}$', customErrorMessage: 'Must be exactly 10 digits' } },
-  { id: 'field_branch', type: 'dropdown', label: 'Branch', required: true, locked: true, order: 4, options: ['CSE', 'CSE (AIML)', 'CSE (Data Science)', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'OTHER'] },
-  { id: 'field_cgpa', type: 'number', label: 'CGPA', required: true, locked: true, order: 5, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' } },
+  { id: 'field_gender', type: 'dropdown', label: 'Gender', required: true, locked: true, order: 4, options: ['Male', 'Female', 'Other'] },
+  { id: 'field_branch', type: 'dropdown', label: 'Branch', required: true, locked: true, order: 5, options: ['CSE', 'CSE (AIML)', 'CSE (Data Science)', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'OTHER'] },
+  { id: 'field_cgpa', type: 'number', label: 'CGPA', required: true, locked: true, order: 6, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' } },
 ];
 
 const SortableFieldItem = ({ field, isActive, onSelect, onDelete, onDuplicate }: any) => {
@@ -542,16 +545,6 @@ export default function DriveDetailPage() {
     } catch { toast.error('Failed to save venue'); }
   };
 
-  const saveSchedule = async () => {
-    try {
-      const schedule = Object.entries(scheduleState).map(([roundType, v]) => ({
-        roundType, startTime: v.startTime, duration: v.duration
-      }));
-      await api.post(`/drives/${driveId}/event-setup`, { hallName, capacity, eventDate, reportTime, schedule });
-      toast.success('Schedule saved!');
-    } catch { toast.error('Failed to save schedule'); }
-  };
-
   const saveRoom = async (roundName: string) => {
     try {
       const panelists = newRoom.panelists
@@ -579,28 +572,47 @@ export default function DriveDetailPage() {
     } catch { toast.error('Failed to delete room'); }
   };
 
-  const activateRound = async (roundType: string) => {
-    try {
-      await api.put(`/drives/${driveId}/rounds/${roundType}/activate`);
-      toast.success(`${roundType.replace('_',' ')} Round is now ACTIVE`);
-      fetchDriveDetails();
-    } catch { toast.error('Failed to activate round'); }
-  };
-
-  const completeRound = async (roundType: string) => {
-    try {
-      await api.put(`/drives/${driveId}/rounds/${roundType}/complete`);
-      toast.success(`${roundType.replace('_',' ')} Round marked as done!`);
-      fetchDriveDetails();
-    } catch { toast.error('Failed to complete round'); }
-  };
-
   const startEventDay = async () => {
     try {
       await api.patch(`/drives/${driveId}/start-event`);
       toast.success('Event Day started! QR system is now active');
       fetchDriveDetails();
     } catch { toast.error('Failed to start event'); }
+  };
+
+  const activateDrive = async () => {
+    try {
+      await api.patch(`/drives/${driveId}/activate`);
+      toast.success('Drive activated! Application form is now live.');
+      fetchDriveDetails();
+    } catch { toast.error('Failed to activate drive'); }
+  };
+
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const handleArchiveDrive = async () => {
+    if (!confirm('Are you sure you want to archive this drive and download the compliance report? Applications cannot be processed after archival.')) return;
+    setArchiveLoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/archive`, {
+        headers: { Authorization: `Bearer ${useAuthStore.getState().accessToken}` }
+      });
+      if (!response.ok) throw new Error('Failed to archive');
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${drive?.companyName.replace(/\s+/g, '_')}_Compliance_Archive.xlsx`;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+      
+      toast.success('Drive Archived Successfully!');
+      fetchDriveDetails();
+    } catch {
+      toast.error('Failed to archive drive. Please check logs.');
+    } finally {
+      setArchiveLoading(false);
+    }
   };
 
   const ROUND_ICONS: Record<string, any> = {
@@ -738,45 +750,94 @@ export default function DriveDetailPage() {
   return (
     <div className="flex flex-col h-full absolute inset-0 bg-slate-50">
       
-      {/* HEADER */}
-      <div className="bg-white border-b border-slate-200 px-8 py-5 shrink-0">
-        <Link to="/admin/dashboard" className="inline-flex items-center text-sm font-bold text-slate-500 hover:text-indigo-600 mb-2 transition-colors">
-          <ArrowLeft size={16} className="mr-1" /> Back to Dashboard
-        </Link>
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-black text-slate-800">{drive.companyName}</h1>
-            <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide
-              ${drive.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
-              {drive.status}
-            </span>
-          </div>
-          <div className="flex gap-3">
-            <button className="px-4 py-2 rounded-lg font-bold text-slate-600 border border-slate-300 hover:bg-slate-50 transition-colors">
-              Download Applications
-            </button>
-            {drive.status === 'draft' && (
-              <button className="px-4 py-2 rounded-lg font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all">
-                Activate Drive
+      {/* Compact Header */}
+      <div className="bg-white border-b border-slate-200/80 px-6 py-3 shrink-0 relative z-20">
+        <div className="relative z-10 max-w-7xl mx-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link to="/admin/dashboard" className="inline-flex items-center justify-center w-8 h-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Back to Dashboard">
+                <Menu size={18} />
+              </Link>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-50 to-white text-indigo-700 font-black text-lg flex items-center justify-center border border-indigo-100/50 shadow-inner shrink-0">
+                {drive.companyName.substring(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <h1 className="text-xl font-black text-slate-800 tracking-tight leading-none">{drive.companyName}</h1>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-widest flex items-center gap-1 border ${
+                      drive.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
+                      drive.status === 'event_day' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60' :
+                      drive.status === 'draft' ? 'bg-slate-50 text-slate-500 border-slate-200/80' : 
+                      'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}>
+                      {(drive.status === 'active' || drive.status === 'event_day') && (
+                        <span className="relative flex h-1.5 w-1.5 shrink-0">
+                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${drive.status === 'active' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
+                          <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${drive.status === 'active' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
+                        </span>
+                      )}
+                      {drive.status.replace('_', ' ')}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-400">{drive.jobRole}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* QR Check-in */}
+              <button 
+                onClick={() => window.open(`/event/${driveId}/qr-display`, '_blank')}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all hover:shadow-md group relative ${
+                  drive.status === 'event_day' ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border-indigo-200/60 hover:shadow-indigo-100' :
+                  'text-slate-500 bg-slate-50 hover:bg-slate-100 border-slate-200/60 hover:text-indigo-600'
+                }`}
+                title="Open QR Check-in Display"
+              >
+                <QrCode size={18} className="group-hover:scale-110 transition-transform" />
               </button>
-            )}
+              {/* Activate Drive */}
+              {drive.status === 'draft' && (
+                <button 
+                  onClick={activateDrive}
+                  className="px-4 py-2 rounded-xl font-bold text-white bg-gradient-to-br from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:scale-95 shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-1.5 text-sm"
+                >
+                  <Play size={14} className="fill-current"/> Activate
+                </button>
+              )}
+              {/* Start Event Day */}
+              {drive.status === 'active' && (
+                <button 
+                  onClick={startEventDay}
+                  className="px-4 py-2 rounded-xl font-bold text-white bg-gradient-to-br from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 active:scale-95 shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-1.5 text-sm"
+                >
+                  <Play size={14} className="fill-current"/> Start Event Day
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* TABS */}
-      <div className="bg-white border-b border-slate-200 px-8 flex gap-8 shrink-0">
-        {['Overview', 'Form Builder', 'Applications', 'Shortlist', 'Event Day'].map(tab => (
-          <button 
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`py-4 font-bold text-sm border-b-2 transition-colors ${
-              activeTab === tab ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+      {/* Premium TABS */}
+      <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 px-8 flex gap-8 shrink-0 relative z-10 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] overflow-x-auto hide-scrollbar">
+        <div className="max-w-7xl mx-auto flex gap-6 w-full h-14">
+          {['Overview', 'Form Builder', 'Applications', 'Shortlist', 'Event Day', 'Audit Log'].map(tab => (
+            <button 
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`relative px-2 py-4 font-bold text-sm transition-colors whitespace-nowrap group ${
+                activeTab === tab ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {tab}
+              {activeTab === tab && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full shadow-[0_-2px_8px_rgba(79,70,229,0.5)]"></div>
+              )}
+              {activeTab !== tab && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-200 rounded-t-full scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* CONTENT AREA */}
@@ -858,6 +919,28 @@ export default function DriveDetailPage() {
                  </div>
               </div>
             </div>
+
+            {drive.status === 'completed' && (
+              <div className="mt-0 bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-2xl p-6 lg:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <Download className="text-indigo-600" size={24} /> 1-Click Archive & Compliance Report
+                  </h3>
+                  <p className="text-slate-600 mt-2 max-w-xl text-sm leading-relaxed">
+                    Generate a comprehensive Excel file containing all applications, shortlist decisions, and communication audit logs for external sharing and compliance. Archiving a drive permanently locks it.
+                  </p>
+                </div>
+                <button
+                  onClick={handleArchiveDrive}
+                  disabled={archiveLoading}
+                  className="shrink-0 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl font-bold transition-all shadow-md shadow-indigo-200 flex items-center gap-2"
+                >
+                  {archiveLoading ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} 
+                  {archiveLoading ? 'Generating...' : 'Archive & Download'}
+                </button>
+              </div>
+            )}
+            
           </div>
         )}
 
@@ -894,8 +977,20 @@ export default function DriveDetailPage() {
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">Form Preview</h2>
                 <div className="flex items-center gap-3">
+                  {formToken && (
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/apply/${formToken}`);
+                        toast.success('Public form link copied!');
+                      }}
+                      className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-300 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"
+                      title="Copy Public Link"
+                    >
+                      <Copy size={14}/> Copy Link
+                    </button>
+                  )}
                   <button onClick={() => { setShowImportModal(true); fetchDrivesForImport(); }} className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors flex items-center gap-1">
-                    <Copy size={14}/> Import Form
+                    <Download size={14}/> Import Form
                   </button>
                   <span className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold">
                     {fields.length} Fields
@@ -1065,7 +1160,7 @@ export default function DriveDetailPage() {
                             const val = e.target.value;
                             let pattern = ''; let msg = 'Invalid format';
                             if (val === 'phone') { pattern = '^\\d{10}$'; msg = 'Must be exactly 10 digits'; }
-                            else if (val === 'usn') { pattern = '^[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}$'; msg = 'Must be a valid USN (e.g., 1RV22CS111)'; }
+                            else if (val === 'usn') { pattern = '^[A-Za-z0-9]{5,20}$'; msg = 'Must be a valid alphanumeric USN/Roll No'; }
                             else if (val === 'linkedin') { pattern = '^https?:\\/\\/(www\\.)?linkedin\\.com\\/.*$'; msg = 'Must be a valid LinkedIn URL'; }
                             else if (val === 'github') { pattern = '^https?:\\/\\/(www\\.)?github\\.com\\/.*$'; msg = 'Must be a valid GitHub URL'; }
                             
@@ -2137,89 +2232,8 @@ export default function DriveDetailPage() {
               </button>
             </div>
 
-            {/* ═══ SECTION 2: Round Schedule ═══ */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">
-                <h3 className="text-lg font-semibold text-slate-800">Event Schedule</h3>
-                <button onClick={saveSchedule}
-                  className="px-4 py-2 border border-indigo-300 text-indigo-600 font-bold text-sm rounded-lg hover:bg-indigo-50 transition-colors">
-                  Save Schedule
-                </button>
-              </div>
-
-              <div className="divide-y divide-slate-100">
-                {drive.rounds?.map((r: any) => {
-                  const RoundIcon = ROUND_ICONS[r.type] || Circle;
-                  const sched = scheduleState[r.type] || { startTime: '', duration: 90 };
-                  return (
-                    <div key={r.type} className="flex items-center gap-4 py-3">
-                      {/* Left: icon + name */}
-                      <div className="flex items-center gap-3 w-48">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-                          <RoundIcon size={16} />
-                        </div>
-                        <span className="font-medium text-slate-800 text-sm">{r.type.replace('_', ' ').toUpperCase()}</span>
-                      </div>
-
-                      {/* Center: time + duration */}
-                      <div className="flex items-center gap-3 flex-1">
-                        <div className="flex items-center gap-1">
-                          <Clock size={14} className="text-slate-400" />
-                          <input type="time" value={sched.startTime}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setScheduleState(prev => {
-                                const cur = prev[r.type] || { startTime: '', duration: 90 };
-                                return { ...prev, [r.type]: { ...cur, startTime: val } };
-                              });
-                            }}
-                            className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:border-indigo-400 min-w-[110px]" />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <input type="number" placeholder="90" value={sched.duration || ''}
-                            onChange={e => {
-                              const val = parseInt(e.target.value) || 0;
-                              setScheduleState(prev => {
-                                const cur = prev[r.type] || { startTime: '', duration: 90 };
-                                return { ...prev, [r.type]: { ...cur, duration: val } };
-                              });
-                            }}
-                            className="border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:border-indigo-400 w-20" />
-                          <span className="text-slate-400 text-sm">mins</span>
-                        </div>
-                      </div>
-
-                      {/* Right: status badge + action */}
-                      <div className="flex items-center gap-2">
-                        {r.status === 'pending' && (
-                          <>
-                            <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-xs font-bold rounded-full">Pending</span>
-                            <button onClick={() => activateRound(r.type)}
-                              className="text-xs text-indigo-600 border border-indigo-300 rounded-lg px-3 py-1 hover:bg-indigo-50 ml-2 font-bold">
-                              Activate
-                            </button>
-                          </>
-                        )}
-                        {r.status === 'active' && (
-                          <>
-                            <span className="px-2.5 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full animate-pulse flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" /> Active
-                            </span>
-                            <button onClick={() => completeRound(r.type)}
-                              className="text-xs text-green-600 border border-green-300 rounded-lg px-3 py-1 hover:bg-green-50 ml-2 font-bold">
-                              Mark Done
-                            </button>
-                          </>
-                        )}
-                        {r.status === 'completed' && (
-                          <span className="px-2.5 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full">✓ Done</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            {/* ═══ SECTION 2: Advanced Rounds Roadmap ═══ */}
+            <EventDayRoadmap driveId={driveId!} rounds={drive.rounds || []} onUpdate={fetchDriveDetails} />
 
             {/* ═══ SECTION 3: Room Configuration (Accordion) ═══ */}
             <div className="bg-white rounded-xl border border-slate-200 p-6">
@@ -2328,8 +2342,29 @@ export default function DriveDetailPage() {
                                 <div className="flex justify-between items-start mb-2">
                                   <span className="font-semibold text-slate-800">{rm.name}</span>
                                   <div className="hidden group-hover:flex items-center gap-1">
-                                    <button className="p-1 text-slate-400 hover:text-indigo-600"><Edit2 size={13} /></button>
-                                    <button onClick={() => deleteRoomById(rm._id)} className="p-1 text-slate-400 hover:text-red-500"><Trash2 size={13} /></button>
+                                    <button 
+                                      onClick={async () => {
+                                        try {
+                                          const auth = JSON.parse(localStorage.getItem('campuspool-auth') || '{}');
+                                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/export/room/${rm._id}`, {
+                                            headers: { Authorization: `Bearer ${auth.state?.accessToken}` }
+                                          });
+                                          if (!res.ok) throw new Error();
+                                          const blob = await res.blob();
+                                          const url = URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = `Room_${rm.name}_Manifest.xlsx`;
+                                          document.body.appendChild(a); a.click();
+                                        } catch { toast.error('Failed to download manifest'); }
+                                      }} 
+                                      className="p-1 text-slate-400 hover:text-green-600 bg-slate-50 hover:bg-green-50 rounded" 
+                                      title="Download Attendance Sheet (Excel)"
+                                    >
+                                      <Download size={13} />
+                                    </button>
+                                    <button className="p-1 text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded ml-1"><Edit2 size={13} /></button>
+                                    <button onClick={() => deleteRoomById(rm._id)} className="p-1 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded ml-1"><Trash2 size={13} /></button>
                                   </div>
                                 </div>
 
@@ -2620,6 +2655,11 @@ export default function DriveDetailPage() {
           </div>
         </div>
       )}
+
+      {activeTab === 'Audit Log' && (
+        <DriveAuditLog driveId={driveId || ''} />
+      )}
+
       {/* Add Candidate Modal */}
       {showAddCandidateModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
