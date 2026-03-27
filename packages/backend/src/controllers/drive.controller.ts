@@ -228,6 +228,8 @@ export const reopenForm = asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json({ success: true, data: updatedDrive });
 });
 
+import { NotificationModel } from '../models/notification.model';
+
 // DELETE /api/v1/drives/:driveId
 export const deleteDrive = asyncHandler(async (req: Request, res: Response) => {
   const driveId = req.params.driveId;
@@ -238,7 +240,10 @@ export const deleteDrive = asyncHandler(async (req: Request, res: Response) => {
 
   await Promise.all([
     DriveModel.findByIdAndDelete(driveId),
-    ApplicationModel.deleteMany({ driveId })
+    ApplicationModel.deleteMany({ driveId }),
+    FormFieldModel.deleteMany({ driveId }),
+    RoomModel.deleteMany({ driveId }),
+    NotificationModel.deleteMany({ driveId })
   ]);
 
   res.status(200).json({ success: true, data: {} });

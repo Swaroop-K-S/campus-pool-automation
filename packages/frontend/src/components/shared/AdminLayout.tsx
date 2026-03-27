@@ -168,47 +168,12 @@ export default function AdminLayout() {
 
       {/* Main Content */}
       <div className={`flex-1 flex flex-col min-h-screen relative max-w-full transition-all duration-300 ${sidebarCollapsed ? 'md:ml-0' : 'md:ml-60'}`}>
-        {/* Top Header */}
-        <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-10 w-full">
-          <div className="flex items-center gap-3">
-            <button className={`text-slate-600 hover:text-indigo-600 ${sidebarCollapsed ? '' : 'md:hidden'}`} onClick={() => { setSidebarOpen(true); setSidebarCollapsed(false); }}>
-              <Menu size={24} />
-            </button>
-            <h1 className="text-xl font-bold text-slate-800 bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 mr-2">
-              {getPageTitle()}
-            </h1>
-            
-            {/* Global Context Switcher */}
-            {recentDrives.length > 0 && (
-              <div className="hidden sm:flex items-center gap-3 border-l border-slate-200 pl-4">
-                <select
-                  value={contextDriveId || ''}
-                  onChange={(e) => {
-                    setContextDriveId(e.target.value);
-                    navigate(`/admin/drives/${e.target.value}`);
-                  }}
-                  className="bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 py-1.5 px-3 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer w-48 truncate shadow-sm hover:border-indigo-300 transition-colors"
-                >
-                  <option value="" disabled>Select Workspace...</option>
-                  {recentDrives.map(d => (
-                    <option key={d._id} value={d._id}>
-                      {d.companyName} {d.status === 'event_day' ? '🟢' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-             <button className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all border border-transparent hover:border-slate-200 relative">
-               <Bell size={20} />
-               <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-             </button>
-             <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-bold border border-slate-200 shadow-sm cursor-pointer hover:border-indigo-300 transition-colors">
-               {user?.name?.[0]?.toUpperCase() || 'A'}
-             </div>
-          </div>
-        </header>
+        {/* Mobile sidebar toggle */}
+        <div className={`md:hidden sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3`}>
+          <button className="text-slate-600 hover:text-indigo-600" onClick={() => { setSidebarOpen(true); setSidebarCollapsed(false); }}>
+            <Menu size={24} />
+          </button>
+        </div>
 
         {/* Page Content */}
         <main className="flex-1 w-full bg-[#f8fafc]">

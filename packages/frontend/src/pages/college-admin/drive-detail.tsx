@@ -6,7 +6,7 @@ import {
   AlignLeft, AlignJustify, Hash,
   ChevronDown, ChevronRight, Circle, CheckSquare, Calendar, FileText, 
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
-  Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search,
+  Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search, Eye,
   Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Play, QrCode, Menu, BarChart2
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
@@ -84,6 +84,8 @@ const DEFAULT_FIELDS = [
   { id: 'field_gender', type: 'dropdown', label: 'Gender', required: true, locked: true, order: 4, options: ['Male', 'Female', 'Other'] },
   { id: 'field_branch', type: 'dropdown', label: 'Branch', required: true, locked: true, order: 5, options: ['CSE', 'CSE (AIML)', 'CSE (Data Science)', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'OTHER'] },
   { id: 'field_cgpa', type: 'number', label: 'CGPA', required: true, locked: true, order: 6, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' } },
+  { id: 'field_resume', type: 'file_pdf', label: 'Resume', required: true, locked: true, order: 7 },
+  { id: 'field_photo', type: 'file_image', label: 'Photo', required: true, locked: true, order: 8 },
 ];
 
 const SortableFieldItem = ({ field, isActive, onSelect, onDelete, onDuplicate }: any) => {
@@ -131,6 +133,48 @@ const SortableFieldItem = ({ field, isActive, onSelect, onDelete, onDuplicate }:
       </div>
     </div>
   );
+};
+
+const SecureImage = ({ url, className, fallback }: { url: string, className?: string, fallback: React.ReactNode }) => {
+  const [src, setSrc] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    api.get(url, { responseType: 'blob' })
+      .then((res: any) => setSrc(URL.createObjectURL(res)))
+      .catch(() => setError(true));
+  }, [url]);
+
+  if (error) return <>{fallback}</>;
+  if (!src) return <div className={`animate-pulse bg-slate-200 ${className}`}></div>;
+  return <img src={src} className={className} alt="" />;
+};
+
+const handleSecureDownload = async (url: string, filename: string) => {
+  try {
+    const res: any = await api.get(url, { responseType: 'blob' });
+    const blobUrl = URL.createObjectURL(res);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    toast.error('Failed to download document');
+  }
+};
+
+const handleSecureView = async (url: string) => {
+  try {
+    const res: any = await api.get(url, { responseType: 'blob' });
+    const blobUrl = URL.createObjectURL(res);
+    window.open(blobUrl, '_blank');
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+  } catch {
+    toast.error('Failed to view document');
+  }
 };
 
 export default function DriveDetailPage() {
@@ -614,23 +658,6 @@ export default function DriveDetailPage() {
       toast.error('Failed to archive drive. Please check logs.');
     } finally {
       setArchiveLoading(false);
-    }
-  };
-
-  const handleDownloadFile = async (appId: string, type: 'resume' | 'photo') => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/applications/${appId}/${type}`, {
-        headers: { Authorization: `Bearer ${useAuthStore.getState().accessToken}` }
-      });
-      if (!response.ok) throw new Error(`Failed to fetch ${type}`);
-      
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      // Revoke the Object URL after a delay to clear memory without breaking the new tab immediately
-      setTimeout(() => URL.revokeObjectURL(url), 10000); 
-    } catch {
-      toast.error(`Unable to open ${type}`);
     }
   };
 
@@ -1816,89 +1843,127 @@ export default function DriveDetailPage() {
                 <>
                   <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={() => { setShowDetailDrawer(false); setSelectedApp(null); }}/>
                   <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white z-50 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-                    {/* Header */}
-                    <div className="flex items-center gap-4 p-6 border-b border-slate-100">
-                      <div className="relative flex-shrink-0">
-                        {app.hasPhoto ? (
-                          <img src={`${apiBase}/drives/${driveId}/applications/${app._id}/photo`} alt={drawerName}
-                            className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-100 shadow-sm"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}/>
-                        ) : (
-                          <div className="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-700 text-2xl font-bold flex items-center justify-center">{drawerInitials}</div>
-                        )}
-                        <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
-                          app.status === 'selected' ? 'bg-green-500' : app.status === 'shortlisted' ? 'bg-indigo-500' : 'bg-slate-400'
-                        }`}/>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h2 className="text-lg font-bold text-slate-800 truncate">{drawerName}</h2>
-                        <p className="text-sm text-slate-500">{app.referenceNumber || 'REF: ' + app._id?.toString().slice(-8).toUpperCase()}</p>
-                        <span className={`inline-flex mt-1 text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
-                          app.status === 'selected' ? 'bg-green-100 text-green-700'
-                          : app.status === 'shortlisted' ? 'bg-indigo-100 text-indigo-700'
-                          : app.status === 'attended' ? 'bg-purple-100 text-purple-700'
-                          : 'bg-slate-100 text-slate-600'
-                        }`}>{app.status}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {!isEditingApp ? (
-                          <button onClick={() => { setIsEditingApp(true); setEditedAppData(app.data); }}
-                            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors flex-shrink-0" title="Edit Application">
-                            <Edit2 size={18}/>
-                          </button>
-                        ) : (
-                          <button onClick={() => setIsEditingApp(false)}
-                            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0" title="Cancel Edit">
+                    {/* Premium Profile Header */}
+                    <div className="relative bg-gradient-to-br from-indigo-600 via-indigo-700 to-slate-900 p-6 pb-20">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className={`inline-flex text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${
+                            app.status === 'selected' ? 'bg-emerald-400/20 text-emerald-300'
+                            : app.status === 'shortlisted' ? 'bg-cyan-400/20 text-cyan-300'
+                            : app.status === 'attended' ? 'bg-purple-400/20 text-purple-300'
+                            : 'bg-white/15 text-white/80'
+                          }`}>{app.status}</span>
+                          <p className="text-indigo-200/70 text-xs font-mono mt-2">{app.referenceNumber || 'REF-' + app._id?.toString().slice(-8).toUpperCase()}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {!isEditingApp ? (
+                            <button onClick={() => { setIsEditingApp(true); setEditedAppData(app.data); }}
+                              className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors" title="Edit Application">
+                              <Edit2 size={15}/>
+                            </button>
+                          ) : (
+                            <button onClick={() => setIsEditingApp(false)}
+                              className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-red-500/30 text-white/80 transition-colors" title="Cancel Edit">
+                              <X size={15}/>
+                            </button>
+                          )}
+                          <button onClick={() => { setShowDetailDrawer(false); setSelectedApp(null); setIsEditingApp(false); }}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors">
                             <X size={18}/>
                           </button>
-                        )}
-                        <button onClick={() => { setShowDetailDrawer(false); setSelectedApp(null); setIsEditingApp(false); }}
-                          className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
-                          <X size={20}/>
-                        </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Floating Profile Card */}
+                    <div className="relative -mt-14 mx-6 mb-4">
+                      <div className="bg-white rounded-2xl shadow-xl border border-slate-200/70 p-5 flex items-center gap-4">
+                        <div className="relative flex-shrink-0">
+                          {app.hasPhoto ? (
+                            <img src={`${apiBase}/drives/${driveId}/applications/${app._id}/photo`} alt={drawerName}
+                              className="w-20 h-20 rounded-2xl object-cover border-2 border-indigo-100 shadow-md"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling && ((e.target as HTMLImageElement).nextElementSibling as HTMLElement).style.setProperty('display', 'flex'); }}/>
+                          ) : null}
+                          <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-100 to-indigo-200 text-indigo-700 text-2xl font-black flex items-center justify-center ${app.hasPhoto ? 'hidden' : ''}`}>{drawerInitials}</div>
+                          <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-[3px] border-white ${
+                            app.status === 'selected' ? 'bg-emerald-500' : app.status === 'shortlisted' ? 'bg-indigo-500' : app.status === 'attended' ? 'bg-purple-500' : 'bg-slate-400'
+                          }`}/>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h2 className="text-xl font-black text-slate-800 truncate">{drawerName}</h2>
+                          {app.driveStudentId && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{app.driveStudentId}</span>
+                              <button onClick={() => { navigator.clipboard.writeText(app.driveStudentId); toast.success('ID copied!'); }} className="text-slate-400 hover:text-indigo-600 transition-colors"><Copy size={12}/></button>
+                            </div>
+                          )}
+                          <p className="text-xs text-slate-400 mt-1 font-medium">{app.submittedAt ? 'Applied ' + new Date(app.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</p>
+                        </div>
                       </div>
                     </div>
 
                     {/* Scrollable Content */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                      {/* Documents */}
-                      {(app.hasResume || app.hasPhoto) && (
-                        <div>
-                          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Documents</h3>
-                          <div className="grid grid-cols-2 gap-3">
-                            {app.hasResume && (
-                              <a href={`${apiBase}/drives/${driveId}/applications/${app._id}/resume`} target="_blank" rel="noreferrer"
-                                className="flex items-center gap-3 p-4 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors group/doc">
-                                <div className="w-10 h-10 bg-red-100 group-hover/doc:bg-red-200 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"><FileText size={20} className="text-red-600"/></div>
-                                <div><div className="text-sm font-semibold text-red-700">Resume</div><div className="text-xs text-red-500">Click to view PDF</div></div>
-                              </a>
-                            )}
-                            {app.hasPhoto && (
-                              <a href={`${apiBase}/drives/${driveId}/applications/${app._id}/photo`} target="_blank" rel="noreferrer"
-                                className="flex items-center gap-3 p-4 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors group/doc">
-                                <div className="w-10 h-10 bg-blue-100 group-hover/doc:bg-blue-200 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"><ImageIcon size={20} className="text-blue-600"/></div>
-                                <div><div className="text-sm font-semibold text-blue-700">Photo</div><div className="text-xs text-blue-500">Click to view</div></div>
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Drive Student ID */}
-                      {app.driveStudentId && (
-                        <div>
-                          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Drive ID</h3>
-                          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-center justify-between">
-                            <div className="text-lg font-black font-mono text-indigo-700 tracking-wider">{app.driveStudentId}</div>
-                            <button
-                              onClick={() => { navigator.clipboard.writeText(app.driveStudentId); toast.success('Drive ID copied!'); }}
-                              className="text-slate-400 hover:text-indigo-600 transition-colors p-1"
-                            >
-                              <Copy size={14} />
+                    <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-5">
+                      {/* Documents - Resume & Photo Cards */}
+                      <div>
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Documents</h3>
+                        <div className="space-y-3">
+                          {/* Student Photo */}
+                          {app.hasPhoto ? (
+                            <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+                              <SecureImage url={`/drives/${driveId}/applications/${app._id}/photo`} fallback={<div className="w-full h-48 bg-slate-100 flex items-center justify-center text-slate-400 font-bold">Failed to load photo</div>}
+                                className="w-full max-h-48 object-contain bg-white" />
+                              <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-100">
+                                <div className="flex items-center gap-2 text-sm font-medium text-slate-600"><ImageIcon size={15} className="text-blue-500"/>Student Photo</div>
+                                <button onClick={() => handleSecureDownload(`/drives/${driveId}/applications/${app._id}/photo`, `${app.data?.name || 'student'}_photo.jpg`)}
+                                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                                  <Download size={12}/>Full Size
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="bg-slate-50 rounded-xl border border-dashed border-slate-200 p-4 flex items-center gap-4 opacity-60 cursor-not-allowed">
+                              <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <ImageIcon size={20} className="text-slate-400" />
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-sm font-bold text-slate-500">Student Photo</div>
+                                <div className="text-xs text-slate-400">Not Uploaded</div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Resume / CV */}
+                          {app.hasResume ? (
+                            <button onClick={() => handleSecureView(`/drives/${driveId}/applications/${app._id}/resume`)}
+                              className="flex items-center gap-4 p-4 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors group/doc w-full text-left">
+                              <div className="w-12 h-12 bg-red-100 group-hover/doc:bg-red-200 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
+                                <FileText size={24} className="text-red-600"/>
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-sm font-bold text-red-700">Resume / CV</div>
+                                <div className="text-xs text-red-500">Click to view in new tab</div>
+                              </div>
+                              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-100 text-red-600 group-hover/doc:bg-red-200 group-hover/doc:text-red-700 transition-colors text-xs font-bold">
+                                <span>View</span>
+                                <Eye size={14}/>
+                              </div>
                             </button>
-                          </div>
+                          ) : (
+                            <div className="flex items-center gap-4 p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl opacity-60 cursor-not-allowed">
+                              <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <FileText size={24} className="text-slate-400"/>
+                              </div>
+                              <div className="flex-1">
+                                <div className="text-sm font-bold text-slate-500">Resume / CV</div>
+                                <div className="text-xs text-slate-400">Not Uploaded</div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
+
+
 
                       {/* All Form Fields */}
                       <div>
@@ -1967,42 +2032,7 @@ export default function DriveDetailPage() {
                         </div>
                       </div>
 
-                      {/* File Uploads (Resume / Photo) */}
-                      {(app.resumeFileId || app.photoFileId) && (
-                        <div>
-                          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Attachments</h3>
-                          <div className="bg-slate-50 rounded-xl divide-y divide-slate-200 overflow-hidden border border-slate-200 mb-6">
-                            {app.resumeFileId && (
-                              <div className="flex items-center justify-between px-4 py-3 hover:bg-slate-100/50 transition-colors">
-                                <div className="flex items-center gap-3">
-                                  <FileText size={18} className="text-indigo-500" />
-                                  <div className="text-sm font-medium text-slate-700">Student Resume</div>
-                                </div>
-                                <button
-                                  onClick={() => handleDownloadFile(app._id, 'resume')}
-                                  className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
-                                >
-                                  <Download size={14} /> View File
-                                </button>
-                              </div>
-                            )}
-                            {app.photoFileId && (
-                              <div className="flex items-center justify-between px-4 py-3 hover:bg-slate-100/50 transition-colors">
-                                <div className="flex items-center gap-3">
-                                  <ImageIcon size={18} className="text-indigo-500" />
-                                  <div className="text-sm font-medium text-slate-700">Student Photo</div>
-                                </div>
-                                <button
-                                  onClick={() => handleDownloadFile(app._id, 'photo')}
-                                  className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
-                                >
-                                  <ImageIcon size={14} /> View File
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
+
 
                       {/* Submission Info */}
                       <div>

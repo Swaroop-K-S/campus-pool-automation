@@ -1,66 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Users, UserCheck, Trophy, Plus, ChevronRight, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, BarChart2, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2, Link, Tag, TrendingUp } from 'lucide-react';
+import { Trophy, Plus, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2, Link, Tag, QrCode, Building, Activity, TrendingUp, Users, Bell, Clock, ChevronRight } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
 import { useRef } from 'react';
 import { DriveCalendar } from '../../components/admin/DriveCalendar';
 
-const CountUp = ({ end, duration = 1500 }: { end: number, duration?: number }) => {
-  const [count, setCount] = useState(0);
 
-  useEffect(() => {
-    let startTimestamp: number | null = null;
-    const step = (timestamp: number) => {
-      if (!startTimestamp) startTimestamp = timestamp;
-      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-      // easeOutExpo for slick deceleration
-      const easeProgress = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-      setCount(Math.floor(easeProgress * end));
-      
-      if (progress < 1) window.requestAnimationFrame(step);
-    };
-    window.requestAnimationFrame(step);
-  }, [end, duration]);
-
-  return <>{count.toLocaleString()}</>;
-};
-
-const StatCard = ({ label, value, icon, color, onClick, trend, sublabel }: any) => (
-  <div onClick={onClick}
-    className={`bg-white/80 backdrop-blur-md rounded-2xl border border-slate-200/60 p-5 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] cursor-pointer hover:shadow-xl hover:shadow-${color}-500/10 hover:border-${color}-300 hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 ease-out group relative overflow-hidden`}>
-    
-    {/* Subtle Background Glow */}
-    <div className={`absolute -right-6 -top-6 w-24 h-24 bg-${color}-500/5 rounded-full blur-2xl group-hover:bg-${color}-500/10 transition-colors pointer-events-none`} />
-
-    <div className="flex items-start justify-between mb-4 relative z-10">
-      <div className={`w-12 h-12 rounded-[14px] bg-gradient-to-br from-${color}-50 to-${color}-100/50 flex items-center justify-center group-hover:bg-${color}-100 transition-colors border border-${color}-100 shadow-inner`}>
-        {icon}
-      </div>
-      {trend && (
-        <span className="text-[11px] text-emerald-700 bg-emerald-100/80 px-2.5 py-1 rounded-full font-bold shadow-sm border border-emerald-200/50 flex items-center gap-1">
-          <TrendingUp size={12} className="text-emerald-600"/> {trend}
-        </span>
-      )}
-    </div>
-    
-    <div className="relative z-10">
-      <div className="text-3xl font-black text-slate-800 tracking-tight mb-1">
-        {typeof value === 'number' ? <CountUp end={value} /> : value}
-      </div>
-      <div className="text-sm font-bold text-slate-500 uppercase tracking-wide">{label}</div>
-      {sublabel && (
-        <div className="text-xs font-semibold text-slate-400 mt-1">{sublabel}</div>
-      )}
-    </div>
-    
-    <div className={`mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-${color}-600 opacity-0 group-hover:opacity-100 transition-opacity translate-y-2 group-hover:translate-y-0 duration-300`}>
-      <span>View detailed report</span>
-      <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform"/>
-    </div>
-  </div>
-);
 
 const DriveOptionsMenu = ({ drive, onEdit, onDelete, onDuplicate, onChangeStatus }: any) => {
   const [open, setOpen] = useState(false);
@@ -230,16 +177,11 @@ export default function AdminDashboardPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   
-  const [dbStats, setDbStats] = useState<any>({
-    activeDrives: 0,
-    totalApplications: 0,
-    shortlisted: 0,
-    selected: 0
-  });
-  
+
   const [drives, setDrives] = useState<any[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<any[]>([]);
   const [collegeDetails, setCollegeDetails] = useState<any>({});
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
   
   const [showSelectedDrawer, setShowSelectedDrawer] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -259,17 +201,17 @@ export default function AdminDashboardPage() {
 
   const fetchData = async () => {
     try {
-      const [statsRes, drivesRes, selectedRes, profileRes] = await Promise.all([
-        api.get('/analytics/summary').catch(() => null),
+      const [drivesRes, selectedRes, profileRes, activityRes] = await Promise.all([
         api.get('/drives?includeCount=true').catch(() => null),
         api.get('/analytics/selected-students').catch(() => null),
-        api.get('/college/profile').catch(() => null)
+        api.get('/college/profile').catch(() => null),
+        api.get('/analytics/recent-activity').catch(() => null)
       ]);
 
-      if ((statsRes as any)?.success) setDbStats((statsRes as any).data);
       if ((drivesRes as any)?.success) setDrives((drivesRes as any).data);
       if ((selectedRes as any)?.success) setSelectedStudents((selectedRes as any).data);
       if ((profileRes as any)?.success) setCollegeDetails((profileRes as any).data);
+      if ((activityRes as any)?.success) setRecentActivities((activityRes as any).data);
       
     } catch (err) {
       toast.error('Failed to load dashboard data');
@@ -352,113 +294,120 @@ export default function AdminDashboardPage() {
     return Array.from(tags).sort();
   }, [drives]);
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return 'TBD';
-    return new Date(dateStr).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+  const { totalPipeline, activeEvents, totalShortlisted } = useMemo(() => {
+    let pipeline = 0, active = 0, shortlisted = 0;
+    drives.forEach(d => {
+      pipeline += (d.applicationCount || 0);
+      shortlisted += (d.shortlistedCount || 0);
+      if (d.status === 'active' || d.status === 'event_day') active++;
+    });
+    return { totalPipeline: pipeline, activeEvents: active, totalShortlisted: shortlisted };
+  }, [drives]);
+  
+  const placementRate = totalPipeline > 0 ? Math.round((totalShortlisted / totalPipeline) * 100) : 0;
+
+  // Helper to format relative time
+  const timeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   };
 
-  const placementRate = useMemo(() => {
-    if (!dbStats.totalApplications) return 0;
-    return Math.round((dbStats.selected / dbStats.totalApplications) * 100);
-  }, [dbStats]);
-
-  const bestCompany = useMemo(() => {
-    if (!selectedStudents.length) return 'None';
-    return selectedStudents.sort((a,b) => b.students.length - a.students.length)[0]?.companyName || 'None';
-  }, [selectedStudents]);
-
   return (
-    <div className="page-enter p-8 max-w-7xl mx-auto min-h-full">
+    <div className="page-enter p-4 md:p-8 max-w-[1600px] mx-auto min-h-full font-sans">
       
-      {/* Premium Glassmorphic Hero header */}
-      <div className="bg-white/70 backdrop-blur-xl border border-slate-200/50 rounded-3xl p-8 mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-        {/* Subtle decorative glows */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4 pointer-events-none"></div>
-
-        <div className="relative z-10">
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight leading-tight">
-            Welcome back, {collegeDetails?.name?.split(' ')[0] || 'Admin'} 👋
-          </h1>
-          <p className="text-slate-500 mt-2 font-medium max-w-xl text-sm leading-relaxed">
-            Here's what's happening across <span className="text-indigo-600 font-bold">{collegeDetails?.name || 'your campus'}</span> today. Track, analyze, and scale your recruitment drives effortlessly.
-          </p>
+      {/* ULTRA-PREMIUM HERO SECTION */}
+      <div className="relative mb-16">
+        { /* Animated Mesh Background */ }
+        <div className="absolute inset-0 bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl">
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/30 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-purple-600/20 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/4"></div>
+          <div className="absolute top-1/2 left-1/2 w-[600px] h-[600px] bg-blue-500/10 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2"></div>
         </div>
-        <div className="relative z-10 w-full md:w-auto">
-          <button onClick={() => navigate('/admin/drives/new')}
-            className="w-full md:w-auto bg-gradient-to-br from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:scale-95 transition-all text-white px-7 py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 whitespace-nowrap group">
-            <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300"/> Create New Drive
-          </button>
+
+        <div className="relative z-10 px-10 pt-12 pb-24 md:pb-28">
+           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+             <div>
+               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/10 backdrop-blur-md mb-4">
+                 <span className="relative flex h-2 w-2">
+                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                 </span>
+                 <span className="text-white/90 text-xs font-bold tracking-wider uppercase">System Operational</span>
+               </div>
+               <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight mb-2">
+                 Welcome back, {collegeDetails?.name?.split(' ')[0] || 'Admin'}
+               </h1>
+               <p className="text-white/70 text-base md:text-lg max-w-2xl">
+                 Here's the pulse of <span className="text-white font-bold">{collegeDetails?.name || 'your campus'}</span> today. Track {totalPipeline} candidates across {activeEvents} active placement drives.
+               </p>
+             </div>
+             
+             <button onClick={() => navigate('/admin/drives/new')}
+               className="shrink-0 bg-white hover:bg-indigo-50 active:scale-95 transition-all text-indigo-900 px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-black/20 group">
+               <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300 text-indigo-600"/> Create New Drive
+             </button>
+           </div>
         </div>
-      </div>
 
-      {/* STAT CARDS ROW */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        <StatCard 
-          label="Active Drives" 
-          value={loading ? '-' : dbStats.activeDrives} 
-          icon={<Briefcase size={20} className="text-indigo-600"/>} 
-          color="indigo" 
-          onClick={() => { setStatusFilter('Active'); window.scrollTo({ top: 500, behavior: 'smooth'}); }} 
-          sublabel="In progress or event day" 
-        />
-        <StatCard 
-          label="Total Applications" 
-          value={loading ? '-' : dbStats.totalApplications} 
-          icon={<Users size={20} className="text-blue-600"/>} 
-          color="blue" 
-          onClick={() => {
-            const firstActive = drives.find(d => d.status === 'active' || d.status === 'event_day');
-            if (firstActive) navigate(`/admin/drives/${firstActive._id}`);
-          }} 
-          sublabel="Across all drives" 
-        />
-        <StatCard 
-          label="Shortlisted" 
-          value={loading ? '-' : dbStats.shortlisted} 
-          icon={<UserCheck size={20} className="text-amber-600"/>} 
-          color="amber" 
-          onClick={() => {
-            const firstDrive = drives.find(d => d.shortlistedCount > 0);
-            if (firstDrive) navigate(`/admin/drives/${firstDrive._id}`);
-          }} 
-          sublabel="Pending notifications" 
-        />
-        <StatCard 
-          label="Selected" 
-          value={loading ? '-' : dbStats.selected} 
-          icon={<Trophy size={20} className="text-green-600"/>} 
-          color="green" 
-          onClick={() => setShowSelectedDrawer(true)} 
-          sublabel="Students placed" 
-          trend={dbStats.selected > 0 ? "View Details" : null}
-        />
-      </div>
+        {/* FLOATING PULSE METRICS */}
+        <div className="absolute bottom-0 left-10 right-10 translate-y-1/2 z-20">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-6 shadow-xl shadow-slate-200/50 border border-white flex items-center gap-5 hover:-translate-y-1 transition-transform cursor-default group">
+              <div className="w-14 h-14 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <Users className="text-indigo-600" size={24}/>
+              </div>
+              <div>
+                <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Total Pipeline</p>
+                <div className="flex items-baseline gap-2">
+                  <h3 className="text-3xl font-black text-slate-800 leading-none">{totalPipeline}</h3>
+                  <span className="text-xs font-bold text-emerald-600 flex items-center">+12%</span>
+                </div>
+              </div>
+            </div>
 
-      {/* QUICK STATS BAR */}
-      {drives.length > 0 && dbStats.selected > 0 && (
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-5 mb-8 text-white shadow-md flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-              <BarChart2 size={24} className="text-white" />
+            <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-6 shadow-xl shadow-slate-200/50 border border-white flex items-center gap-5 hover:-translate-y-1 transition-transform cursor-default group">
+              <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <Activity className="text-emerald-600" size={24}/>
+              </div>
+              <div>
+                <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Active Events</p>
+                <div className="flex items-baseline gap-2">
+                  <h3 className="text-3xl font-black text-slate-800 leading-none">{activeEvents}</h3>
+                  <span className="text-xs font-medium text-slate-400">Live drives</span>
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="text-sm font-semibold text-indigo-100 uppercase tracking-widest">Overall Placement Rate</div>
-              <div className="text-2xl font-black">{placementRate}% <span className="text-sm font-medium text-indigo-200">across {drives.length} drives this year</span></div>
+
+            <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-6 shadow-xl shadow-slate-200/50 border border-white flex items-center gap-5 hover:-translate-y-1 transition-transform cursor-default group">
+               <div className="w-14 h-14 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <TrendingUp className="text-blue-600" size={24}/>
+              </div>
+              <div>
+                <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">L1 Shortlist Rate</p>
+                <div className="flex items-baseline gap-2">
+                  <h3 className="text-3xl font-black text-slate-800 leading-none">{placementRate}%</h3>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="flex gap-8 text-right">
-            <div>
-              <div className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-1">Best Company</div>
-              <div className="font-bold text-white max-w-[150px] truncate">{bestCompany}</div>
-            </div>
-            <div>
-               <div className="text-xs font-semibold text-indigo-200 uppercase tracking-wider mb-1">Top Branch</div>
-               <div className="font-bold text-white max-w-[150px] truncate">Computer Science</div>
-            </div>
+
           </div>
         </div>
-      )}
+      </div>
+      
+      {/* MACRO LAYOUT: DRIVES (75%) | LIVE FEED (25%) */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 pt-8">
+        
+        {/* DRIVES SECTION */}
+        <div className="xl:col-span-3 space-y-6">
+
 
       {/* DRIVES SECTION HEADER */}
       <div className="flex flex-col md:flex-row items-center gap-4 py-3 mb-6 bg-white/50 backdrop-blur top-0 sticky z-10">
@@ -483,17 +432,7 @@ export default function AdminDashboardPage() {
           ))}
         </div>
 
-        <div className="ml-auto flex bg-white border border-slate-200 rounded-lg p-1">
-          <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`} title="Grid View">
-            <GridIcon size={16} />
-          </button>
-          <button onClick={() => setViewMode('list')} className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`} title="List View">
-            <ListIcon size={16} />
-          </button>
-          <button onClick={() => setViewMode('calendar')} className={`p-1.5 rounded ${viewMode === 'calendar' ? 'bg-indigo-100 text-indigo-800' : 'text-slate-400 hover:text-slate-600'}`} title="Calendar View">
-            <Calendar size={16} />
-          </button>
-        </div>
+
       </div>
 
       {/* TAG FILTER ROW */}
@@ -605,101 +544,209 @@ export default function AdminDashboardPage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-5">
-          {filteredDrives.map(drive => (
-            <div key={drive._id} onClick={() => navigate(`/admin/drives/${drive._id}`)}
-              className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer overflow-hidden group flex flex-col h-full">
-              
-              <div className={`h-1.5 w-full ${
-                drive.status === 'active' ? 'bg-gradient-to-r from-indigo-500 to-purple-500' :
-                drive.status === 'event_day' ? 'bg-gradient-to-r from-emerald-400 to-green-500' :
-                drive.status === 'draft' ? 'bg-slate-200' : 'bg-slate-300'
-              }`} />
-              
-              <div className="p-5 flex flex-col grow">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-700 font-black text-xl flex items-center justify-center border border-indigo-100/50">
-                    {drive.companyName.substring(0, 2).toUpperCase()}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest flex items-center gap-2 border shadow-sm ${
-                      drive.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' :
-                      drive.status === 'event_day' ? 'bg-indigo-50 text-indigo-700 border-indigo-200/60' :
-                      drive.status === 'draft' ? 'bg-slate-50 text-slate-500 border-slate-200/80' : 
-                      'bg-slate-100 text-slate-600 border-slate-200'
-                    }`}>
-                      {(drive.status === 'active' || drive.status === 'event_day') && (
-                        <span className="relative flex h-1.5 w-1.5 shrink-0">
-                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${drive.status === 'active' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
-                          <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${drive.status === 'active' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
+        <div className="flex flex-col gap-5">
+          {filteredDrives.map(drive => {
+            const getStatusConfig = (status: string) => {
+              switch(status) {
+                case 'active': return { color: 'indigo', label: 'Active', pulse: true, gradient: 'from-indigo-500 via-indigo-600 to-blue-700' };
+                case 'event_day': return { color: 'emerald', label: 'Live Event', pulse: true, gradient: 'from-emerald-500 via-teal-500 to-cyan-600' };
+                case 'draft': return { color: 'slate', label: 'Draft', pulse: false, gradient: 'from-slate-300 via-slate-400 to-slate-500' };
+                case 'completed': return { color: 'slate', label: 'Completed', pulse: false, gradient: 'from-slate-400 via-slate-500 to-slate-600' };
+                default: return { color: 'slate', label: status, pulse: false, gradient: 'from-slate-300 to-slate-400' };
+              }
+            };
+            const config = getStatusConfig(drive.status);
+
+            return (
+              <div key={drive._id} onClick={() => navigate(`/admin/drives/${drive._id}`)}
+                className="group relative bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-500 cursor-pointer">
+                
+                <div className="flex h-full">
+                  {/* Left Gradient Accent Strip */}
+                  <div className={`w-2 shrink-0 bg-gradient-to-b ${config.gradient} rounded-l-2xl`}></div>
+
+                  {/* Main Card Body */}
+                  <div className="flex-1 p-5">
+                    {/* Row 1: Logo + Company Info + Status + Menu */}
+                    <div className="flex items-start gap-4 mb-4">
+                      {/* Floating Logo */}
+                      <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${config.gradient} text-white font-black text-lg flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                        {drive.companyName.substring(0, 2).toUpperCase()}
+                      </div>
+
+                      {/* Company & Role */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-black text-slate-800 text-lg leading-tight truncate group-hover:text-indigo-600 transition-colors">{drive.companyName}</h3>
+                        <p className="text-slate-500 text-sm font-semibold truncate flex items-center gap-1.5 mt-0.5">
+                          <GraduationCap size={13} className="text-indigo-400 shrink-0"/>
+                          {drive.jobRole}
+                        </p>
+                      </div>
+
+                      {/* Status Pill */}
+                      <span className={`shrink-0 px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 border bg-white shadow-sm text-${config.color}-700 border-${config.color}-200/50`}>
+                        {config.pulse && (
+                          <span className="relative flex h-1.5 w-1.5 shrink-0">
+                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-${config.color}-500`}></span>
+                            <span className={`relative inline-flex rounded-full h-1.5 w-1.5 bg-${config.color}-500`}></span>
+                          </span>
+                        )}
+                        {!config.pulse && <span className={`w-1.5 h-1.5 rounded-full bg-${config.color}-400 shrink-0`} />}
+                        {config.label}
+                      </span>
+
+                      <div onClick={e => e.stopPropagation()} className="shrink-0">
+                        <DriveOptionsMenu drive={drive} onEdit={handleEditDrive} onDelete={handleDeleteDrive} onDuplicate={handleDuplicateDrive} onChangeStatus={handleChangeStatus} />
+                      </div>
+                    </div>
+
+                    {/* Row 2: Pills */}
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                      {drive.ctc && (
+                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/50 text-xs px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5">
+                          <DollarSign size={12} className="text-emerald-500"/> {drive.ctc} LPA
                         </span>
                       )}
-                      {drive.status === 'draft' && <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />}
-                      {drive.status === 'completed' && <span className="w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0" />}
-                      <span className="truncate max-w-[80px]">{drive.status.replace('_', ' ')}</span>
-                    </span>
-                    {drive.formToken && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigator.clipboard.writeText(`${window.location.origin}/apply/${drive.formToken}`);
-                          toast.success('Public link copied!');
-                        }}
-                        className="p-1 px-1.5 text-slate-400 hover:text-indigo-600 bg-white hover:bg-indigo-50 rounded-lg border border-transparent hover:border-indigo-100 transition-colors"
-                        title="Copy Public Link"
-                      >
-                        <Link size={16} />
-                      </button>
-                    )}
-                    <DriveOptionsMenu drive={drive} onEdit={handleEditDrive} onDelete={handleDeleteDrive} onDuplicate={handleDuplicateDrive} onChangeStatus={handleChangeStatus} />
-                  </div>
-                </div>
-                
-                <h3 className="font-black text-slate-800 text-lg leading-tight line-clamp-1">{drive.companyName}</h3>
-                <p className="text-slate-500 text-sm font-medium mt-0.5 line-clamp-1">{drive.jobRole}</p>
-                
-                <div className="flex items-center gap-2 mt-3 flex-wrap">
-                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs px-2.5 py-1 rounded-md font-bold flex items-center gap-1">
-                    <DollarSign size={12} /> {drive.ctc || 'Not Disclosed'}
-                  </span>
-                  {drive.locations?.slice(0, 2).map((loc: string, i: number) => (
-                    <span key={i} className="bg-slate-50 text-slate-600 border border-slate-200 text-xs px-2.5 py-1 rounded-md font-semibold flex items-center gap-1">
-                      <MapPin size={12} /> {loc}
-                    </span>
-                  ))}
-                  {drive.locations?.length > 2 && <span className="text-xs font-bold text-slate-400">+{drive.locations.length - 2}</span>}
-                  {drive.tags?.slice(0, 2).map((tag: string) => (
-                    <span key={tag} className="bg-indigo-50 text-indigo-700 border border-indigo-100/50 text-xs px-2.5 py-1 rounded-md font-bold flex items-center gap-1">
-                      <Tag size={10} /> {tag}
-                    </span>
-                  ))}
-                  {drive.tags?.length > 2 && <span className="text-xs font-bold text-slate-400">+{drive.tags.length - 2}</span>}
-                </div>
-                
-                <div className="border-t border-slate-100 my-4 grow" />
-                
-                <div className="flex justify-between items-end">
-                  <div className="flex gap-4 sm:gap-6">
-                    <div>
-                      <div className="font-black text-slate-800 text-xl leading-none">{drive.applicationCount || 0}</div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Apps</div>
+                      {drive.locations?.[0] && (
+                        <span className="bg-slate-50 text-slate-600 border border-slate-200/60 text-xs px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5">
+                          <MapPin size={12} className="text-slate-400"/> {drive.locations[0]} {drive.locations.length > 1 && `+${drive.locations.length-1}`}
+                        </span>
+                      )}
+                      {drive.tags?.[0] && (
+                        <span className="bg-indigo-50 text-indigo-700 border border-indigo-200/50 text-xs px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5">
+                          <Tag size={10} className="text-indigo-400"/> {drive.tags[0]}
+                        </span>
+                      )}
+                      {drive.driveDate && (
+                        <span className="bg-amber-50 text-amber-700 border border-amber-200/50 text-xs px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5">
+                          <Calendar size={12} className="text-amber-500"/> {new Date(drive.driveDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </span>
+                      )}
                     </div>
-                    <div>
-                      <div className="font-black text-slate-800 text-xl leading-none">{drive.shortlistedCount || 0}</div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">L1 Passed</div>
+                    
+                    {/* Row 3: Metrics + Quick Actions — all inline */}
+                    <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-slate-100">
+                      {/* Metrics */}
+                      <div className="flex items-center gap-4 mr-auto">
+                        <div className="flex items-center gap-2">
+                          <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center">
+                            <Users size={16} className="text-indigo-500"/>
+                          </div>
+                          <div>
+                            <div className="font-black text-slate-800 text-base leading-none">{drive.applicationCount || 0}</div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Applied</div>
+                          </div>
+                        </div>
+                        <div className="w-px h-8 bg-slate-100"/>
+                        <div className="flex items-center gap-2">
+                          <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+                            <CheckCircle size={16} className="text-emerald-500"/>
+                          </div>
+                          <div>
+                            <div className="font-black text-slate-800 text-base leading-none">{drive.shortlistedCount || 0}</div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Shortlisted</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Action Buttons */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); navigate(`/event/${drive._id}/qr-display`); }}
+                          className="group/btn flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-all text-xs font-bold"
+                          title="Show QR Code"
+                        >
+                          <QrCode size={14} className="group-hover/btn:scale-110 transition-transform"/>
+                          QR
+                        </button>
+                        
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); navigate(`/admin/drives/${drive._id}/room-assignment`); }}
+                          className="group/btn flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg transition-all text-xs font-bold"
+                          title="Room Management"
+                        >
+                          <Building size={14} className="group-hover/btn:scale-110 transition-transform"/>
+                          Rooms
+                        </button>
+
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (drive.formToken) {
+                              navigator.clipboard.writeText(`${window.location.origin}/apply/${drive.formToken}`);
+                              toast.success('Form link copied!');
+                            } else {
+                              toast.error('No public form available');
+                            }
+                          }}
+                          className="group/btn w-9 h-9 flex items-center justify-center bg-blue-50 hover:bg-blue-100 text-blue-500 rounded-lg transition-all"
+                          title="Copy Public Link"
+                        >
+                          <Link size={14} className="group-hover/btn:-rotate-45 transition-transform"/>
+                        </button>
+
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); navigate(`/admin/drives/${drive._id}`); }}
+                          className="group/btn flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-indigo-600 text-white rounded-lg transition-all text-xs font-bold"
+                        >
+                          Open <ChevronRight size={14} className="group-hover/btn:translate-x-0.5 transition-transform"/>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                     <div className="font-bold text-slate-600 text-sm flex items-center justify-end gap-1.5"><Calendar size={14}/> {formatDate(drive.eventDate)}</div>
-                     <div className="text-indigo-600 font-bold text-xs flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-1">Open <ChevronRight size={12} strokeWidth={3}/></div>
                   </div>
                 </div>
               </div>
-
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+
+      </div> {/* END DRIVES SECTION (xl:col-span-3) */}
+
+      {/* LIVE ACTIVITY SIDEBAR */}
+      <div className="hidden xl:block xl:col-span-1">
+         <div className="bg-white rounded-3xl border border-slate-200/70 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 sticky top-6">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                 <Bell size={20} className="text-indigo-600"/>
+                 Live Activity
+              </h3>
+              <span className="relative flex h-2.5 w-2.5">
+                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+            </div>
+            
+            <div className="relative border-l-2 border-slate-100 ml-3 space-y-8">
+               {recentActivities.length === 0 && (
+                 <div className="pl-6 text-xs text-slate-400 font-medium py-4">No recent activity yet.</div>
+               )}
+               {recentActivities.map((activity, i) => (
+                 <div key={i} className="relative pl-6">
+                    <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center ${
+                      activity.color === 'amber' ? 'bg-amber-400' :
+                      activity.color === 'emerald' ? 'bg-emerald-400' :
+                      activity.color === 'indigo' ? 'bg-indigo-400' : 'bg-slate-400'
+                    }`}></div>
+                    <div className="bg-slate-50 hover:bg-indigo-50/50 transition-colors p-3 rounded-xl border border-slate-100/50 -mt-1.5">
+                      <p className="text-xs font-bold text-slate-700 leading-snug mb-1">{activity.message}</p>
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                         <Clock size={10}/> {timeAgo(activity.timestamp)}
+                      </div>
+                    </div>
+                 </div>
+               ))}
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-slate-100">
+               <button onClick={() => navigate('/admin/analytics')} className="w-full py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors">
+                  View Full Analytics <ChevronRight size={16}/>
+               </button>
+            </div>
+         </div>
+      </div>
+
+    </div> {/* END MACRO LAYOUT GRID */}
 
       {/* SELECTED STUDENTS DRAWER */}
       {showSelectedDrawer && (

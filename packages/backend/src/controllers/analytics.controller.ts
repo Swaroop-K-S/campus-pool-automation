@@ -169,3 +169,76 @@ export const getSelectedStudents = asyncHandler(async (req: Request, res: Respon
 
   res.json({ success: true, data: Object.values(driveGroups) });
 });
+
+// GET /analytics/recent-activity
+export const getRecentActivity = asyncHandler(async (req: Request, res: Response) => {
+  const collegeId = (req as any).user.collegeId;
+  const activities: any[] = [];
+
+  // 1. Recent applications grouped by drive (last 7 days)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const recentApps = await ApplicationModel.aggregate([
+    { $match: { collegeId: new mongoose.Types.ObjectId(collegeId), createdAt: { $gte: sevenDaysAgo } } },
+    { $group: { _id: '$driveId', count: { $sum: 1 }, latest: { $max: '$createdAt' } } },
+    { $sort: { latest: -1 } },
+    { $limit: 10 }
+  ]);
+
+  // Get drive names for the grouped apps
+  const driveIds = recentApps.map(a => a._id);
+  const drives = await DriveModel.find({ _id: { $in: driveIds } }).select('companyName').lean();
+  const driveNameMap: Record<string, string> = {};
+  for (const d of drives) driveNameMap[d._id.toString()] = d.companyName;
+
+  for (const app of recentApps) {
+    const name = driveNameMap[app._id.toString()] || 'Unknown Drive';
+    activities.push({
+      type: 'application',
+      message: `${app.count} new application${app.count > 1 ? 's' : ''} for ${name}`,
+      timestamp: app.latest,
+      color: 'indigo'
+    });
+  }
+
+  // 2. Recent drive status changes (last 30 days)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const recentDrives = await DriveModel.find(
+    { collegeId, updatedAt: { $gte: thirtyDaysAgo } }
+  ).select('companyName status updatedAt createdAt').sort({ updatedAt: -1 }).limit(10).lean();
+
+  for (const drive of recentDrives) {
+    const statusLabel = drive.status === 'active' ? 'marked as Active' :
+                        drive.status === 'event_day' ? 'is Live (Event Day)' :
+                        drive.status === 'completed' ? 'has been Completed' :
+                        drive.status === 'draft' ? 'saved as Draft' : `status: ${drive.status}`;
+    activities.push({
+      type: 'drive_status',
+      message: `${drive.companyName} drive ${statusLabel}`,
+      timestamp: drive.updatedAt,
+      color: drive.status === 'active' ? 'emerald' : drive.status === 'event_day' ? 'amber' : 'slate'
+    });
+  }
+
+  // 3. Recent shortlists (last 7 days)
+  const recentShortlists = await ApplicationModel.aggregate([
+    { $match: { collegeId: new mongoose.Types.ObjectId(collegeId), status: 'shortlisted', updatedAt: { $gte: sevenDaysAgo } } },
+    { $group: { _id: '$driveId', count: { $sum: 1 }, latest: { $max: '$updatedAt' } } },
+    { $sort: { latest: -1 } },
+    { $limit: 5 }
+  ]);
+
+  for (const s of recentShortlists) {
+    const name = driveNameMap[s._id.toString()] || 'Unknown Drive';
+    activities.push({
+      type: 'shortlist',
+      message: `${s.count} student${s.count > 1 ? 's' : ''} shortlisted for ${name}`,
+      timestamp: s.latest,
+      color: 'emerald'
+    });
+  }
+
+  // Sort all activities by timestamp descending
+  activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  res.json({ success: true, data: activities.slice(0, 15) });
+});

@@ -6,9 +6,34 @@ import { generateUniqueDriveId } from '../utils/generate-drive-id';
 import { sendDriveIdEmail } from '../services/email.service';
 import mongoose from 'mongoose';
 import { env } from '../config/env';
+import crypto from 'crypto';
+import path from 'path';
+
+import { Readable } from 'stream';
+
+const uploadToGridFS = (file: Express.Multer.File): Promise<mongoose.Types.ObjectId> => {
+  return new Promise((resolve, reject) => {
+    const bucket = getGridFSBucket();
+    crypto.randomBytes(16, (err, buf) => {
+      if (err) return reject(err);
+      const filename = buf.toString('hex') + path.extname(file.originalname);
+      const uploadStream = bucket.openUploadStream(filename, {
+        contentType: file.mimetype
+      });
+      uploadStream.on('error', reject);
+      uploadStream.on('finish', () => resolve(uploadStream.id as mongoose.Types.ObjectId));
+      
+      const readable = new Readable();
+      readable.push(file.buffer);
+      readable.push(null);
+      readable.pipe(uploadStream);
+    });
+  });
+};
 
 export const upsertFormFields = async (req: Request, res: Response) => {
   try {
+// ...
     const { driveId } = req.params;
     const { fields } = req.body;
     const collegeId = req.user?.collegeId;
@@ -112,11 +137,21 @@ export const submitApplication = async (req: Request, res: Response) => {
     }
 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    console.log('[submitApplication] files received:', Object.keys(files || {}));
+
     const resumeFile = files?.['resume']?.[0];
     const photoFile = files?.['photo']?.[0];
 
-    const resumeFileId = resumeFile ? (resumeFile as any).id : null;
-    const photoFileId = photoFile ? (photoFile as any).id : null;
+    let resumeFileId = null;
+    let photoFileId = null;
+
+    if (resumeFile) {
+      resumeFileId = await uploadToGridFS(resumeFile);
+    }
+    if (photoFile) {
+      photoFileId = await uploadToGridFS(photoFile);
+    }
+    console.log('[submitApplication] extracted IDs:', { resumeFileId, photoFileId });
 
     const currentYear = new Date().getFullYear();
     const randomNum = Math.floor(10000 + Math.random() * 90000); 
@@ -176,6 +211,7 @@ export const submitApplication = async (req: Request, res: Response) => {
 
     return res.status(201).json({ success: true, data: { referenceNumber, driveStudentId, message: 'Application submitted' } });
   } catch (error: unknown) {
+    console.error('[submitApplication] Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ success: false, error: message });
   }

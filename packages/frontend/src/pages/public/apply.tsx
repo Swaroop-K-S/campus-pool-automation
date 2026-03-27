@@ -104,20 +104,31 @@ export default function PublicApplyPage() {
         const fieldConfig = config?.fields.find((f: { id: string, label: string, type: string }) => f.id === key);
         let submitKey = fieldConfig ? fieldConfig.label.replace(/\s+/g, '_') : key;
 
-        if (fieldConfig?.type === 'file') {
+        if (fieldConfig?.type === 'file_pdf' || fieldConfig?.type === 'file_image') {
            const fileList = data[key] as FileList;
+           const submitKey = fieldConfig.type === 'file_pdf' ? 'resume' : 'photo';
+           if (fileList && fileList.length > 0) {
+             formData.append(submitKey, fileList[0]);
+           }
+        } else if (fieldConfig?.type === 'file') {
+           const fileList = data[key] as FileList;
+           let submitKey = key;
            if (submitKey.toLowerCase().includes('resume') || submitKey.toLowerCase().includes('pdf') || submitKey.toLowerCase().includes('cv')) {
              submitKey = 'resume';
            } else {
              submitKey = 'photo';
            }
-           if (fileList?.[0]) formData.append(submitKey, fileList[0]);
+           if (fileList && fileList.length > 0) {
+             formData.append(submitKey, fileList[0]);
+           }
         } else {
            formData.append(submitKey, data[key] as string);
         }
       });
 
-      const res = await api.post(`/form/${formToken}/submit`, formData);
+      const res = await api.post(`/form/${formToken}/submit`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       if ((res as any).success) {
         setSuccessData({
           referenceNumber: (res as any).data.referenceNumber,
