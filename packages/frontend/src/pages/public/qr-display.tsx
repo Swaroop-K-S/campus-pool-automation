@@ -45,7 +45,13 @@ const QRDisplayPage: React.FC = () => {
     fetchQR();
 
     // Also join socket room for live updates
-    socket.emit('join:drive:qr', driveId);
+    const joinRoom = () => socket.emit('join:drive:qr', driveId);
+    
+    if (socket.connected) {
+      joinRoom();
+    }
+    socket.on('connect', joinRoom);
+
     socket.on('qr:rotate', ({ qrDataUrl, expiresAt }: any) => {
       setQrDataUrl(qrDataUrl);
       const secondsLeft = Math.floor((expiresAt - Date.now()) / 1000);
@@ -58,7 +64,10 @@ const QRDisplayPage: React.FC = () => {
       .then(d => { if (d.success) setDrive(d.data); })
       .catch(() => {});
 
-    return () => { socket.off('qr:rotate'); };
+    return () => { 
+      socket.off('connect', joinRoom);
+      socket.off('qr:rotate'); 
+    };
   }, [driveId]);
 
   // Countdown timer

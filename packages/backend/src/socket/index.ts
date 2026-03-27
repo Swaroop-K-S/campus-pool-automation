@@ -13,13 +13,14 @@ export function initSocket(httpServer: any) {
     // JWT auth middleware for socket
     // Public pages skip auth
     const token = socket.handshake.auth.token;
-    if (!token) return next(); // allow public
+    if (!token || token === 'undefined' || token === 'null' || token === '') return next(); // allow public
     try {
       const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET);
       socket.data.user = decoded;
       next();
     } catch { 
-      next(new Error('Unauthorized')); 
+      // If token is invalid/expired, gracefully downgrade to public connection instead of outright rejection
+      next(); 
     }
   });
 
