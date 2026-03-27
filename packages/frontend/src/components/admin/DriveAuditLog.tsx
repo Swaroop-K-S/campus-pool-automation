@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { Mail, MessageSquare, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';

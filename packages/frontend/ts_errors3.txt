@@ -1,0 +1,5 @@
+src/components/admin/DriveAuditLog.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/admin/EventDayRoadmap.tsx(2,62): error TS6133: 'ArrowRight' is declared but its value is never read.
+src/pages/college-admin/drive-detail.tsx(6,3): error TS6133: 'ArrowLeft' is declared but its value is never read.
+src/pages/college-admin/drive-detail.tsx(10,72): error TS6133: 'Printer' is declared but its value is never read.
+src/pages/college-admin/drive-detail.tsx(206,10): error TS6133: 'scheduleState' is declared but its value is never read.

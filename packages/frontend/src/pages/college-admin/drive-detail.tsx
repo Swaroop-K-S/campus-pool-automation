@@ -3,11 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft, AlignLeft, AlignJustify, Hash,
+  AlignLeft, AlignJustify, Hash,
   ChevronDown, ChevronRight, Circle, CheckSquare, Calendar, FileText, 
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
   Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search,
-  Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Printer, Play, QrCode, Menu
+  Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Play, QrCode, Menu
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
@@ -203,7 +203,6 @@ export default function DriveDetailPage() {
   const [expandedRounds, setExpandedRounds] = useState<Record<string, boolean>>({});
   const [newExpertiseTags, setNewExpertiseTags] = useState<string[]>([]);
   const [expertiseInput, setExpertiseInput] = useState('');
-  const [scheduleState, setScheduleState] = useState<Record<string, { startTime: string; duration: number }>>({});
 
   // Applications tab state
   const [appStatusFilter, setAppStatusFilter] = useState('all');
@@ -518,11 +517,8 @@ export default function DriveDetailPage() {
           setHallName(d.venueDetails.hallName || '');
           setCapacity(d.venueDetails.capacity || 0);
         }
-        if (d.schedule) {
-          const sMap: Record<string, {startTime: string; duration: number}> = {};
-          d.schedule.forEach((s: any) => { sMap[s.roundType] = { startTime: s.startTime || '', duration: s.duration || 90 }; });
-          setScheduleState(sMap);
-        }
+        // `scheduleState` state variable was removed because it was never read.
+        // We can safely omit parsing it here.
       }
     } catch {}
   };
@@ -612,6 +608,23 @@ export default function DriveDetailPage() {
       toast.error('Failed to archive drive. Please check logs.');
     } finally {
       setArchiveLoading(false);
+    }
+  };
+
+  const handleDownloadFile = async (appId: string, type: 'resume' | 'photo') => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/applications/${appId}/${type}`, {
+        headers: { Authorization: `Bearer ${useAuthStore.getState().accessToken}` }
+      });
+      if (!response.ok) throw new Error(`Failed to fetch ${type}`);
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      // Revoke the Object URL after a delay to clear memory without breaking the new tab immediately
+      setTimeout(() => URL.revokeObjectURL(url), 10000); 
+    } catch {
+      toast.error(`Unable to open ${type}`);
     }
   };
 
@@ -1868,6 +1881,43 @@ export default function DriveDetailPage() {
                           )}
                         </div>
                       </div>
+
+                      {/* File Uploads (Resume / Photo) */}
+                      {(app.resumeFileId || app.photoFileId) && (
+                        <div>
+                          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Attachments</h3>
+                          <div className="bg-slate-50 rounded-xl divide-y divide-slate-200 overflow-hidden border border-slate-200 mb-6">
+                            {app.resumeFileId && (
+                              <div className="flex items-center justify-between px-4 py-3 hover:bg-slate-100/50 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <FileText size={18} className="text-indigo-500" />
+                                  <div className="text-sm font-medium text-slate-700">Student Resume</div>
+                                </div>
+                                <button
+                                  onClick={() => handleDownloadFile(app._id, 'resume')}
+                                  className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                                >
+                                  <Download size={14} /> View File
+                                </button>
+                              </div>
+                            )}
+                            {app.photoFileId && (
+                              <div className="flex items-center justify-between px-4 py-3 hover:bg-slate-100/50 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <ImageIcon size={18} className="text-indigo-500" />
+                                  <div className="text-sm font-medium text-slate-700">Student Photo</div>
+                                </div>
+                                <button
+                                  onClick={() => handleDownloadFile(app._id, 'photo')}
+                                  className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                                >
+                                  <ImageIcon size={14} /> View File
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Submission Info */}
                       <div>

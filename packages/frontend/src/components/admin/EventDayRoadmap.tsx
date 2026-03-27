@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, UploadCloud, Users, CheckCircle, Loader2, ArrowRight, Wand2, X } from 'lucide-react';
+import { Download, UploadCloud, Users, CheckCircle, Loader2, Wand2, X } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 
