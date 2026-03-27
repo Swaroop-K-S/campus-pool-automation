@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, BarChart2, Settings, Bell, LogOut, GraduationCap, Menu, X, Grid3X3, ListChecks, QrCode, Plus, Clock } from 'lucide-react';
+import { LayoutDashboard, BarChart2, Settings, Bell, LogOut, GraduationCap, Menu, X, Plus, Clock } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
 import { useAppStore } from '../../store/app.store';
 import { api } from '../../services/api';
@@ -13,7 +13,6 @@ export default function AdminLayout() {
   const user = useAuthStore(state => state.user);
   const { contextDriveId, setContextDriveId } = useAppStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeDrive, setActiveDrive] = useState<any>(null);
   const [recentDrives, setRecentDrives] = useState<any[]>([]);
 
   // Auto-collapse sidebar when viewing a drive detail page
@@ -36,8 +35,6 @@ export default function AdminLayout() {
            selectedId = eventDrive?._id || allDrives[0]?._id;
            setContextDriveId(selectedId);
         }
-        
-        setActiveDrive(allDrives.find((dr: any) => dr._id === selectedId) || null);
         
         // Keep recent drives for the selector and quick links
         const sorted = [...allDrives].sort((a:any, b:any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -114,39 +111,6 @@ export default function AdminLayout() {
             </div>
           </div>
 
-          {/* ACTIVE DRIVE CONTEXT — Explicitly scoped down to global switcher */}
-          {activeDrive && (
-            <div>
-              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-3 flex items-center gap-2 truncate">
-                {activeDrive.companyName} Ops
-                {activeDrive.status === 'event_day' && (
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                )}
-              </div>
-              <div className="space-y-1 relative">
-                {/* Active Line indicator */}
-                <div className="absolute left-[19px] top-6 bottom-6 w-px bg-slate-800" />
-                
-                <Link to={`/admin/drives/${activeDrive._id}/room-assignment`} onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium text-sm group
-                    ${location.pathname.includes('/room-assignment') ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-                  <Grid3X3 size={18} className="relative z-10 bg-[#0B1120] rounded-full p-0.5" /> Room Assignment
-                </Link>
-                <Link to={`/admin/drives/${activeDrive._id}/rounds`} onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium text-sm group
-                    ${location.pathname.includes('/rounds') ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-                  <ListChecks size={18} className="relative z-10 bg-[#0B1120] rounded-full p-0.5" /> Round Management
-                </Link>
-                <button onClick={() => window.open(`/event/${activeDrive._id}/qr-display`, '_blank')}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all font-medium text-sm text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 group">
-                  <QrCode size={18} className="relative z-10 bg-[#0B1120] rounded-full p-0.5" /> QR Display ↗
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* RECENT DRIVES (BACKEND CONNECTED) */}
           {recentDrives.length > 0 && (

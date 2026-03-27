@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronRight, Circle, CheckSquare, Calendar, FileText, 
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
   Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search,
-  Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Play, QrCode, Menu
+  Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Play, QrCode, Menu, BarChart2
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
@@ -162,6 +162,7 @@ export default function DriveDetailPage() {
   const [formFields, setFormFields] = useState<any[]>([]);
   const [appTotal, setAppTotal] = useState(0);
   const [appLoading, setAppLoading] = useState(true);
+  const [appStats, setAppStats] = useState({ total: 0, applied: 0, shortlisted: 0, attended: 0, selected: 0 });
   const [appSearchQuery, setAppSearchQuery] = useState('');
   const [selectedApp, setSelectedApp] = useState<any>(null);
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
@@ -263,6 +264,11 @@ export default function DriveDetailPage() {
   }, [formFields, columnsInitialized]);
 
   useEffect(() => {
+    if (activeTab === 'Overview') {
+      api.get(`/drives/${driveId}/applications/stats`).then((res: any) => {
+        if (res.success) setAppStats(res.data);
+      }).catch(console.error);
+    }
     if (activeTab === 'Applications') {
       fetchApplications();
     }
@@ -857,99 +863,178 @@ export default function DriveDetailPage() {
       <div className="flex-1 overflow-hidden relative">
         
         {activeTab === 'Overview' && (
-          <div className="p-8 overflow-y-auto h-full flex flex-col gap-6">
+          <div className="p-8 overflow-y-auto h-full flex flex-col gap-6 bg-slate-50/50">
             
-            {/* STATUS STEPPER */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-              <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest mb-6">Drive Status Progression</h3>
-              <div className="flex items-center justify-between relative mt-2 md:px-12">
-                <div className="absolute left-12 right-12 top-1/2 -translate-y-1/2 h-1 bg-slate-100 -z-10 rounded-full" />
-                {['draft', 'active', 'event_day', 'completed'].map((s, idx, arr) => {
-                  const isActive = drive.status === s;
-                  const isPast = arr.indexOf(drive.status) > idx;
-                  const canClick = arr.indexOf(drive.status) === idx - 1;
-                  
-                  return (
-                    <div key={s} className="flex flex-col items-center gap-3 bg-white px-4">
-                      <button 
-                        disabled={!canClick}
-                        onClick={async () => {
-                          if (canClick) {
-                            try {
-                              if (s === 'active') await api.patch(`/drives/${drive._id}/activate`);
-                              else await api.put(`/drives/${drive._id}`, { status: s });
-                              fetchDriveDetails();
-                              toast.success(`Drive moved to ${s.replace('_', ' ')}!`);
-                            } catch (e) { toast.error('Failed to update status'); }
-                          }
-                        }}
-                        title={canClick ? `Click to move to ${s.replace('_', ' ')}` : ''}
-                        className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-sm border-2 transition-all shadow-sm ${
-                          isActive ? 'bg-indigo-600 border-indigo-600 text-white ring-4 ring-indigo-100 scale-110' :
-                          isPast ? 'bg-indigo-600 border-indigo-600 text-white' :
-                          canClick ? 'bg-white border-indigo-400 text-indigo-600 hover:bg-indigo-50 cursor-pointer hover:scale-105' :
-                          'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'
-                        }`}
-                      >
-                        {isPast ? <Check size={20} /> : idx + 1}
-                      </button>
-                      <span className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-indigo-700' : isPast ? 'text-slate-700' : 'text-slate-400'}`}>
-                        {s.replace('_', ' ')}
-                      </span>
+            {/* TOP ROW: Funnel & Quick Ops */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Funnel Graph */}
+              <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between relative overflow-hidden">
+                <div className="flex items-center gap-2 mb-6 absolute top-0 right-0 bg-indigo-50 px-4 py-2 rounded-bl-2xl border-b border-l border-indigo-100">
+                  <div className={`w-2.5 h-2.5 rounded-full ${drive.status === 'active' || drive.status === 'event_day' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                  <span className="text-xs font-black uppercase text-indigo-800 tracking-wider flex items-center gap-1">{drive.status?.replace('_', ' ')}</span>
+                </div>
+                
+                <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest mb-2"><AlignLeft size={16} className="inline mr-1 mb-0.5" /> Pipeline Funnel</h3>
+                
+                <div className="flex items-center border border-slate-100 rounded-2xl justify-between w-full mt-4 h-32 px-6 bg-slate-50 relative">
+                  <div className="absolute top-1/2 left-10 right-10 h-1 bg-slate-200 -translate-y-1/2 rounded-full" />
+                  {[
+                    { label: 'Applied', count: appStats.total, color: 'text-blue-600', bg: 'bg-blue-100', border: 'border-blue-200' },
+                    { label: 'Shortlisted', count: appStats.shortlisted, color: 'text-purple-600', bg: 'bg-purple-100', border: 'border-purple-200' },
+                    { label: 'Attended', count: appStats.attended, color: 'text-amber-600', bg: 'bg-amber-100', border: 'border-amber-200' },
+                    { label: 'Selected', count: appStats.selected, color: 'text-emerald-600', bg: 'bg-emerald-100', border: 'border-emerald-200' }
+                  ].map((step, idx) => (
+                    <div key={idx} className="flex flex-col items-center flex-1 relative z-10 hover:-translate-y-1 transition-transform cursor-default">
+                      <div className={`w-16 h-16 rounded-2xl ${step.bg} ${step.color} flex items-center justify-center font-black text-2xl shadow-sm border ${step.border} ring-4 ring-slate-50 z-10`}>
+                        {step.count}
+                      </div>
+                      <span className="text-xs font-bold text-slate-600 mt-3 uppercase tracking-wider bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-sm">{step.label}</span>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+              </div>
+
+              {/* Quick Ops */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest mb-4"><Cpu size={16} className="inline mr-1 mb-0.5" /> Quick Operations</h3>
+                <div className="space-y-3">
+                  <button onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/apply/${drive.formToken}`);
+                        toast.success('Public form link copied!');
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-700 rounded-xl transition-all font-bold text-sm group"
+                  >
+                     <span className="flex items-center gap-2"><Copy size={16} className="text-slate-400 group-hover:text-indigo-500" /> Copy Form Link</span>
+                     <ChevronRight size={16} className="text-slate-300" />
+                  </button>
+                  <button onClick={() => setActiveTab('Form Builder')}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl transition-all font-bold text-sm group"
+                  >
+                     <span className="flex items-center gap-2"><AlignJustify size={16} className="text-slate-400 group-hover:text-slate-600" /> Modify Registration</span>
+                     <ChevronRight size={16} className="text-slate-300" />
+                  </button>
+                  {drive.status !== 'completed' && (
+                    <button onClick={() => setShowCloseConfirm(true)}
+                        className="w-full flex items-center justify-between px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl transition-all font-bold text-sm"
+                    >
+                       <span className="flex items-center gap-2"><Lock size={16} /> Halt Registrations</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                 <h3 className="font-bold text-lg text-slate-800 mb-4 border-b pb-2">Drive Details</h3>
-                 <div className="space-y-3">
-                   <p><span className="text-slate-500 font-semibold w-32 inline-block">Role:</span> <span className="font-bold text-slate-800">{drive.jobRole}</span></p>
-                   <p><span className="text-slate-500 font-semibold w-32 inline-block">CTC:</span> <span className="font-bold text-slate-800">{drive.ctc}</span></p>
-                   <p><span className="text-slate-500 font-semibold w-32 inline-block">Locations:</span> <span className="font-bold text-slate-800">{drive.locations?.join(', ') || 'N/A'}</span></p>
-                   <p><span className="text-slate-500 font-semibold w-32 inline-block">Min CGPA:</span> <span className="font-bold text-slate-800">{drive.eligibility?.minCGPA || 'None'}</span></p>
+            {/* BOTTOM ROW: Key Metrics & Drive Rounds Checklist */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Key Metrics */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col relative overflow-hidden">
+                 <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest mb-6"><BarChart2 size={16} className="inline mr-1 mb-0.5" /> Event Parameters</h3>
+                 
+                 {/* Big Numbers */}
+                 <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 p-4 rounded-xl shadow-inner">
+                      <p className="text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">Total Applied</p>
+                      <p className="text-3xl font-black text-indigo-700">{appStats.total}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 p-4 rounded-xl shadow-inner">
+                      <p className="text-emerald-500 text-xs font-bold uppercase tracking-wider mb-1">Pending Review</p>
+                      <p className="text-3xl font-black text-emerald-700">{Math.max(0, appStats.total - appStats.shortlisted)}</p>
+                    </div>
+                 </div>
+
+                 {/* Countdown timer */}
+                 {drive.formCloseDate && drive.formStatus === 'open' && (
+                   <div className="mb-6">
+                     <CountdownTimer closeDate={drive.formCloseDate} />
+                   </div>
+                 )}
+
+                 {/* Info List */}
+                 <div className="space-y-4 flex-1">
+                   <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                     <span className="text-slate-500 font-bold text-sm">Role Profile</span>
+                     <span className="font-black text-slate-800 text-sm bg-slate-100 border border-slate-200 px-3 py-1 rounded-lg">{drive.jobRole}</span>
+                   </div>
+                   <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                     <span className="text-slate-500 font-bold text-sm">Target Offer</span>
+                     <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500 text-lg">{drive.ctc}</span>
+                   </div>
+                   <div className="flex justify-between items-center pb-1">
+                     <span className="text-slate-500 font-bold text-sm">Min CGPA</span>
+                     <span className="font-black text-slate-700 text-sm">{drive.eligibility?.minCGPA || 'None'}</span>
+                   </div>
                  </div>
               </div>
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                 <div className="flex items-center justify-between mb-4 border-b pb-2">
-                   <h3 className="font-bold text-lg text-slate-800">Drive Rounds</h3>
+
+              {/* Drive Rounds (Actionable Checklists) */}
+              <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+                 <div className="flex items-center justify-between mb-6">
+                   <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest"><CheckSquare size={16} className="inline mr-1 mb-0.5" /> Execution Modules</h3>
+                   <button onClick={() => setActiveTab('Event Day')} className="text-indigo-600 text-sm font-bold hover:text-indigo-700 flex items-center gap-1 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 transition-colors">Launch Event Console <ChevronRight size={16}/></button>
                  </div>
-                 <div className="space-y-2">
-                   {drive.rounds?.map((r: any, idx: number) => (
-                     <div key={idx} className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">
-                       <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 ${r.status === 'completed' ? 'bg-green-500 text-white' : r.status === 'active' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                         {r.status === 'completed' ? '✓' : (r.order || idx + 1)}
+                 
+                 <div className="space-y-3 flex-1 overflow-y-auto pr-2">
+                   {drive.rounds?.map((r: any, idx: number) => {
+                     const isDone = r.status === 'completed';
+                     const isActive = r.status === 'active';
+                     return (
+                       <div key={idx} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${isActive ? 'bg-indigo-50 border-indigo-200 shadow-sm filter drop-shadow-sm' : isDone ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                         <div className="flex items-center gap-5">
+                           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-lg ${isDone ? 'bg-emerald-100 text-emerald-600' : isActive ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-slate-100 text-slate-400'}`}>
+                             {isDone ? <Check size={20} /> : (r.order || idx + 1)}
+                           </div>
+                           <div>
+                             <h4 className={`font-bold text-sm ${isActive ? 'text-indigo-900' : 'text-slate-800'}`}>{r.label || r.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</h4>
+                             <p className="text-xs font-bold mt-1 tracking-wide flex items-center gap-1">
+                               {isDone ? <span className="text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-md">Module Completed</span> : isActive ? <span className="text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"/> Executing</span> : <span className="text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">Pending Configuration</span>}
+                             </p>
+                           </div>
+                         </div>
+                         <div className="flex items-center gap-3">
+                           {!isDone && (
+                             <button onClick={() => setActiveTab('Event Day')} className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-transform hover:scale-105 active:scale-95 ${isActive ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700 shadow-indigo-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+                               Manage
+                             </button>
+                           )}
+                         </div>
                        </div>
-                       <span className="text-sm text-slate-700 flex-1 font-medium">{r.label || r.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
-                       {r.isCustom && <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded font-medium">Custom</span>}
-                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.status === 'completed' ? 'bg-green-100 text-green-700' : r.status === 'active' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
-                         {r.status === 'completed' ? 'Done' : r.status === 'active' ? '● Active' : 'Pending'}
-                       </span>
+                     );
+                   })}
+                   
+                   {(!drive.rounds || drive.rounds.length === 0) && (
+                     <div className="flex flex-col items-center justify-center py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                       <div className="w-16 h-16 bg-white shadow-sm rounded-full flex items-center justify-center text-slate-400 mb-4"><AlignJustify size={32} /></div>
+                       <p className="text-slate-600 font-bold">No execution modules found.</p>
+                       <p className="text-slate-400 text-sm mt-1">Configure your drive to set up automatic rounds.</p>
                      </div>
-                   ))}
+                   )}
                  </div>
               </div>
             </div>
 
+            {/* Archive Feature */}
             {drive.status === 'completed' && (
-              <div className="mt-0 bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-2xl p-6 lg:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-                <div>
-                  <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <Download className="text-indigo-600" size={24} /> 1-Click Archive & Compliance Report
+              <div className="mt-2 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl p-6 lg:p-8 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                <div className="absolute right-0 top-0 opacity-10 blur-2xl text-indigo-500">
+                   <Cpu size={200} />
+                </div>
+                <div className="relative z-10">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Download className="text-indigo-400" size={24} /> Generate Compliance Archive
                   </h3>
-                  <p className="text-slate-600 mt-2 max-w-xl text-sm leading-relaxed">
-                    Generate a comprehensive Excel file containing all applications, shortlist decisions, and communication audit logs for external sharing and compliance. Archiving a drive permanently locks it.
+                  <p className="text-slate-400 mt-2 max-w-xl text-sm leading-relaxed">
+                    Download a secure, master Excel file containing all applications, shortlist decisions, and communication audit logs for external sharing.
                   </p>
                 </div>
                 <button
                   onClick={handleArchiveDrive}
                   disabled={archiveLoading}
-                  className="shrink-0 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl font-bold transition-all shadow-md shadow-indigo-200 flex items-center gap-2"
+                  className="shrink-0 relative z-10 px-6 py-3 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-800 disabled:text-indigo-400 text-white rounded-xl font-bold transition-all shadow-md flex items-center gap-2"
                 >
                   {archiveLoading ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} 
-                  {archiveLoading ? 'Generating...' : 'Archive & Download'}
+                  {archiveLoading ? 'Archiving...' : 'Download Master Sheet'}
                 </button>
               </div>
             )}
