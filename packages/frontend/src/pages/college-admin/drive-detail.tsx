@@ -208,6 +208,8 @@ export default function DriveDetailPage() {
   const [appLoading, setAppLoading] = useState(true);
   const [appStats, setAppStats] = useState({ total: 0, applied: 0, shortlisted: 0, attended: 0, selected: 0 });
   const [appSearchQuery, setAppSearchQuery] = useState('');
+  const [appPage, setAppPage] = useState(1);
+  const [hasMoreApps, setHasMoreApps] = useState(false);
   const [selectedApp, setSelectedApp] = useState<any>(null);
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [isEditingApp, setIsEditingApp] = useState(false);
@@ -314,7 +316,8 @@ export default function DriveDetailPage() {
       }).catch(console.error);
     }
     if (activeTab === 'Applications') {
-      fetchApplications();
+      setAppPage(1);
+      fetchApplications(1, false);
     }
     if (activeTab === 'Shortlist') {
       fetchShortlisted();
@@ -386,9 +389,10 @@ export default function DriveDetailPage() {
       await api.put(`/drives/${driveId}/applications/${selectedApp._id}`, { data: editedAppData });
       toast.success('Student details updated!');
       setIsEditingApp(false);
-      fetchApplications();
+      // We don't reset to page 1 to jump all the way up, just fetch current page or let local state handle it.
       // Update local state to reflect change without forcing a full refresh of drawer
       setSelectedApp({ ...selectedApp, data: editedAppData });
+      setApplications(prev => prev.map(a => a._id === selectedApp._id ? { ...a, data: editedAppData } : a));
     } catch (err) {
       toast.error('Failed to update details');
     } finally {
@@ -412,21 +416,36 @@ export default function DriveDetailPage() {
     }
   };
 
-  const fetchApplications = async () => {
-    setAppLoading(true);
+  const fetchApplications = async (page = 1, append = false) => {
+    if (!append) setAppLoading(true);
     try {
-      const res = await api.get(`/drives/${driveId}/applications?status=${appStatusFilter}`);
+      const res = await api.get(`/drives/${driveId}/applications?status=${appStatusFilter}&page=${page}&limit=50`);
       if ((res as any).success) {
-        setApplications((res as any).data.applications || []);
-        setFormFields((res as any).data.formFields || []);
-        setAppTotal((res as any).data.total || 0);
+        const newApps = (res as any).data.applications || [];
+        if (append) {
+          setApplications(prev => [...prev, ...newApps]);
+        } else {
+          setApplications(newApps);
+        }
+        if (!append) setFormFields((res as any).data.formFields || []);
+        const total = (res as any).data.total || 0;
+        setAppTotal(total);
+        setHasMoreApps(page < Math.ceil(total / 50));
       }
     } catch (err) {
       toast.error('Failed to fetch applications');
     } finally {
-      setAppLoading(false);
+      if (!append) setAppLoading(false);
     }
   };
+
+  const loadMoreApps = () => {
+    if (!hasMoreApps || appLoading) return;
+    const nextPage = appPage + 1;
+    setAppPage(nextPage);
+    fetchApplications(nextPage, true);
+  };
+
 
   const fetchShortlisted = async () => {
     try {
@@ -1759,7 +1778,7 @@ export default function DriveDetailPage() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
                               {app.hasPhoto ? (
-                                <img src={app.photoUrl?.startsWith('/') ? `${apiBase}${app.photoUrl.replace('/api/v1', '')}` : `${apiBase}/drives/${driveId}/applications/${app._id}/photo`}
+                                <img src={app.photoUrl?.startsWith('http') ? app.photoUrl : app.photoUrl?.startsWith('/') ? `${apiBase}${app.photoUrl.replace('/api/v1', '')}` : `${apiBase}/drives/${driveId}/applications/${app._id}/photo`}
                                   alt={fullName}
                                   className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm flex-shrink-0"
                                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}/>
@@ -1807,6 +1826,22 @@ export default function DriveDetailPage() {
                 </table>
               </div>
             </div>
+
+            {/* Load More Pagination Strip */}
+            {hasMoreApps && !appLoading && (
+              <div className="flex justify-center mt-6 mb-4">
+                <button onClick={loadMoreApps} className="px-6 py-2.5 bg-white border border-slate-200 shadow-sm text-indigo-600 font-bold rounded-full hover:bg-slate-50 transition-colors flex items-center gap-2">
+                  <Download size={16} className="rotate-180" /> Load More Candidates
+                </button>
+              </div>
+            )}
+            {appLoading && appPage > 1 && (
+              <div className="flex justify-center mt-6 mb-4">
+                <span className="text-slate-400 flex items-center gap-2 text-sm font-semibold">
+                  <Loader2 className="animate-spin" size={16} /> Loading more candidates...
+                </span>
+              </div>
+            )}
 
             {/* ── Candidate Detail Drawer ── */}
             {showDetailDrawer && selectedApp && (() => {
@@ -1911,14 +1946,19 @@ export default function DriveDetailPage() {
                           {/* Student Photo */}
                           {app.hasPhoto ? (
                             <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-                              <SecureImage url={`/drives/${driveId}/applications/${app._id}/photo`} fallback={<div className="w-full h-48 bg-slate-100 flex items-center justify-center text-slate-400 font-bold">Failed to load photo</div>}
-                                className="w-full max-h-48 object-contain bg-white" />
+                              {app.photoUrl?.startsWith('http') ? (
+                                <img src={app.photoUrl} alt="Student Photo" className="w-full max-h-48 object-contain bg-white" />
+                              ) : (
+                                <SecureImage url={`/drives/${driveId}/applications/${app._id}/photo`} fallback={<div className="w-full h-48 bg-slate-100 flex items-center justify-center text-slate-400 font-bold">Failed to load photo</div>}
+                                  className="w-full max-h-48 object-contain bg-white" />
+                              )}
                               <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-100">
                                 <div className="flex items-center gap-2 text-sm font-medium text-slate-600"><ImageIcon size={15} className="text-blue-500"/>Student Photo</div>
-                                <button onClick={() => handleSecureDownload(`/drives/${driveId}/applications/${app._id}/photo`, `${app.data?.name || 'student'}_photo.jpg`)}
+                                <a href={app.photoUrl?.startsWith('http') ? app.photoUrl : `${apiBase}/drives/${driveId}/applications/${app._id}/photo`}
+                                  target="_blank" rel="noreferrer"
                                   className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
                                   <Download size={12}/>Full Size
-                                </button>
+                                </a>
                               </div>
                             </div>
                           ) : (
@@ -1935,7 +1975,14 @@ export default function DriveDetailPage() {
                           
                           {/* Resume / CV */}
                           {app.hasResume ? (
-                            <button onClick={() => handleSecureView(`/drives/${driveId}/applications/${app._id}/resume`)}
+                            <button onClick={() => {
+                              const url = app.resumeUrl;
+                              if (url && url.startsWith('http')) {
+                                window.open(url, '_blank');
+                              } else {
+                                window.open(`${apiBase}${(url || '').replace('/api/v1', '')}`, '_blank');
+                              }
+                            }}
                               className="flex items-center gap-4 p-4 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors group/doc w-full text-left">
                               <div className="w-12 h-12 bg-red-100 group-hover/doc:bg-red-200 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors">
                                 <FileText size={24} className="text-red-600"/>
@@ -2059,9 +2106,9 @@ export default function DriveDetailPage() {
                     {/* Footer Actions */}
                     <div className="border-t border-slate-100 p-4 flex gap-3 bg-white">
                       {app.hasResume && (
-                        <a href={`${apiBase}/drives/${driveId}/applications/${app._id}/resume`} target="_blank" rel="noreferrer"
+                        <a href={app.resumeUrl && app.resumeUrl.startsWith('http') ? app.resumeUrl : `${apiBase}/drives/${driveId}/applications/${app._id}/resume`} target="_blank" rel="noreferrer"
                           className="flex-1 flex items-center justify-center gap-2 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl py-2.5 text-sm font-medium transition-colors">
-                          <Download size={15}/> Download Resume
+                          <Download size={15}/> View Resume
                         </a>
                       )}
                       {app.status === 'applied' && (

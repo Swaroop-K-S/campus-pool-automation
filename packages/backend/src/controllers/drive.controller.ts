@@ -3,6 +3,7 @@ import { DriveModel, ApplicationModel, FormFieldModel, RoomModel } from '../mode
 import mongoose from 'mongoose';
 import { asyncHandler } from '../utils/async-handler';
 import { DriveStatusEnum } from '@campuspool/shared';
+import { AppCache, generateCacheKey } from '../utils/cache';
 
 // GET /api/v1/drives
 export const getDrives = asyncHandler(async (req: Request, res: Response) => {
@@ -104,13 +105,20 @@ export const getDriveById = asyncHandler(async (req: Request, res: Response) => 
   const driveId = req.params.driveId;
   const collegeId = (req as any).user.collegeId;
 
-  const drive = await DriveModel.findOne({ _id: driveId, collegeId });
+  const cacheKey = generateCacheKey('drive-by-id', { driveId, collegeId });
+  const cachedData = AppCache.get(cacheKey);
+  if (cachedData) {
+    return res.status(200).json({ success: true, data: cachedData, cached: true });
+  }
+
+  const drive = await DriveModel.findOne({ _id: driveId, collegeId }).lean();
   
   if (!drive) {
     return res.status(404).json({ success: false, error: 'Drive not found' });
   }
 
-  res.status(200).json({ success: true, data: drive });
+  AppCache.set(cacheKey, drive);
+  res.status(200).json({ success: true, data: drive, cached: false });
 });
 
 // PUT /api/v1/drives/:driveId
@@ -282,7 +290,6 @@ export const markCompleted = asyncHandler(async (req: Request, res: Response) =>
 // GET /api/v1/drives/:driveId/archive
 // 1-Click Archive & Compliance Report
 import exceljs from 'exceljs';
-import { NotificationModel } from '../models/notification.model';
 
 export const archiveDrive = asyncHandler(async (req: Request, res: Response) => {
   const driveId = req.params.driveId;

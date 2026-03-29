@@ -8,28 +8,12 @@ import mongoose from 'mongoose';
 import { env } from '../config/env';
 import crypto from 'crypto';
 import path from 'path';
+import { CloudinaryProvider } from '../services/storage/cloudinary.provider';
 
 import { Readable } from 'stream';
 
-const uploadToGridFS = (file: Express.Multer.File): Promise<mongoose.Types.ObjectId> => {
-  return new Promise((resolve, reject) => {
-    const bucket = getGridFSBucket();
-    crypto.randomBytes(16, (err, buf) => {
-      if (err) return reject(err);
-      const filename = buf.toString('hex') + path.extname(file.originalname);
-      const uploadStream = bucket.openUploadStream(filename, {
-        contentType: file.mimetype
-      });
-      uploadStream.on('error', reject);
-      uploadStream.on('finish', () => resolve(uploadStream.id as mongoose.Types.ObjectId));
-      
-      const readable = new Readable();
-      readable.push(file.buffer);
-      readable.push(null);
-      readable.pipe(uploadStream);
-    });
-  });
-};
+// Legacy GridFS uploads disabled for Phase 2 Cloud Storage.
+// const uploadToGridFS = (file: Express.Multer.File): Promise<mongoose.Types.ObjectId> => { ... };
 
 export const upsertFormFields = async (req: Request, res: Response) => {
   try {
@@ -100,6 +84,23 @@ export const getPublicFormConfig = async (req: Request, res: Response) => {
   }
 };
 
+export const getCloudinarySignature = async (req: Request, res: Response) => {
+  try {
+    const { formToken } = req.params;
+    const drive = await DriveModel.findOne({ formToken });
+    if (!drive) return res.status(404).json({ success: false, error: 'Form not found' });
+    
+    // Generate secure upload signature locked to a specific folder
+    const folder = `campuspool/drives/${drive._id}`;
+    const signatureData = CloudinaryProvider.generateUploadSignature(folder);
+    
+    return res.json({ success: true, data: signatureData });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to generate upload signature';
+    return res.status(500).json({ success: false, error: message });
+  }
+};
+
 export const submitApplication = async (req: Request, res: Response) => {
   try {
     const { formToken } = req.params;
@@ -126,8 +127,11 @@ export const submitApplication = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, error: `This form opens on ${new Date(drive.formOpenDate).toLocaleDateString()}. Check back then!` });
     }
 
-    const emailKey = Object.keys(req.body).find(k => k.toLowerCase().includes('email'));
-    const emailValue = emailKey ? req.body[emailKey] : null;
+    // Parse the JSON data string sent by frontend
+    const parsedData = typeof req.body.data === 'string' ? JSON.parse(req.body.data) : req.body.data;
+
+    const emailKey = Object.keys(parsedData).find(k => k.toLowerCase().includes('email'));
+    const emailValue = emailKey ? parsedData[emailKey] : null;
 
     if (emailValue) {
       const existing = await ApplicationModel.findOne({ driveId: drive._id, [`data.${emailKey}`]: emailValue });
@@ -136,23 +140,6 @@ export const submitApplication = async (req: Request, res: Response) => {
       }
     }
 
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-    console.log('[submitApplication] files received:', Object.keys(files || {}));
-
-    const resumeFile = files?.['resume']?.[0];
-    const photoFile = files?.['photo']?.[0];
-
-    let resumeFileId = null;
-    let photoFileId = null;
-
-    if (resumeFile) {
-      resumeFileId = await uploadToGridFS(resumeFile);
-    }
-    if (photoFile) {
-      photoFileId = await uploadToGridFS(photoFile);
-    }
-    console.log('[submitApplication] extracted IDs:', { resumeFileId, photoFileId });
-
     const currentYear = new Date().getFullYear();
     const randomNum = Math.floor(10000 + Math.random() * 90000); 
     const referenceNumber = `CP-${currentYear}-${randomNum}`;
@@ -160,9 +147,7 @@ export const submitApplication = async (req: Request, res: Response) => {
     // Generate unique Drive Student ID
     const driveStudentId = await generateUniqueDriveId(drive.companyName);
 
-    const appData = { ...req.body };
-    delete appData.resume;
-    delete appData.photo;
+    const appData = { ...parsedData };
 
     const keys = Object.keys(appData);
     
@@ -182,14 +167,17 @@ export const submitApplication = async (req: Request, res: Response) => {
     const cgpaKey = keys.find(k => k.toLowerCase().includes('cgpa') || k.toLowerCase().includes('gpa'));
     if (cgpaKey && cgpaKey !== 'cgpa') { appData.cgpa = appData[cgpaKey]; delete appData[cgpaKey]; }
 
+    // Get Cloudinary URLs from request body (uploaded directly by frontend)
+    const { resumeUrl, photoUrl } = req.body;
+
     const application = await ApplicationModel.create({
       referenceNumber,
       driveStudentId,
       driveId: drive._id,
       collegeId: drive.collegeId,
       data: appData,
-      resumeFileId,
-      photoFileId,
+      resumeUrl: resumeUrl || undefined,
+      photoUrl: photoUrl || undefined,
       status: 'applied',
       submittedAt: new Date()
     });

@@ -3,10 +3,10 @@ import {
   upsertFormFields,
   getFormFields,
   getPublicFormConfig,
-  submitApplication
+  submitApplication,
+  getCloudinarySignature
 } from '../controllers/form.controller';
 import { authenticate } from '../middleware/auth.middleware';
-import { uploadApplicationFiles } from '../middleware/upload.middleware';
 
 const router = Router();
 
@@ -18,25 +18,15 @@ const submitLimiter = rateLimit({
   message: { success: false, message: 'Too many submissions from this IP, please try again after an hour' }
 });
 
-import multer from 'multer';
-
 // --- Admin Routes (authenticated) ---
 router.post('/drives/:driveId/form', authenticate, upsertFormFields);
 router.get('/drives/:driveId/form', authenticate, getFormFields);
 
 // --- Public Routes (no auth) ---
+// IMPORTANT: Specific routes MUST come before the generic :formToken catch-all
+router.get('/form/:formToken/presign', getCloudinarySignature);
+router.post('/form/:formToken/submit', submitApplication);
 router.get('/form/:formToken', getPublicFormConfig);
-router.post('/form/:formToken/submit', (req, res, next) => {
-  uploadApplicationFiles(req, res, (err: any) => {
-    if (err) {
-      console.error('[multer] Upload error:', err);
-      if (err instanceof multer.MulterError) {
-        return res.status(400).json({ success: false, error: `Upload error: ${err.message}` });
-      }
-      return res.status(400).json({ success: false, error: err.message || 'File upload failed' });
-    }
-    next();
-  });
-}, submitApplication);
 
 export default router;
+

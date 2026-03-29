@@ -99,36 +99,77 @@ export default function PublicApplyPage() {
   const onSubmit = async (data: Record<string, string | FileList>) => {
     try {
       setSubmitting(true);
-      const formData = new FormData();
+
+      // --- Phase 1: Identify file fields and collect text data ---
+      let resumeFile: File | null = null;
+      let photoFile: File | null = null;
+      const textData: Record<string, string> = {};
+
       Object.keys(data).forEach(key => {
         const fieldConfig = config?.fields.find((f: { id: string, label: string, type: string }) => f.id === key);
-        let submitKey = fieldConfig ? fieldConfig.label.replace(/\s+/g, '_') : key;
+        const submitKey = fieldConfig ? fieldConfig.label.replace(/\s+/g, '_') : key;
 
         if (fieldConfig?.type === 'file_pdf' || fieldConfig?.type === 'file_image') {
-           const fileList = data[key] as FileList;
-           const submitKey = fieldConfig.type === 'file_pdf' ? 'resume' : 'photo';
-           if (fileList && fileList.length > 0) {
-             formData.append(submitKey, fileList[0]);
-           }
+          const fileList = data[key] as FileList;
+          if (fileList && fileList.length > 0) {
+            if (fieldConfig.type === 'file_pdf') resumeFile = fileList[0];
+            else photoFile = fileList[0];
+          }
         } else if (fieldConfig?.type === 'file') {
-           const fileList = data[key] as FileList;
-           let submitKey = key;
-           if (submitKey.toLowerCase().includes('resume') || submitKey.toLowerCase().includes('pdf') || submitKey.toLowerCase().includes('cv')) {
-             submitKey = 'resume';
-           } else {
-             submitKey = 'photo';
-           }
-           if (fileList && fileList.length > 0) {
-             formData.append(submitKey, fileList[0]);
-           }
+          const fileList = data[key] as FileList;
+          if (fileList && fileList.length > 0) {
+            const lk = key.toLowerCase();
+            if (lk.includes('resume') || lk.includes('pdf') || lk.includes('cv')) resumeFile = fileList[0];
+            else photoFile = fileList[0];
+          }
         } else {
-           formData.append(submitKey, data[key] as string);
+          textData[submitKey] = data[key] as string;
         }
       });
 
-      const res = await api.post(`/form/${formToken}/submit`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      // --- Phase 2: Upload files directly to Cloudinary (if any) ---
+      let resumeUrl: string | undefined;
+      let photoUrl: string | undefined;
+
+      if (resumeFile || photoFile) {
+        // Get cryptographic signature from our backend
+        const sigRes = await api.get(`/form/${formToken}/presign`);
+        if (!(sigRes as any).success) throw new Error('Failed to get upload signature');
+        const sig = (sigRes as any).data;
+
+        const uploadToCloudinary = async (file: File, resourceType: string): Promise<string> => {
+          const cloudForm = new FormData();
+          cloudForm.append('file', file);
+          cloudForm.append('api_key', sig.apiKey);
+          cloudForm.append('timestamp', String(sig.timestamp));
+          cloudForm.append('signature', sig.signature);
+          cloudForm.append('folder', sig.folder);
+
+          const cloudRes = await fetch(
+            `https://api.cloudinary.com/v1_1/${sig.cloudName}/${resourceType}/upload`,
+            { method: 'POST', body: cloudForm }
+          );
+          if (!cloudRes.ok) throw new Error('Cloud upload failed');
+          const result = await cloudRes.json();
+          return result.secure_url;
+        };
+
+        // Upload in parallel for speed
+        const uploads = await Promise.all([
+          resumeFile ? uploadToCloudinary(resumeFile, 'raw') : Promise.resolve(undefined),
+          photoFile ? uploadToCloudinary(photoFile, 'image') : Promise.resolve(undefined)
+        ]);
+        resumeUrl = uploads[0];
+        photoUrl = uploads[1];
+      }
+
+      // --- Phase 3: Submit application with Cloudinary URLs ---
+      const res = await api.post(`/form/${formToken}/submit`, {
+        data: JSON.stringify(textData),
+        resumeUrl,
+        photoUrl
       });
+
       if ((res as any).success) {
         setSuccessData({
           referenceNumber: (res as any).data.referenceNumber,

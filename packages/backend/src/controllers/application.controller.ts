@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { ApplicationModel } from '../models';
 import { FormFieldModel } from '../models/form-field.model';
+import { AppCache, generateCacheKey } from '../utils/cache';
 
 export const getApplications = async (req: Request, res: Response) => {
   try {
@@ -27,14 +28,21 @@ export const getApplications = async (req: Request, res: Response) => {
       .limit(limit)
       .lean();
 
-    // Add hasResume and hasPhoto flags
+    // Add hasResume and hasPhoto flags (supports both Cloudinary URLs and legacy GridFS)
     const enriched = applications.map((app: any) => ({
       ...app,
-      hasResume: !!app.resumeFileId,
-      hasPhoto: !!app.photoFileId,
-      photoUrl: app.photoFileId
-        ? `/api/v1/drives/${driveId}/applications/${app._id}/photo`
-        : null,
+      hasResume: !!(app.resumeUrl || app.resumeFileId),
+      hasPhoto: !!(app.photoUrl || app.photoFileId),
+      photoUrl: app.photoUrl
+        ? app.photoUrl  // Cloudinary CDN URL
+        : app.photoFileId
+          ? `/api/v1/drives/${driveId}/applications/${app._id}/photo`  // Legacy GridFS
+          : null,
+      resumeUrl: app.resumeUrl
+        ? app.resumeUrl  // Cloudinary CDN URL
+        : app.resumeFileId
+          ? `/api/v1/drives/${driveId}/applications/${app._id}/resume`  // Legacy GridFS
+          : null,
     }));
 
     return res.json({
@@ -75,6 +83,12 @@ export const getApplicationStats = async (req: Request, res: Response) => {
     const { driveId } = req.params;
     const collegeId = req.user?.collegeId;
 
+    const cacheKey = generateCacheKey('app-stats', { driveId, collegeId });
+    const cachedData = AppCache.get(cacheKey);
+    if (cachedData) {
+      return res.json({ success: true, data: cachedData, cached: true });
+    }
+
     const objectIdDriveId = mongoose.Types.ObjectId.isValid(driveId) ? new mongoose.Types.ObjectId(driveId) : driveId;
     
     const validStats = await ApplicationModel.aggregate([
@@ -100,7 +114,8 @@ export const getApplicationStats = async (req: Request, res: Response) => {
       }
     });
 
-    return res.json({ success: true, data: result });
+    AppCache.set(cacheKey, result);
+    return res.json({ success: true, data: result, cached: false });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ success: false, error: message });

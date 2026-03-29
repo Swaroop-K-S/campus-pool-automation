@@ -6,9 +6,11 @@ const applicationSchema = new Schema({
   driveId: { type: Schema.Types.ObjectId, ref: 'Drive', required: true },
   collegeId: { type: Schema.Types.ObjectId, ref: 'College', required: true },
   data: { type: Schema.Types.Mixed, required: true },
-  resumeFileId: { type: Schema.Types.ObjectId },
-  photoFileId: { type: Schema.Types.ObjectId },
-  status: { type: String, enum: Object.values(ApplicationStatusEnum.enum), default: 'applied' },
+  resumeFileId: { type: Schema.Types.ObjectId }, // Legacy GridFS
+  photoFileId: { type: Schema.Types.ObjectId }, // Legacy GridFS
+  resumeUrl: { type: String }, // Cloudinary Link
+  photoUrl: { type: String }, // Cloudinary Link
+  status: { type: String, enum: ["applied", "shortlisted", "invited", "attended", "round_N_passed", "round_N_failed", "selected", "rejected"], default: 'applied' },
   driveStudentId: { type: String, unique: true, sparse: true, index: true },
   currentRound: { type: String },
   attendedAt: { type: Date },

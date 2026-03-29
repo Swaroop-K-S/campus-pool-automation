@@ -9,8 +9,10 @@ export const ApplicationSchema = z.object({
   driveId: ObjectIdSchema,
   collegeId: ObjectIdSchema,
   data: z.record(z.any()), // Dynamic object
-  resumeFileId: ObjectIdSchema.optional(),
-  photoFileId: ObjectIdSchema.optional(),
+  resumeFileId: ObjectIdSchema.optional(), // Legacy GridFS
+  photoFileId: ObjectIdSchema.optional(), // Legacy GridFS
+  resumeUrl: z.string().optional(), // Cloudinary Link
+  photoUrl: z.string().optional(), // Cloudinary Link
   status: ApplicationStatusEnum.default("applied"),
   currentRound: z.string().optional(),
   attendedAt: z.date().optional(),
