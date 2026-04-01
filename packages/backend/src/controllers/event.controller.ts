@@ -276,3 +276,82 @@ export const advanceRound = async (req: Request, res: Response): Promise<void> =
     res.status(500).json({ success: false, error: error.message || 'Failed to advance round' });
   }
 };
+
+// POST /drives/:driveId/rounds/:roundType/advance-present
+// Single-click advancement: all students who physically scanned in (status='attended')
+// are moved to the next round. Absent students (still 'applied'/'shortlisted') are rejected.
+export const advancePresentStudents = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driveId, roundType } = req.params;
+    const drive = await DriveModel.findById(driveId);
+    if (!drive) {
+      res.status(404).json({ success: false, error: 'Drive not found' });
+      return;
+    }
+
+    const currentRoundIndex = drive.rounds ? drive.rounds.findIndex(r => r.type === roundType) : -1;
+    if (currentRoundIndex === -1) {
+      res.status(404).json({ success: false, error: 'Round not found in drive' });
+      return;
+    }
+
+    const nextRound = drive.rounds ? drive.rounds[currentRoundIndex + 1] : null;
+
+    // Count how many students are currently `attended` — these are the ones who scanned the QR
+    const presentCount = await ApplicationModel.countDocuments({ driveId, status: 'attended' });
+
+    if (presentCount === 0) {
+      res.status(400).json({ success: false, error: 'No checked-in students found. Make sure students have scanned the QR code first.' });
+      return;
+    }
+
+    // 1. Advance all attended students to the next round (or select them if this is the last round)
+    const advanceUpdate = nextRound
+      ? { status: 'shortlisted', currentRound: nextRound.type }
+      : { status: 'selected', currentRound: 'completed' };
+
+    const advanceResult = await ApplicationModel.updateMany(
+      { driveId, status: 'attended' },
+      { $set: advanceUpdate }
+    );
+
+    // 2. Reject all who are still in 'applied' state (never scanned in — no-shows)
+    const rejectResult = await ApplicationModel.updateMany(
+      { driveId, status: 'applied' },
+      { $set: { status: 'rejected' } }
+    );
+
+    // 3. Mark the current round as completed, activate next round if any
+    if (drive.rounds) {
+      drive.rounds[currentRoundIndex].status = 'completed';
+      if (nextRound) {
+        drive.rounds[currentRoundIndex + 1].status = 'active';
+      }
+      await drive.save();
+    }
+
+    // 4. Emit real-time socket update
+    try {
+      getIO().to(`drive:${driveId}`).emit('round:status_changed', {
+        roundType,
+        status: 'completed',
+        nextRound: nextRound ? nextRound.type : null,
+        timestamp: new Date()
+      });
+    } catch {}
+
+    res.json({
+      success: true,
+      data: {
+        advanced: advanceResult.modifiedCount,
+        rejected: rejectResult.modifiedCount,
+        nextRound: nextRound ? nextRound.type : null,
+        message: `${advanceResult.modifiedCount} students advanced to ${nextRound ? nextRound.type : 'final selection'}. ${rejectResult.modifiedCount} no-shows rejected.`
+      }
+    });
+
+  } catch (error: any) {
+    console.error("advancePresentStudents ERROR:", error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to advance students' });
+  }
+};

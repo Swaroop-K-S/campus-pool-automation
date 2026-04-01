@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { startQR, stopQR, verifyStudent, getWelcomeData, getDriveInfo, pushSubscribe, getCurrentQR } from '../controllers/qr.controller';
+import { startQR, stopQR, verifyStudent, getWelcomeData, getDriveInfo, pushSubscribe, getCurrentQR, getStatusLookup } from '../controllers/qr.controller';
 import { authenticate } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -8,6 +8,7 @@ const router = Router();
 router.get('/:driveId/info', getDriveInfo);
 router.get('/:driveId/qr/current', getCurrentQR);
 router.post('/:driveId/verify', verifyStudent);
+router.get('/:driveId/status-lookup', getStatusLookup);
 
 // Session token auth (student)
 router.get('/:driveId/welcome/:appId', getWelcomeData);

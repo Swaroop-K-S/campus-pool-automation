@@ -18,6 +18,7 @@ import PublicApplyPage from './pages/public/apply';
 import QRDisplayPage from './pages/public/qr-display';
 import VerifyPage from './pages/public/verify';
 import WelcomePage from './pages/public/welcome';
+import StatusLookupPage from './pages/public/status-lookup';
 import NotFoundPage from './pages/not-found';
 
 const ErrorBoundary = () => (
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
   { path: '/event/:driveId/qr-display', element: <QRDisplayPage />, errorElement: <ErrorBoundary /> },
   { path: '/event/:driveId/verify', element: <VerifyPage />, errorElement: <ErrorBoundary /> },
   { path: '/event/:driveId/welcome/:appId', element: <WelcomePage />, errorElement: <ErrorBoundary /> },
+  { path: '/event/:driveId/my-status', element: <StatusLookupPage />, errorElement: <ErrorBoundary /> },
   { path: '/login', element: <LoginPage />, errorElement: <ErrorBoundary /> },
 
   // All admin pages (single authenticated layout)

@@ -212,10 +212,12 @@ export default function PublicApplyPage() {
           else if (label.includes('github')) setValue(field.id, profile.github, { shouldValidate: true });
         });
         
-        toast.success(`Profile auto-filled for ${profile.name}!`);
+        toast.success(`Details auto-filled using USN ${ssoId.toUpperCase()}!`);
+      } else {
+        toast.error('USN not found in college records. Please fill details manually.');
       }
     } catch (error) {
-      toast.error('Failed to find profile. Please enter your data manually.');
+      toast.error('Could not look up USN. Please fill in your details manually.');
     } finally {
       setSsoLoading(false);
     }
@@ -368,26 +370,27 @@ export default function PublicApplyPage() {
         {(!config?.formStatus || config.formStatus === 'open' || config.formStatus === 'extended') && (
         <div className="space-y-6">
           {currentPage === 0 && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 shadow-sm flex flex-col md:flex-row items-center gap-4">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-center gap-4">
                <div className="flex-1">
-                 <h3 className="font-black text-indigo-900 text-lg flex items-center gap-2"><Zap size={20} className="text-yellow-500 fill-yellow-500" /> Auto-Fill with CampusPool Passport</h3>
-                 <p className="text-sm text-indigo-700 font-medium">Have a verified student profile? Enter your Passport ID to auto-fill your details.</p>
+                 <h3 className="font-black text-slate-900 text-base flex items-center gap-2"><Zap size={18} className="text-yellow-500 fill-yellow-500" /> USN Quick Fill</h3>
+                 <p className="text-sm text-slate-500 font-medium mt-0.5">Have your University Seat Number (USN)? Enter it below to auto-fill your details from college records.</p>
                </div>
                <div className="flex w-full md:w-auto gap-2">
                  <input 
                    type="text"
-                   placeholder="Enter Passport ID"
+                   placeholder="Enter your USN"
                    value={ssoId}
-                   onChange={e => setSsoId(e.target.value)}
-                   className="px-4 py-3 rounded-xl border border-indigo-200 w-full md:w-48 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold bg-white"
+                   onChange={e => setSsoId(e.target.value.toUpperCase())}
+                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSSOFetch(); } }}
+                   className="px-4 py-3 rounded-xl border border-slate-300 w-full md:w-44 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold bg-white uppercase tracking-widest"
                  />
                  <button 
                    type="button"
                    onClick={handleSSOFetch}
                    disabled={ssoLoading || !ssoId.trim()}
-                   className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors whitespace-nowrap disabled:opacity-50"
+                   className="px-5 py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-colors whitespace-nowrap disabled:opacity-50 text-sm"
                  >
-                   {ssoLoading ? 'Fetching...' : 'Auto-Fill'}
+                   {ssoLoading ? 'Looking up...' : 'Auto-Fill'}
                  </button>
                </div>
             </div>

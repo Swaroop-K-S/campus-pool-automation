@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { AlertCircle, ArrowRight, RefreshCw, GraduationCap, Clock } from 'lucide-react';
+import { AlertCircle, ArrowRight, RefreshCw, GraduationCap, Clock, CheckCircle } from 'lucide-react';
 
 const VerifyPage: React.FC = () => {
   const { driveId } = useParams<{ driveId: string }>();
@@ -13,6 +13,7 @@ const VerifyPage: React.FC = () => {
   const [error, setError] = useState('');
   const [tokenExpired, setTokenExpired] = useState(false);
   const [drive, setDrive] = useState<any>(null);
+  const [alreadyCheckedIn, setAlreadyCheckedIn] = useState(false);
 
   const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
@@ -53,13 +54,42 @@ const VerifyPage: React.FC = () => {
 
       // Store session token
       localStorage.setItem(`campuspool_session_${data.data.applicationId}`, data.data.sessionToken);
-      navigate(`/event/${driveId}/welcome/${data.data.applicationId}`);
+
+      if (data.data.alreadyCheckedIn) {
+        // Show the friendly "already checked in" screen, then redirect
+        setAlreadyCheckedIn(true);
+        setTimeout(() => navigate(`/event/${driveId}/welcome/${data.data.applicationId}`), 2200);
+      } else {
+        navigate(`/event/${driveId}/welcome/${data.data.applicationId}`);
+      }
     } catch {
       setError('Connection error. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  // ALREADY CHECKED IN SCREEN
+  if (alreadyCheckedIn) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: 16 }}>
+        <div style={{ background: 'white', borderRadius: 20, padding: 32, maxWidth: 380, width: '100%', textAlign: 'center', boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
+          <div style={{ width: 72, height: 72, background: '#D1FAE5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <CheckCircle size={36} color="#059669" />
+          </div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1E293B', marginBottom: 8 }}>You're already checked in!</h2>
+          <p style={{ color: '#64748B', fontSize: 14, lineHeight: 1.6, marginBottom: 6 }}>
+            Welcome back, <strong>{drive?.companyName || 'drive participant'}</strong>!
+          </p>
+          <p style={{ color: '#94A3B8', fontSize: 13 }}>Returning to your dashboard...</p>
+          <div style={{ marginTop: 20, height: 4, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: '100%', background: '#059669', borderRadius: 4, animation: 'shrink 2.2s linear forwards' }} />
+          </div>
+        </div>
+        <style>{`@keyframes shrink { from { width: 100%; } to { width: 0%; } }`}</style>
+      </div>
+    );
+  }
 
   // TOKEN EXPIRED SCREEN
   if (tokenExpired) {

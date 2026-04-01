@@ -42,17 +42,22 @@ export function randomAssign(
     matchReason: 'Random assignment'
   }));
 
-  let roomIndex = 0;
-  for (const studentId of shuffled) {
-    // Find next room with capacity
-    while (
-      roomIndex < rooms.length &&
-      assignments[roomIndex].studentIds.length >= rooms[roomIndex].capacity
-    ) {
-      roomIndex++;
+  // True Round-Robin distribution to ensure even load balancing
+  let sIndex = 0;
+  while (sIndex < shuffled.length) {
+    let assignedThisPass = false;
+    for (let rIndex = 0; rIndex < rooms.length; rIndex++) {
+      if (sIndex >= shuffled.length) break;
+      
+      // If this room still has capacity, assign the next student
+      if (assignments[rIndex].studentIds.length < rooms[rIndex].capacity) {
+        assignments[rIndex].studentIds.push(shuffled[sIndex]);
+        sIndex++;
+        assignedThisPass = true;
+      }
     }
-    if (roomIndex >= rooms.length) break;
-    assignments[roomIndex].studentIds.push(studentId);
+    // If we looped through all rooms and nobody took a student, it means all rooms are full
+    if (!assignedThisPass) break;
   }
 
   return assignments;

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
+import { Users, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
 
 interface RoundResult {
   passed: number;
@@ -22,6 +23,7 @@ export default function RoundManagementPage() {
   const [roundResults, setRoundResults] = useState<{ [round: string]: RoundResult }>({});
   const [finalResult, setFinalResult] = useState<{ selected: number; notFound: number } | null>(null);
   const [uploading, setUploading] = useState('');
+  const [advancingPresent, setAdvancingPresent] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<any[]>([]);
   const [showSelected, setShowSelected] = useState(false);
   const [funnelCounts, setFunnelCounts] = useState<{ [key: string]: number }>({});
@@ -74,6 +76,30 @@ export default function RoundManagementPage() {
       }
     } catch { toast.error('Network error'); }
     setUploading('');
+  };
+
+  // Single-click advance: move all QR-scanned students to next round
+  const handleAdvancePresent = async (roundType: string) => {
+    const confirmed = window.confirm(
+      `This will advance ALL checked-in students (who scanned the QR) to the next round and mark all no-shows as rejected.\n\nPresent students: ${funnelCounts['attended'] || 0}\n\nProceed?`
+    );
+    if (!confirmed) return;
+
+    setAdvancingPresent(true);
+    try {
+      const data: any = await api.post(`/drives/${driveId}/rounds/${roundType}/advance-present`);
+      if (data.success) {
+        toast.success(data.data.message || 'Students advanced successfully!');
+        fetchDrive();
+        fetchFunnel();
+      } else {
+        toast.error(data.error || 'Failed to advance students');
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Network error. Please try again.');
+    } finally {
+      setAdvancingPresent(false);
+    }
   };
 
   const handleFinalSelection = async () => {
@@ -155,6 +181,9 @@ export default function RoundManagementPage() {
             result={roundResults[round.type]}
             uploading={uploading === round.type}
             onUpload={() => handleUploadResults(round.type)}
+            onAdvancePresent={() => handleAdvancePresent(round.type)}
+            advancingPresent={advancingPresent}
+            attendedCount={funnelCounts['attended'] || 0}
             navigate={navigate}
           />
         ))}
@@ -247,7 +276,7 @@ function Arrow() {
   return <span className="text-slate-300 text-lg font-bold flex-shrink-0">→</span>;
 }
 
-function RoundCard({ round, driveId, uploadFile, setUploadFile, result, uploading, onUpload, navigate }: any) {
+function RoundCard({ round, driveId, uploadFile, setUploadFile, result, uploading, onUpload, onAdvancePresent, advancingPresent, attendedCount, navigate }: any) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'], 'text/csv': ['.csv'] },
     maxFiles: 1,
@@ -283,11 +312,51 @@ function RoundCard({ round, driveId, uploadFile, setUploadFile, result, uploadin
       )}
 
       {round.status === 'active' && (
-        <div>
+        <div className="space-y-4">
+
+          {/* ─── Single-Click QR Advance ─── */}
+          <div className="bg-gradient-to-br from-indigo-50 to-violet-50 border-2 border-indigo-200 rounded-2xl p-5">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-200">
+                <Users size={22} className="text-white" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-black text-slate-800 text-base">Advance All Checked-In Students</h4>
+                <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">
+                  Students who scanned the QR are marked present. Click below to instantly move all <strong className="text-indigo-700">{attendedCount} checked-in students</strong> to the next round and auto-reject no-shows.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                onClick={onAdvancePresent}
+                disabled={advancingPresent || attendedCount === 0}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all shadow-md shadow-indigo-200 hover:shadow-indigo-300 active:scale-95"
+              >
+                {advancingPresent ? (
+                  <><Loader2 size={16} className="animate-spin" /> Processing...</>
+                ) : (
+                  <><CheckCircle2 size={16} /> Advance {attendedCount} Present Students <ArrowRight size={14} /></>
+                )}
+              </button>
+              {attendedCount === 0 && (
+                <span className="text-xs text-amber-600 font-medium">⏳ Waiting for students to scan QR...</span>
+              )}
+            </div>
+          </div>
+
+          {/* ─── Divider ─── */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-slate-200" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">or upload pass list manually</span>
+            <div className="flex-1 h-px bg-slate-200" />
+          </div>
+
           {/* Upload Dropzone */}
-          <div className="bg-slate-50 rounded-xl p-4 mt-2">
+          <div className="bg-slate-50 rounded-xl p-4">
             <h4 className="font-bold text-sm text-slate-700 mb-1">Upload Pass List</h4>
-            <p className="text-xs text-slate-500 mb-3">Upload XLSX/CSV with USN or Email column of students who passed</p>
+            <p className="text-xs text-slate-500 mb-3">Upload XLSX/CSV with USN or Email column of students who passed a specific test/interview</p>
             <div {...getRootProps()}
               className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
                 isDragActive ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 hover:border-indigo-300'

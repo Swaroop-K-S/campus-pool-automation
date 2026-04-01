@@ -222,6 +222,7 @@ export const getWelcomeData = async (req: Request, res: Response): Promise<void>
     res.json({
       success: true,
       data: {
+        status: application.status,                    // ← needed for rejected/standby detection
         student: {
           name: application.data?.fullName || application.data?.name,
           branch: application.data?.branch,
@@ -234,7 +235,8 @@ export const getWelcomeData = async (req: Request, res: Response): Promise<void>
           schedule: drive.schedule,
           rounds: drive.rounds,
           venueDetails: drive.venueDetails,
-          eventDate: drive.eventDate
+          eventDate: drive.eventDate,
+          reportTime: (drive as any).reportTime || null  // ← needed for standby card
         },
         assignedRoom: assignedRoom ? { name: assignedRoom.name, floor: assignedRoom.floor } : null,
         activeRound: activeRound ? { type: activeRound.type, status: activeRound.status } : null,
@@ -259,7 +261,7 @@ export const getDriveInfo = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-// POST /event/:driveId/push-subscribe (session token auth)
+// GET /event/:driveId/push-subscribe (session token auth)
 export const pushSubscribe = async (req: Request, res: Response): Promise<void> => {
   try {
     const { driveId } = req.params;
@@ -273,6 +275,89 @@ export const pushSubscribe = async (req: Request, res: Response): Promise<void> 
 
     res.json({ success: true, data: { message: 'Subscribed' } });
   } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// GET /event/:driveId/status-lookup?usn=XXX  (PUBLIC — no auth)
+// Lets students check their status + retrieve their Drive ID before event day
+export const getStatusLookup = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driveId } = req.params;
+    const usn = (req.query.usn as string)?.trim().toUpperCase();
+    const ref = (req.query.ref as string)?.trim().toUpperCase();
+
+    if (!usn && !ref) {
+      res.status(400).json({ success: false, error: 'Provide a USN or reference number to look up your status.' });
+      return;
+    }
+
+    const drive = await DriveModel.findById(driveId)
+      .select('companyName jobRole eventDate venueDetails reportTime status rounds ctc');
+    if (!drive) {
+      res.status(404).json({ success: false, error: 'Drive not found.' });
+      return;
+    }
+
+    // Build query — match by USN or ref number
+    const query: any = { driveId };
+    if (usn && ref) {
+      query.$or = [
+        { 'data.usn': new RegExp(`^${usn}$`, 'i') },
+        { referenceNumber: new RegExp(`^${ref}$`, 'i') }
+      ];
+    } else if (usn) {
+      query['data.usn'] = new RegExp(`^${usn}$`, 'i');
+    } else {
+      query.referenceNumber = new RegExp(`^${ref}$`, 'i');
+    }
+
+    const application = await ApplicationModel.findOne(query)
+      .select('status driveStudentId referenceNumber currentRound attendedAt data.fullName data.branch');
+
+    if (!application) {
+      res.status(404).json({
+        success: false,
+        error: 'No application found for this drive. Please check your USN or contact the placement team.',
+        code: 'NOT_FOUND'
+      });
+      return;
+    }
+
+    // Status label mapping
+    const statusLabel: Record<string, string> = {
+      applied: 'Applied',
+      shortlisted: 'Shortlisted',
+      invited: 'Invited',
+      attended: 'Checked In',
+      selected: 'Selected 🎉',
+      rejected: 'Not Selected',
+    };
+
+    res.json({
+      success: true,
+      data: {
+        studentName: (application as any).data?.fullName || 'Student',
+        branch: (application as any)?.data?.branch || null,
+        status: application.status,
+        statusLabel: statusLabel[application.status as string] || application.status,
+        driveStudentId: (application as any).driveStudentId || null,
+        referenceNumber: (application as any).referenceNumber || null,
+        currentRound: (application as any).currentRound || null,
+        attendedAt: (application as any).attendedAt || null,
+        drive: {
+          companyName: drive.companyName,
+          jobRole: drive.jobRole,
+          ctc: drive.ctc,
+          status: drive.status,
+          eventDate: drive.eventDate,
+          reportTime: (drive as any).reportTime || null,
+          venueName: (drive as any).venueDetails?.hallName || null,
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('getStatusLookup ERROR:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };

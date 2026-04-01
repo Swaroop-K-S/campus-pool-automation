@@ -228,8 +228,8 @@ export default function DriveDetailPage() {
   const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
   const [sendChannel, setSendChannel] = useState<'email'|'whatsapp'|'both'>('both');
   const [emailSubject, setEmailSubject] = useState('Invitation: {{companyName}} Campus Drive — {{eventDate}}');
-  const [emailTemplate, setEmailTemplate] = useState(`<p>Dear {{name}},</p>\n<p>Congratulations! You have been shortlisted for the <strong>{{companyName}}</strong> campus placement drive.</p>\n<table style="border-collapse:collapse;margin:16px 0;"><tr><td style="padding:6px 12px;font-weight:bold;">Company</td><td style="padding:6px 12px;">{{companyName}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">Role</td><td style="padding:6px 12px;">{{jobRole}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">CTC</td><td style="padding:6px 12px;">{{ctc}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">Date</td><td style="padding:6px 12px;">{{eventDate}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">Venue</td><td style="padding:6px 12px;">{{venueName}}</td></tr></table>\n<p><strong>Your Drive ID: {{driveId}}</strong><br/>Keep this ID safe. You will need it on event day.</p>\n<p>Please carry your college ID and updated resume.</p>\n<p>Best regards,<br/>{{collegeName}}</p>`);
-  const [whatsappTemplate, setWhatsappTemplate] = useState(`Hi {{name}}! 🎉\n\nYou have been *shortlisted* for the *{{companyName}}* campus placement drive.\n\n📋 *Details:*\n- Role: {{jobRole}}\n- CTC: {{ctc}}\n- Date: {{eventDate}}\n- Venue: {{venueName}}\n\n🪪 *Your Drive ID: {{driveId}}*\nSave this ID — you will need it on event day to scan QR and check in.\n\nPlease carry your college ID and resume.\n\n- {{collegeName}}`);
+  const [emailTemplate, setEmailTemplate] = useState(`<p>Dear {{name}},</p>\n<p>Congratulations! You have been shortlisted for the <strong>{{companyName}}</strong> campus placement drive.</p>\n<table style="border-collapse:collapse;margin:16px 0;"><tr><td style="padding:6px 12px;font-weight:bold;">Company</td><td style="padding:6px 12px;">{{companyName}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">Role</td><td style="padding:6px 12px;">{{jobRole}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">CTC</td><td style="padding:6px 12px;">{{ctc}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">Date</td><td style="padding:6px 12px;">{{eventDate}}</td></tr><tr><td style="padding:6px 12px;font-weight:bold;">Venue</td><td style="padding:6px 12px;">{{venueName}}</td></tr></table>\n<p><strong>Your Drive ID: {{driveId}}</strong><br/>Keep this ID safe. You will need it on event day to scan the QR code and check in.</p>\n<p>📌 <strong>Check your status anytime:</strong> <a href="{{statusPageUrl}}">{{statusPageUrl}}</a></p>\n<p>Please carry your college ID and updated resume.</p>\n<p>Best regards,<br/>{{collegeName}}</p>`);
+  const [whatsappTemplate, setWhatsappTemplate] = useState(`Hi {{name}}! 🎉\n\nYou have been *shortlisted* for the *{{companyName}}* campus placement drive.\n\n📋 *Details:*\n- Role: {{jobRole}}\n- CTC: {{ctc}}\n- Date: {{eventDate}}\n- Venue: {{venueName}}\n\n🪪 *Your Drive ID: {{driveId}}*\nSave this ID — you will need it on event day to scan QR and check in.\n\n🔗 Check your status anytime: {{statusPageUrl}}\n\nPlease carry your college ID and resume.\n\n- {{collegeName}}`);
   const [sendProgress, setSendProgress] = useState<{sent:number;total:number;failed:number;active:boolean}|null>(null);
 
   // Event Day State
@@ -532,6 +532,7 @@ export default function DriveDetailPage() {
       companyName: drive?.companyName || '—', jobRole: drive?.jobRole || '—', ctc: drive?.ctc || '—',
       eventDate: drive?.eventDate ? new Date(drive.eventDate).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'TBA',
       venueName: (drive as any)?.venueDetails?.hallName || 'TBA', collegeName: 'Your College',
+      statusPageUrl: `${window.location.origin}/event/${driveId}/my-status`,
     };
     let result = template;
     Object.entries(vars).forEach(([k, v]) => { result = result.replace(new RegExp(`{{\\s*${k}\\s*}}`, 'gi'), v); });
@@ -549,7 +550,7 @@ export default function DriveDetailPage() {
     { key: 'cgpa', label: 'CGPA' }, { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' },
     { key: 'driveId', label: 'Drive ID' }, { key: 'companyName', label: 'Company' }, { key: 'jobRole', label: 'Job Role' },
     { key: 'ctc', label: 'CTC' }, { key: 'eventDate', label: 'Event Date' }, { key: 'venueName', label: 'Venue' },
-    { key: 'collegeName', label: 'College Name' },
+    { key: 'collegeName', label: 'College Name' }, { key: 'statusPageUrl', label: 'Status Page URL 🔗' },
   ];
 
   const handleTemplateSend = async () => {
@@ -848,7 +849,6 @@ export default function DriveDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {/* QR Check-in */}
               <button 
                 onClick={() => window.open(`/event/${driveId}/qr-display`, '_blank')}
                 className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all hover:shadow-md group relative ${
@@ -858,6 +858,14 @@ export default function DriveDetailPage() {
                 title="Open QR Check-in Display"
               >
                 <QrCode size={18} className="group-hover:scale-110 transition-transform" />
+              </button>
+              {/* Student Status Page Link */}
+              <button
+                onClick={() => { const url = `${window.location.origin}/event/${driveId}/my-status`; navigator.clipboard.writeText(url).then(() => toast.success('Status page URL copied!')); }}
+                className="w-10 h-10 rounded-xl flex items-center justify-center border border-slate-200/60 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 text-slate-500 transition-all hover:shadow-md group"
+                title="Copy student status page URL (share in notice boards)"
+              >
+                <BarChart2 size={18} className="group-hover:scale-110 transition-transform" />
               </button>
               {/* Activate Drive */}
               {drive.status === 'draft' && (
