@@ -18,8 +18,10 @@ const submitLimiter = rateLimit({
   message: { success: false, message: 'Too many submissions from this IP, please try again after an hour' }
 });
 
+import { authorizeRoles } from '../middleware/rbac.middleware';
+
 // --- Admin Routes (authenticated) ---
-router.post('/drives/:driveId/form', authenticate, upsertFormFields);
+router.post('/drives/:driveId/form', authenticate, authorizeRoles('admin', 'superadmin'), upsertFormFields);
 router.get('/drives/:driveId/form', authenticate, getFormFields);
 
 // --- Public Routes (no auth) ---

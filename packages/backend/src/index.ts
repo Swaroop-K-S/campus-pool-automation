@@ -41,8 +41,9 @@ const startServer = async () => {
 
     console.log('⏰ Form auto-close scheduler started');
 
-    server.listen(PORT, () => {
+    server.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`🚀 Server running in ${env.NODE_ENV} mode on port ${PORT}`);
+      console.log(`📡 Network access: http://172.17.66.59:${PORT}`);
     });
   } catch (error) {
     console.error(`❌ Server failed to start:`, error);

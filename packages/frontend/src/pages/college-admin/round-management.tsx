@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
-import { Users, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
+import { Users, CheckCircle2, ArrowRight, Loader2, Trash2 } from 'lucide-react';
 
 interface RoundResult {
   passed: number;
@@ -102,6 +102,25 @@ export default function RoundManagementPage() {
     }
   };
 
+  const handlePurgeAbsentees = async () => {
+    const confirmed = window.confirm(
+      `WARNING: Destructive Operation\n\nThis will instantly reject ALL students who have not actively checked into a room during the Event Day (e.g. no-shows).\nThis frees up system capacity for remaining rounds.\n\nAre you absolutely sure you want to purge all no-shows?`
+    );
+    if (!confirmed) return;
+
+    try {
+      const data: any = await api.post(`/drives/${driveId}/purge-noshows`);
+      if (data.success) {
+        toast.success(`Purged ${data.data.purgedCount || 0} empty records! Capacity freed.`);
+        fetchFunnel();
+      } else {
+        toast.error(data.error || 'Failed to purge empty records');
+      }
+    } catch {
+      toast.error('Network error during purge operation');
+    }
+  };
+
   const handleFinalSelection = async () => {
     if (!finalFile) return;
     setUploading('final');
@@ -138,13 +157,21 @@ export default function RoundManagementPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(`/admin/drives/${driveId}`)}
-          className="text-slate-400 hover:text-slate-600 text-xl">←</button>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Round Management</h1>
-          <p className="text-sm text-slate-500">{drive?.companyName} — {drive?.jobRole}</p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate(`/admin/drives/${driveId}`)}
+            className="text-slate-400 hover:text-slate-600 text-xl">←</button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Round Management</h1>
+            <p className="text-sm text-slate-500">{drive?.companyName} — {drive?.jobRole}</p>
+          </div>
         </div>
+        <button
+          onClick={handlePurgeAbsentees}
+          className="flex items-center gap-2 bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 px-4 py-2 rounded-xl text-sm font-bold shadow-sm transition-colors active:scale-95"
+        >
+          <Trash2 size={16} /> Purge No-Shows
+        </button>
       </div>
 
       {/* Funnel Summary */}
@@ -197,12 +224,18 @@ export default function RoundManagementPage() {
             Upload the final selected students list from {drive?.companyName}
           </p>
 
-          <FinalDropzone file={finalFile} setFile={setFinalFile} />
+          <DynamicDropzone 
+            file={finalFile} 
+            setFile={setFinalFile} 
+            uploading={uploading === 'final'}
+            title="Drop Final Selection List"
+            subtitle="Upload an XLSX/CSV file containing the USN or Email column of purely the selected students."
+          />
 
           {finalFile && (
             <button onClick={handleFinalSelection} disabled={uploading === 'final'}
-              className="mt-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl disabled:opacity-50 transition-colors">
-              {uploading === 'final' ? '⏳ Processing...' : '🎉 Process Final Selection'}
+              className="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-4 rounded-xl disabled:opacity-50 transition-all shadow-md active:scale-[0.99] flex items-center justify-center gap-2">
+              {uploading === 'final' ? <><Loader2 size={20} className="animate-spin" /> Processing...</> : '🎉 Process Final Selection'}
             </button>
           )}
 
@@ -277,12 +310,6 @@ function Arrow() {
 }
 
 function RoundCard({ round, driveId, uploadFile, setUploadFile, result, uploading, onUpload, onAdvancePresent, advancingPresent, attendedCount, navigate }: any) {
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'], 'text/csv': ['.csv'] },
-    maxFiles: 1,
-    onDrop: (files) => { if (files[0]) setUploadFile(files[0]); }
-  });
-
   const borderColor = round.status === 'active' ? 'border-indigo-400' : round.status === 'completed' ? 'border-green-400' : 'border-slate-200';
   const statusBadge = round.status === 'active'
     ? 'bg-indigo-100 text-indigo-700' : round.status === 'completed'
@@ -354,24 +381,18 @@ function RoundCard({ round, driveId, uploadFile, setUploadFile, result, uploadin
           </div>
 
           {/* Upload Dropzone */}
-          <div className="bg-slate-50 rounded-xl p-4">
-            <h4 className="font-bold text-sm text-slate-700 mb-1">Upload Pass List</h4>
-            <p className="text-xs text-slate-500 mb-3">Upload XLSX/CSV with USN or Email column of students who passed a specific test/interview</p>
-            <div {...getRootProps()}
-              className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
-                isDragActive ? 'border-indigo-400 bg-indigo-50' : 'border-slate-300 hover:border-indigo-300'
-              }`}>
-              <input {...getInputProps()} />
-              {uploadFile ? (
-                <p className="text-sm text-indigo-600 font-medium">📄 {uploadFile.name}</p>
-              ) : (
-                <p className="text-sm text-slate-400">Drop XLSX/CSV here or click to select</p>
-              )}
-            </div>
+          <div className="bg-slate-50 rounded-2xl p-4 sm:p-6 mt-4">
+            <DynamicDropzone 
+              file={uploadFile} 
+              setFile={setUploadFile} 
+              uploading={uploading}
+              title="Upload Pass List"
+              subtitle="Upload XLSX/CSV with USN or Email column of students who successfully passed this round."
+            />
             {uploadFile && (
               <button onClick={onUpload} disabled={uploading}
-                className="mt-3 bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg text-sm disabled:opacity-50 hover:bg-indigo-500 transition-colors">
-                {uploading ? '⏳ Processing...' : '📤 Upload & Process'}
+                className="mt-4 w-full bg-indigo-600 text-white font-bold px-4 py-3.5 rounded-xl disabled:opacity-50 hover:bg-indigo-700 transition-all shadow-md active:scale-[0.99] flex justify-center items-center gap-2">
+                {uploading ? <><Loader2 size={18} className="animate-spin" /> Processing...</> : '📤 Process Pass List'}
               </button>
             )}
           </div>
@@ -405,23 +426,45 @@ function RoundCard({ round, driveId, uploadFile, setUploadFile, result, uploadin
   );
 }
 
-function FinalDropzone({ file, setFile }: { file: File | null; setFile: (f: File | null) => void }) {
+function DynamicDropzone({ file, setFile, title, subtitle, uploading }: { file: File | null; setFile: (f: File | null) => void, title: string, subtitle: string, uploading: boolean }) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'], 'text/csv': ['.csv'] },
     maxFiles: 1,
-    onDrop: (files) => { if (files[0]) setFile(files[0]); }
+    onDrop: (files) => { if (files[0] && !uploading) setFile(files[0]); }
   });
 
   return (
     <div {...getRootProps()}
-      className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
-        isDragActive ? 'border-indigo-400 bg-indigo-50' : 'border-indigo-300 hover:border-indigo-400'
+      className={`relative w-full border-2 border-dashed rounded-3xl p-8 sm:p-12 flex flex-col items-center justify-center text-center transition-all duration-300 ${
+        uploading ? 'border-indigo-200 bg-indigo-50/50 cursor-wait' :
+        isDragActive ? 'border-indigo-500 bg-indigo-50 shadow-inner scale-[0.99] cursor-copy' : 
+        'border-slate-300 hover:border-indigo-400 hover:bg-slate-50 hover:shadow-sm cursor-pointer'
       }`}>
-      <input {...getInputProps()} />
-      {file ? (
-        <p className="text-indigo-600 font-medium">📄 {file.name}</p>
+      <input {...getInputProps()} disabled={uploading} />
+      
+      {uploading ? (
+         <div className="flex flex-col items-center">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 mb-4 rounded-full border-[4px] border-indigo-100 border-t-indigo-600 animate-spin flex-shrink-0 shadow-sm" />
+            <h3 className="text-base sm:text-lg font-bold text-indigo-700 animate-pulse">Parsing Records...</h3>
+         </div>
       ) : (
-        <p className="text-slate-500">Drop final selection XLSX here or click to select</p>
+         <>
+          <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-4 sm:mb-6 shadow-sm transition-transform ${file ? 'bg-emerald-100 scale-100' : 'bg-indigo-100 group-hover:scale-105'}`}>
+             <span className="text-2xl sm:text-3xl">{file ? '✅' : '📊'}</span>
+          </div>
+          
+          {!file ? (
+            <>
+                <h3 className="text-lg sm:text-xl font-black text-slate-800 mb-2">{title}</h3>
+                <p className="text-slate-500 text-xs sm:text-sm max-w-sm mx-auto font-medium">{subtitle}</p>
+            </>
+          ) : (
+            <div className="flex flex-col items-center">
+                <span className="text-indigo-700 font-bold text-base sm:text-lg mb-1">{file.name}</span>
+                <span className="text-indigo-400 text-xs sm:text-sm font-semibold">Ready to process. Click below.</span>
+            </div>
+          )}
+         </>
       )}
     </div>
   );

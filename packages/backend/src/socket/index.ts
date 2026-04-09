@@ -37,6 +37,29 @@ export function initSocket(httpServer: any) {
     socket.on('join:drive:qr', (driveId: string) => {
       socket.join(`drive:${driveId}:qr`);
     });
+
+    // Event Day: Megaphone / Mass Broadcast (Admin -> Students)
+    socket.on('admin:broadcast', ({ driveId, message }: { driveId: string, message: string }) => {
+      if (socket.data?.user?.role !== 'college_admin') return;
+      io.to(`drive:${driveId}`).emit('drive:broadcast', { message });
+    });
+
+    // Event Day: Admin joins admin room
+    socket.on('join:drive:admin', (driveId: string) => {
+      if (socket.data?.user?.role === 'college_admin') {
+        socket.join(`drive:${driveId}:admin`);
+      }
+    });
+
+    // Event Day: Student Summoning (Invigilator -> Student)
+    socket.on('invigilator:summon', ({ appId, roomName }: { appId: string, roomName: string }) => {
+      io.to(`app:${appId}`).emit('student:summoned', { roomName });
+    });
+
+    // Event Day: SOS (Student -> Admins)
+    socket.on('student:sos', ({ applicationId, driveId, studentName, room }: any) => {
+      io.to(`drive:${driveId}:admin`).emit('admin:sos-alert', { applicationId, studentName, room, timestamp: new Date() });
+    });
   });
 
   ioInstance = io;

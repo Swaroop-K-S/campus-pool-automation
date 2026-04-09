@@ -20,6 +20,9 @@ import VerifyPage from './pages/public/verify';
 import WelcomePage from './pages/public/welcome';
 import StatusLookupPage from './pages/public/status-lookup';
 import NotFoundPage from './pages/not-found';
+import InvigilatorPortal from './pages/public/invigilator';
+import PassportPage from './pages/public/passport';
+import ProjectorPage from './pages/public/projector';
 
 const ErrorBoundary = () => (
   <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -42,6 +45,9 @@ export const router = createBrowserRouter([
   { path: '/event/:driveId/verify', element: <VerifyPage />, errorElement: <ErrorBoundary /> },
   { path: '/event/:driveId/welcome/:appId', element: <WelcomePage />, errorElement: <ErrorBoundary /> },
   { path: '/event/:driveId/my-status', element: <StatusLookupPage />, errorElement: <ErrorBoundary /> },
+  { path: '/event/:driveId/projector', element: <ProjectorPage />, errorElement: <ErrorBoundary /> },
+  { path: '/invigilator/:token', element: <InvigilatorPortal />, errorElement: <ErrorBoundary /> },
+  { path: '/passport', element: <PassportPage />, errorElement: <ErrorBoundary /> },
   { path: '/login', element: <LoginPage />, errorElement: <ErrorBoundary /> },
 
   // All admin pages (single authenticated layout)

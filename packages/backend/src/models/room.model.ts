@@ -8,16 +8,23 @@ const roomSchema = new Schema({
   name: { type: String, required: true },
   floor: { type: String, required: true },
   capacity: { type: Number, required: true },
+  isLocked: { type: Boolean, default: false },           // Room lock — blocks new assignments
+  allowedBranches: [{ type: String }],                   // [] = allow all
   panelists: [{
     name: { type: String, required: true },
     expertise: [{ type: String }]
   }],
-  assignedStudents: [{ type: Schema.Types.ObjectId, ref: 'Application' }]
+  assignedStudents: [{ type: Schema.Types.ObjectId, ref: 'Application' }],
+  throughputLog: [{
+    recordedAt: { type: Date, default: Date.now },
+    processedCount: { type: Number, default: 0 }         // how many evaluated in this window
+  }]
 }, {
   timestamps: true
 });
 
 roomSchema.index({ driveId: 1, round: 1 });
 roomSchema.index({ collegeId: 1 });
+roomSchema.index({ driveId: 1, isLocked: 1 });
 
 export const RoomModel = mongoose.model<Room & Document>('Room', roomSchema, 'rooms');

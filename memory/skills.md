@@ -42,3 +42,6 @@ This document outlines the requisite technical skills, domain knowledge, and arc
 ## 3. Maintenance & Next Steps
 - **Code Consistency:** Maintain strict TypeScript compliance using `npm run typecheck --workspaces`.
 - **Scaling Sockets:** As the app grows and concurrent connections increase during large drives, knowledge of scaling Socket.io with Redis adapters will be necessary.
+- **Admin "God View" Design & Implementation:** Proficiency in building real-time, SVG-mapped or grid-based heatmaps using WebSockets, capacity threshold math, and dynamic color logic (Green/Amber/Red pulsing).
+- **Systemic Locking (Panic Switching):** Expertise in implementing global state-based middleware guards (`drive-guard.middleware.ts`) that enforce operational freezes across heterogeneous student/panelist environments via unified socket broadcasts.
+- **Secure Magic Link Authorization:** Architecting no-auth, token-based temporary portals (JWT-signed) that provide restricted sandboxes for room-specific operations with time-based expiry and session-less verification.

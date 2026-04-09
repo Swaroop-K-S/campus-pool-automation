@@ -56,6 +56,11 @@ export const DriveSchema = z.object({
     duration: z.number()
   })).optional(),
   tags: z.array(z.string()).optional(),
+  walkInEnabled: z.boolean().default(false),
+  resources: z.array(z.object({
+    title: z.string(),
+    url: z.string()
+  })).optional(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional()
 });

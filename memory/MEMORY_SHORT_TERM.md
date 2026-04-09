@@ -283,3 +283,157 @@ Generate a massive 60-point visionary masterplan to improve every single aspect 
 
 ### Status
 - **Completed.** The architectural blueprint and the deep technical execution strategy for the next evolution of CampusPool are fully documented.
+
+---
+
+## [2026-04-02] Phase 6: Admin God View & Panic Switch
+
+### Task
+Implement high-level administrative control and real-time operational visibility: (1) Global Drive Panic Switch; (2) Live Room Heatmap (God View); (3) Secure Magic-Link Invigilator Portal with Dynamic Rubrics.
+
+### What We Did
+- **Master Panic Switch**: Added `isPaused` to `DriveModel`. Created `PATCH /pause` endpoint. Implemented `drive-guard.middleware.ts` to block sensitive event-day mutations when paused. Injected Red/Orange toggle button in Admin Dashboard. Added global Socket.io `drive:paused` listener to Student and Panelist apps to render an impenetrable lockdown overlay.
+- **God View (Live Heatmap)**: Built a new "God View" tab in `drive-detail.tsx`. Displays a real-time grid of rooms grouped by round. Color-coded heat system: Slate (Empty) -> Green (Open) -> Amber (Filling) -> Orange (Nearly Full, pulsing) -> Red (OVER CAPACITY, pulsing). Includes live command stats (Overloaded room count, Total seated).
+- **Invigilator Portal**: Built `invigilator.tsx` mobile-first dashboard. Secured via JWT Magic Links (24h expiry).
+- **Dynamic Rubrics**: Panelists can score students on traits (Communication, Tech, Body Language, etc.) and add custom traits on the fly. Linked evaluation results to real-time student selection/rejection status.
+- **Queue Tracking**: Wire up backend logic to determine student position and wait times based on room assignment. 
+
+### Status
+- **Completed.** Phase 6 is 100% integrated and verified. The platform now possesses Tier-1 operational control.
+
+---
+
+## [2026-04-02] Phase 3: Pre-Drive Preparation Portal
+
+### Task
+Implement a resource library system allowing admins to attach preparation materials to a drive, which shortlisted students can access via the status lookup page.
+
+### What We Did
+- **Schema:** Added `resources: [{ title: String, url: String }]` field to `DriveModel`.
+- **Backend:** Extended `getEventSetup`, `getStatusLookup`, and `getDriveInfo` APIs to include `resources` in their responses. Extended `updateEventSetup` to accept resource updates.
+- **Admin UI:** Added a "Pre-Drive Preparation Materials" section in the Event Day tab of `drive-detail.tsx`. Admins can add/remove resource title+URL pairs and save them.
+- **Student UI:** `status-lookup.tsx` now shows a "Prep Resources" card for shortlisted/invited students if resources exist, with clickable external links.
+
+### Status
+- **Completed.**
+
+---
+
+## [2026-04-02] Phase 3: Global Student Passport (CampusPool Passport)
+
+### Task
+Implement a secure, stateless student identity portal that lets students view their full placement history across all drives using a JWT-based authentication flow.
+
+### What We Did
+
+**New Files Created:**
+- `packages/backend/src/models/student-profile.model.ts` — Mongoose model (`student_profiles` collection). Stores persistent student identity: `usn`, `email`, `name`, `branch`, `collegeId`, `lastSeen`. Indexed on `[usn, collegeId]`.
+- `packages/backend/src/controllers/passport.controller.ts` — Two endpoints:
+  - `POST /passport/verify` — Verifies USN + email against existing `ApplicationModel` records. On success: upserts `StudentProfileModel`, issues an 8h Passport JWT signed with `JWT_ACCESS_SECRET`.
+  - `GET /passport/profile` — Protected by Passport JWT. Returns student profile summary, aggregate stats (totalApplied, shortlisted, selected, pending), and full drive history list.
+- `packages/backend/src/routes/passport.routes.ts` — Express router mounted at `/passport`.
+- `packages/frontend/src/pages/public/passport.tsx` — Premium dark-themed React page:
+  - Login screen: animated USN + email form
+  - Auth token stored in `localStorage` under key `campuspool_passport_token`
+  - Profile dashboard: stat cards (drives applied, shortlisted, offers, pending), chronological drive history with status badges, "Selected" celebration banner for each winning drive
+  - Sign out functionality
+
+**Wired Into:**
+- `packages/backend/src/models/index.ts` — exports `StudentProfileModel`
+- `packages/backend/src/routes/index.ts` — mounts passport routes at `/passport`
+- `packages/frontend/src/router.tsx` — registers `/passport` public route
+- `packages/frontend/src/pages/public/status-lookup.tsx` — added "🛂 View your full placement history → CampusPool Passport" discovery CTA
+
+**Auth Strategy:** Stateless JWT. No passwords or OTPs — verifies identity against application records (students already submitted USN + email when applying). Token expires in 8 hours.
+
+### Status
+- **Completed.** No new TypeScript errors introduced. Two pre-existing socket.io lint errors in `event.controller.ts` (lines 398, 429) unrelated to this work remain.
+
+---
+
+## [2026-04-02] Phase 1.4: Walk-in Fast-Track Registration
+
+### Task
+Allow admins to instantly register unregistered walk-in students during event day, bypassing the normal online application form.
+
+### What We Did
+
+**Backend:**
+- Added `walkInRegistration` export to `packages/backend/src/controllers/event.controller.ts`
+- Logic: validates drive is in `event_day` status, creates an `Application` with `status: 'attended'`, `currentRound: firstRound`, `attendedAt: new Date()`, and a sequential `WI-001` style `driveStudentId`.
+- Broadcasts `event:walk_in_registered` via Socket.io to all God View clients.
+- Route: `POST /drives/:driveId/walk-in` (auth + driveGuard protected) registered in `event.routes.ts`.
+
+**Frontend (`drive-detail.tsx`):**
+- State: `showWalkInModal`, `walkInForm` (name, usn, branch, phone, email), `isRegisteringWalkIn`, `lastWalkIn`
+- Handler: `handleWalkIn` — calls API, on success stores `lastWalkIn` (name + driveStudentId) and refreshes applications list
+- UI: 🟢 "Walk-in Fast-Track" button in God View Quick Operations panel
+- **Modal — Entry state:** Form with Full Name* (required), USN* (required, auto-uppercases), Branch, Phone, Email inputs + warning banner about Event Day mode requirement
+- **Modal — Success state:** Celebration view showing the assigned `WI-001` Drive Student ID prominently. "Register Another" button resets for next student.
+
+### Status
+- **Completed.** Walk-in students appear immediately in the Applications tab and God View.
+
+---
+
+## [2026-04-02] Phase 1.11: Live Projector Wall Display
+
+### Task
+Build a public, auto-refreshing wall display screen for large screens/projectors showing live event-day stats.
+
+### What We Did
+
+**Backend:**
+- Added `getProjectorStats` export to `packages/backend/src/controllers/event.controller.ts`
+- **Public endpoint — no JWT required:** `GET /event/:driveId/projector-stats` registered before `router.use(authenticate)` in `event.routes.ts`
+- Returns: drive info (companyName, jobRole, venue, status), summary stats (total, checkedIn, active, selected, rejected), activeRound object, per-round breakdown array, 12 most recent check-ins sorted by `attendedAt`.
+
+**Frontend:**
+- Created `packages/frontend/src/pages/public/projector.tsx` — full dark 1080p-optimized display:
+  - **Header:** Company logo initial, drive name + job role + venue, active round badge with live pulsing dot, LIVE/OFFLINE connectivity indicator, last-updated timestamp
+  - **Left panel — 4 stat cards:** Registered / Checked In / In Process / Offers Out (animated, JetBrains Mono font)
+  - **Progress bar:** Check-in percentage with color shift (indigo → green as capacity fills)
+  - **Round breakdown grid:** Per-round cards with Active (pulsing dot) / Done (CheckCircle) / Pending states
+  - **Right panel — Recent Check-ins feed:** Live list of last 12 entries with Drive Student ID, name, branch, time, status badge
+  - **Bottom ticker bar:** Scrolling marquee with live summary stats
+  - Auto-polls every 8 seconds via `setInterval`
+- Registered at `/event/:driveId/projector` in `router.tsx` (public route)
+
+**God View Integration:**
+- Added 🟣 "Projector Display" `<a>` button to Quick Operations panel — opens `/event/:driveId/projector` in a new tab
+- Added `Monitor` icon to lucide-react imports in `drive-detail.tsx`
+- Added `CheckCircle` icon to lucide-react imports in `drive-detail.tsx`
+
+### Status
+- **Completed.** Wall display works with no auth. Admin can open it from God View with one click.
+
+---
+
+## System Health Summary (as of 2026-04-02 — Updated)
+
+### Working Features
+- ✅ Full admin portal (8 pages + God View tab)
+- ✅ Student portal: Apply → QR Verify → Welcome Dashboard (Active Round / Standby / Rejected / Selected)
+- ✅ Pre-event student status lookup: `/event/:driveId/my-status`
+- ✅ Pre-Drive Prep Resources: Admin uploads links, shortlisted students see them on status page
+- ✅ **CampusPool Passport** (`/passport`): Cross-drive identity portal with JWT auth, history view, stats
+- ✅ **Walk-in Fast-Track**: Admin registers unregistered students during event day from God View
+- ✅ **Projector Wall Display** (`/event/:driveId/projector`): Live auto-refreshing dark display for large screens
+- ✅ God View: Live room heatmap, panic switch, MIA alerts, latecomer management, purge no-shows
+- ✅ Invigilator Portal: Magic link JWT, mobile-first, dynamic rubric scoring
+- ✅ Real-time: Socket.io for QR rotation, round progression, walk-in broadcast, drive pause
+- ✅ Notifications: Email + WhatsApp with `{{statusPageUrl}}` in default templates
+- ✅ Data: 9 seeded drives, 319 applications, 2028 Engineering Batch
+- ✅ Analytics: Line chart trends, Top Recruiters leaderboard, Selection Rate %
+
+### Implementation Masterplan Status
+| Phase | Status |
+|-------|--------|
+| Phase 1 (Event Day Ecosystem — 20 items) | ~75% done — Core QR, God View, Panic, Purge, MIA, Walk-in ✅, Projector ✅ |
+| Phase 2 (Room Logistics Engine — 10 items) | ✅ 100% — Basic rooms, capacity controls, EWT tracking, Auto-assign routing, Live Lock toggles |
+| Phase 3 (Student Web Experience — 10 items) | ✅ 100% — Passport, Prep Resources, Status Lookup |
+| Phase 4 (Admin Controls & Rules Engine — 10 items) | ~10% — Drive cloning exists |
+| Phase 5 (Hyper-Scale Infrastructure — 10 items) | Not started |
+
+### Pre-Existing Known Issues (Not Blocking)
+- `event.controller.ts` L398, L429: `Property 'io' does not exist` — pre-existing socket type error, does not affect runtime

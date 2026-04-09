@@ -5,10 +5,12 @@ import {
   getApplicationStats,
   updateApplicationStatus,
   updateApplicationData,
-  addManualCandidate
+  addManualCandidate,
+  autoRejectEligibilitySweep
 } from '../controllers/application.controller';
 import { streamResume, streamPhoto } from '../controllers/form.controller';
 import { authenticate } from '../middleware/auth.middleware';
+import { authorizeRoles } from '../middleware/rbac.middleware';
 
 const router = Router();
 
@@ -18,7 +20,8 @@ router.use(authenticate);
 // We'll organize them assuming this router is mounted at /api/v1/drives
 router.get('/:driveId/applications', getApplications);
 router.get('/:driveId/applications/stats', getApplicationStats); // Must come before /:appId
-router.post('/:driveId/applications/manual', addManualCandidate); // Must come before /:appId
+router.post('/:driveId/applications/manual', authorizeRoles('admin', 'superadmin'), addManualCandidate); // Must come before /:appId
+router.post('/:driveId/applications/auto-reject', authorizeRoles('admin', 'superadmin'), autoRejectEligibilitySweep); // Must come before /:appId
 router.get('/:driveId/applications/:appId', getApplicationById);
 router.get('/:driveId/applications/:appId/resume', streamResume);
 router.get('/:driveId/applications/:appId/photo', streamPhoto);

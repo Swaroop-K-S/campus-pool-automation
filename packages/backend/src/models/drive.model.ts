@@ -59,6 +59,13 @@ const driveSchema = new Schema({
     reason: String,
     extendedAt: Date
   }],
+  enableQueueTracking: { type: Boolean, default: false },
+  isPaused: { type: Boolean, default: false },
+  walkInEnabled: { type: Boolean, default: false },
+  resources: [{
+    title: String,
+    url: String
+  }],
   tags: [{ type: String }]
 }, {
   timestamps: true

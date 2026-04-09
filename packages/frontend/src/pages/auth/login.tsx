@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { useAuthStore } from '../../store/auth.store';
-import { jwtDecode } from 'jwt-decode';
+
 import { Eye, EyeOff } from 'lucide-react';
 
 const LoginSchema = z.object({
@@ -18,7 +18,7 @@ type LoginFormData = z.infer<typeof LoginSchema>;
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const setAuth = useAuthStore(state => state.setAuth);
+  const setUser = useAuthStore(state => state.setUser);
   const [showPassword, setShowPassword] = useState(false);
   
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormData>({
@@ -30,15 +30,14 @@ export default function LoginPage() {
       const response = await api.post('/auth/login', data) as { success: boolean, data: { accessToken: string, refreshToken: string, user: any } };
       
       if (response.success && response.data) {
-        const { accessToken, refreshToken, user } = response.data;
-        const decoded = jwtDecode<{ userId: string, collegeId: string, email: string }>(accessToken);
+        const { user } = response.data;
         
-        setAuth({
-          userId: decoded.userId,
-          collegeId: decoded.collegeId,
-          name: user?.name,
-          email: decoded.email
-        }, accessToken, refreshToken);
+        setUser({
+          userId: user.userId,
+          collegeId: user.collegeId,
+          name: user.name,
+          email: user.email
+        });
         
         toast.success("Login successful");
         navigate('/admin/dashboard');

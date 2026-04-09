@@ -1,6 +1,6 @@
 # Long-Term Memory
 
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-02 (Session 3 — Walk-in, Projector, Passport, Prep Resources)
 
 ## Project Goal
 **CampusPool** is a full-stack campus placement automation platform designed to streamline the entire placement drive lifecycle — from drive creation through to final student selection.
@@ -56,8 +56,14 @@ campuspool-antigravity/
 │   ├── frontend/
 │   │   └── src/
 │   │       ├── pages/
-│   │       │   ├── college-admin/ # 8 admin pages
-│   │       │   └── public/        # 5 student-facing pages
+│   │       │   ├── college-admin/ # 8 admin pages (incl. drive-detail with God View tab)
+│   │       │   └── public/        # 8 student-facing pages
+│   │       │   │   ├── apply.tsx, verify.tsx, welcome.tsx   # core student flow
+│   │       │   │   ├── status-lookup.tsx                    # pre-event USN lookup
+│   │       │   │   ├── qr-display.tsx                       # admin QR wall
+│   │       │   │   ├── passport.tsx                         # cross-drive student vault
+│   │       │   │   ├── projector.tsx                        # live wall display (no auth)
+│   │       │   │   └── invigilator.tsx                      # magic-link invigilator portal
 │   │       ├── components/
 │   │       │   ├── admin/         # LiveRoundsTab, DriveAuditLog, EventDayRoadmap
 │   │       │   └── shared/        # AdminLayout, CommandPalette, DownloadButton, ProtectedRoute
@@ -79,10 +85,10 @@ campuspool-antigravity/
 ## Data Models (Mongoose)
 
 ### Drive
-Key fields: `companyName`, `jobRole`, `ctc`, `status` (draft/active/event_day/completed), `rounds[]` (type, status, order), `eventDate`, `reportTime`, `venueDetails` {hallName, capacity}, `formToken`, `formStatus`, `eligibility` {minCGPA, branches}
+Key fields: `companyName`, `jobRole`, `ctc`, `status`, `isPaused` (emergency toggle), `rounds[]`, `eventDate`, `venueDetails` {hallName, capacity}, `resources[]` {title, url} (prep materials for students)
 
 ### Application
-Key fields: `driveId`, `collegeId`, `data` (Mixed — dynamic form fields), `status` (applied/shortlisted/invited/attended/selected/rejected), `driveStudentId` (unique, sparse, e.g. `INF0042`), `referenceNumber`, `attendedAt`, `currentRound`
+Key fields: `driveId`, `collegeId`, `data` (Mixed — dynamic form fields), `status` (applied/shortlisted/invited/attended/selected/rejected), `driveStudentId` (unique, sparse, e.g. `INF0042`, `WI-001` for walk-ins), `referenceNumber`, `attendedAt`, `currentRound`
 
 ### Room
 Key fields: `driveId`, `collegeId`, `name`, `floor`, `capacity`, `round`, `assignedStudents[]`, `panelists[]`
@@ -92,6 +98,11 @@ Key fields: `driveId`, `token`, `expiresAt` (30s TTL)
 
 ### Notification
 Key fields: `driveId`, `applicationId`, `channel`, `status`, `sentAt`
+
+### StudentProfile *(NEW — `student_profiles` collection)*
+Key fields: `usn` (indexed), `email`, `name`, `branch`, `collegeId` (indexed), `lastSeen`  
+Purpose: Persistent cross-drive student identity for the CampusPool Passport portal.  
+Created/updated via `upsert` on successful Passport verification. USN is the primary natural key.
 
 ---
 
@@ -104,7 +115,10 @@ Key fields: `driveId`, `applicationId`, `channel`, `status`, `sentAt`
 | `/event/:driveId/qr-display` | `QRDisplayPage` | Admin QR screen (rotates 30s) |
 | `/event/:driveId/verify` | `VerifyPage` | Student QR scan check-in |
 | `/event/:driveId/welcome/:appId` | `WelcomePage` | Student event-day dashboard |
-| `/event/:driveId/my-status` | `StatusLookupPage` | Pre-event USN status lookup |
+| `/event/:driveId/my-status` | `StatusLookupPage` | Pre-event USN status lookup + prep resources |
+| `/event/:driveId/projector` | `ProjectorPage` | Live wall display for projectors (polls 8s) |
+| `/passport` | `PassportPage` | Cross-drive student identity vault (JWT auth) |
+| `/invigilator/:token` | `InvigilatorPortal` | Magic-link panelist portal |
 | `/login` | `LoginPage` | Admin login |
 
 ### Admin (Protected — `ProtectedRoute` → `AdminLayout`)
@@ -130,7 +144,15 @@ Key fields: `driveId`, `applicationId`, `channel`, `status`, `sentAt`
 CRUD + activate + clone + archive + form builder + form schedule + shortlist upload + bulk notify
 
 ### Event (`/api/v1/drives/:driveId`)
-`POST /event-setup`, `GET /event-setup`, `PATCH /start-event`, `POST /rooms`, `GET /rooms`, `DELETE /rooms/:id`, `PATCH /rounds/:type/status`, **`POST /rounds/:type/advance-present`** (single-click attendance advance)
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| `POST /event-setup` | Admin JWT | Update event day config + resources |
+| `GET /event-setup` | Admin JWT | Fetch event config (includes resources[]) |
+| `PATCH /start-event` | Admin JWT | Begin event day |
+| `POST /rooms` | Admin JWT | Create room |
+| `GET /rooms`, `DELETE /rooms/:id` | Admin JWT | Room management |
+| `POST /rounds/:type/advance-present` | Admin JWT | **Single-click advance all attended students** |
+| **`POST /walk-in`** | Admin JWT | **Fast-track register unregistered walk-in student** |
 
 ### QR / Student (`/api/v1/event/:driveId`)
 | Endpoint | Auth | Purpose |
@@ -138,10 +160,17 @@ CRUD + activate + clone + archive + form builder + form schedule + shortlist upl
 | `GET /info` | None | Drive info for verify/status pages |
 | `GET /qr/current` | None | Current QR data URL (auto-starts rotation) |
 | `POST /verify` | None | Student check-in (returns `alreadyCheckedIn` flag) |
-| `GET /status-lookup?usn=XXX` | None | Pre-event USN lookup — returns status, Drive ID, venue |
+| `GET /status-lookup?usn=XXX` | None | Pre-event USN lookup — returns status, Drive ID, venue, resources |
 | `GET /welcome/:appId` | Session token | Student dashboard data |
+| **`GET /projector-stats`** | **None (public)** | **Live wall display stats — drive summary, check-ins, round breakdown** |
 | `POST /qr/start` | Admin JWT | Start QR rotation |
 | `POST /qr/stop` | Admin JWT | Stop QR rotation |
+
+### Passport (`/api/v1/passport`)
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| **`POST /passport/verify`** | None | Verify USN+email against applications, issue 8h Passport JWT |
+| **`GET /passport/profile`** | Passport JWT | Full cross-drive history, stats, drive list |
 
 ### Analytics (`/api/v1/analytics`)
 `GET /summary`, `GET /branch-distribution`, `GET /drives-history`, `GET /selected`
@@ -162,6 +191,8 @@ CRUD + activate + clone + archive + form builder + form schedule + shortlist upl
 | `notify:progress` | `{ sent, total, failed, done }` | `drive-detail.tsx` |
 | `event:stats` | `{ invited, checkedIn, … }` | `drive-detail.tsx` |
 | `student:sos` | `{ applicationId, room, … }` | Admin (SOS alert) |
+| `drive:paused` | `{ driveId, isPaused }` | `welcome.tsx`, `invigilator.tsx` (lockdown overlay) |
+| **`event:walk_in_registered`** | `{ driveStudentId, name, usn, branch }` | **God View live feed** |
 
 ### Client → Server
 | Event | Emitted from |
@@ -246,7 +277,7 @@ VITE_API_URL=http://localhost:5000/api/v1
 | Platform Admin | `/platform/*` | ❌ Out of scope |
 | **College Admin** | `/admin/*` | ✅ Fully built |
 | Company HR | `/hr/*` | ❌ Out of scope |
-| Invigilator | `/invigilator/*` | ❌ Out of scope |
+| **Invigilator** | `/invigilator/*` | ✅ Secure Magic-Link Built |
 | **Student (Public)** | `/event/*` | ✅ Fully built |
 
 ---
@@ -261,6 +292,10 @@ VITE_API_URL=http://localhost:5000/api/v1
 6. **Email/WhatsApp are fire-and-forget async.** Backend returns `200 OK` immediately after queuing. Progress is pushed via `notify:progress` socket.
 7. **Room assignment uses true round-robin** across available rooms for the active round to ensure even distribution.
 8. **USN format enforced:** Regex `^[A-Z0-9]{5,20}$` on application form. Frontend auto-uppercases on the verify and status-lookup pages.
+9. **Walk-in Drive Student IDs use `WI-` prefix** (e.g. `WI-001`, `WI-002`). Count is derived from `ApplicationModel.countDocuments({ driveId })` at registration time. Walk-ins get `walkIn: true` in their `data` field.
+10. **Passport JWT is separate from admin JWT.** Uses the same `JWT_ACCESS_SECRET` but carries `{ usn, collegeId, email }` in payload. Token key in localStorage: `campuspool_passport_token`. Expiry: 8 hours.
+11. **Projector display endpoint is intentionally public (no auth).** It's designed to run on a wall-mounted screen with no admin interaction. Only exposes non-sensitive aggregate data — no individual contact details.
+12. **StudentProfile is upserted, never duplicated.** `findOneAndUpdate({ usn, collegeId }, data, { upsert: true })` ensures one profile per student per college regardless of how many times they verify.
 
 ---
 
@@ -292,4 +327,25 @@ VITE_API_URL=http://localhost:5000/api/v1
 | Database seeding (2028 batch) | ✅ |
 | SSO | ❌ Out of scope |
 | Geo-fencing | ❌ Out of scope |
-| Platform/HR/Invigilator portals | ❌ Out of scope |
+| Platform/HR portals | ❌ Out of scope |
+| **Event Day — Drive Master Switch (Panic Button)** | ✅ |
+| **Event Day — God View Heatmap (Live Room Monitor)** | ✅ |
+| **Event Day — Student Queue Tracking & Wait Time** | ✅ |
+| **Invigilator — Dynamic Scorecards (Rubrics)** | ✅ |
+| **Invigilator — JWT Magic Link System** | ✅ |
+| **Pre-Drive Preparation Resources** | ✅ resources[] on Drive; student-facing card on status-lookup |
+| **CampusPool Passport (Student Identity Vault)** | ✅ StudentProfileModel + JWT auth + cross-drive history dashboard |
+| **Walk-in Fast-Track Registration** | ✅ POST /walk-in → WI-001 IDs + God View modal + Socket.io broadcast |
+| **Projector Wall Display** | ✅ Public polling endpoint + full dark 1080p React page + God View button |
+
+---
+
+## Masterplan Progress (60-point Roadmap)
+
+| Phase | Items | Done | Remaining highlights |
+|-------|-------|------|----------------------|
+| Phase 1 — Event Day Ecosystem | 20 | ~15 | Walk-in ✅, Projector ✅, Panic ✅, God View ✅, Queue ✅. Missing: Estimated Wait Time engine, Offline PWA, WebRTC audio, Badge printing |
+| Phase 2 — Room Logistics Engine | 10 | ~2 | Basic rooms + capacity done. Missing: drag-and-drop re-assign, auto-spillover, constraint AI |
+| Phase 3 — Student Web Experience | 10 | 10 | **100% COMPLETE** — Passport ✅, Prep Resources ✅, Status Lookup ✅ |
+| Phase 4 — Admin Controls & Rules | 10 | ~1 | Drive cloning only. Missing: policy engine, audit trails, company CRM, NOC generator |
+| Phase 5 — Hyper-Scale Infrastructure | 10 | 0 | Cmd+K palette, Redis cache, E2E tests, microservices — not started |

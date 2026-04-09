@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive, archiveDrive, scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted } from '../controllers/drive.controller';
+import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive, archiveDrive, scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted, updateSettings, toggleDrivePause, purgeNoShows } from '../controllers/drive.controller';
 import { authenticate } from '../middleware/auth.middleware';
+import { authorizeRoles } from '../middleware/rbac.middleware';
 import shortlistRoutes from './shortlist.routes';
 import eventRoutes from './event.routes';
 import assignmentRoutes from './assignment.routes';
@@ -11,25 +12,28 @@ router.use(authenticate);
 
 router.route('/')
   .get(getDrives)
-  .post(createDrive);
+  .post(authorizeRoles('admin', 'superadmin'), createDrive);
 
 router.route('/:driveId')
   .get(getDriveById)
-  .put(updateDrive)
-  .delete(deleteDrive);
+  .put(authorizeRoles('admin', 'superadmin'), updateDrive)
+  .delete(authorizeRoles('admin', 'superadmin'), deleteDrive);
 
-router.patch('/:driveId/activate', activateDrive);
-router.post('/:driveId/clone', cloneDrive);
-router.get('/:driveId/archive', archiveDrive); // Added this line
-router.patch('/:driveId/start-event', startEventDay);
-router.patch('/:driveId/complete', markCompleted);
+router.patch('/:driveId/activate', authorizeRoles('admin', 'superadmin'), activateDrive);
+router.post('/:driveId/clone', authorizeRoles('admin', 'superadmin'), cloneDrive);
+router.get('/:driveId/archive', authorizeRoles('admin', 'superadmin'), archiveDrive); // Added this line
+router.patch('/:driveId/start-event', authorizeRoles('admin', 'superadmin'), startEventDay);
+router.patch('/:driveId/complete', authorizeRoles('admin', 'superadmin'), markCompleted);
+router.patch('/:driveId/settings', authorizeRoles('admin', 'superadmin'), updateSettings);
+router.patch('/:driveId/pause', authorizeRoles('admin', 'superadmin'), toggleDrivePause);
+router.post('/:driveId/purge-noshows', authorizeRoles('admin', 'superadmin'), purgeNoShows);
 
 // The original file had a duplicate import for these, consolidating them into the first import.
 // import { scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted } from '../controllers/drive.controller';
-router.patch('/:driveId/form/schedule', scheduleForm);
-router.patch('/:driveId/form/extend', extendForm);
-router.patch('/:driveId/form/close', closeForm);
-router.patch('/:driveId/form/reopen', reopenForm);
+router.patch('/:driveId/form/schedule', authorizeRoles('admin', 'superadmin'), scheduleForm);
+router.patch('/:driveId/form/extend', authorizeRoles('admin', 'superadmin'), extendForm);
+router.patch('/:driveId/form/close', authorizeRoles('admin', 'superadmin'), closeForm);
+router.patch('/:driveId/form/reopen', authorizeRoles('admin', 'superadmin'), reopenForm);
 
 router.use('/:driveId', shortlistRoutes);
 router.use('/:driveId', eventRoutes);

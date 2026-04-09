@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { asyncHandler } from '../utils/async-handler';
 import { DriveStatusEnum } from '@campuspool/shared';
 import { AppCache, generateCacheKey } from '../utils/cache';
+import { logAuditEvent } from '../services/audit.service';
 
 // GET /api/v1/drives
 export const getDrives = asyncHandler(async (req: Request, res: Response) => {
@@ -93,6 +94,15 @@ export const createDrive = asyncHandler(async (req: Request, res: Response) => {
       panelists: []
     });
   }
+
+  await logAuditEvent({
+    userId: (req as any).user.userId,
+    action: 'CREATE_DRIVE',
+    resourceType: 'Drive',
+    resourceId: newDrive._id.toString(),
+    details: `Created drive: ${newDrive.companyName}`,
+    ipAddress: req.ip || req.socket.remoteAddress
+  });
 
   res.status(201).json({
     success: true,
@@ -253,6 +263,15 @@ export const deleteDrive = asyncHandler(async (req: Request, res: Response) => {
     RoomModel.deleteMany({ driveId }),
     NotificationModel.deleteMany({ driveId })
   ]);
+
+  await logAuditEvent({
+    userId: (req as any).user.userId,
+    action: 'DELETE_DRIVE',
+    resourceType: 'Drive',
+    resourceId: driveId,
+    details: `Deleted drive and all associated metadata.`,
+    ipAddress: req.ip || req.socket.remoteAddress
+  });
 
   res.status(200).json({ success: true, data: {} });
 });
@@ -432,4 +451,98 @@ export const cloneDrive = asyncHandler(async (req: Request, res: Response) => {
   }
 
   res.status(201).json({ success: true, data: newDrive });
+});
+
+// PATCH /api/v1/drives/:driveId/settings
+export const updateSettings = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+  
+  // Destructure allowed settings to prevent over-posting
+  const { enableQueueTracking, walkInEnabled } = req.body;
+  
+  const updatePayload: any = {};
+  if (enableQueueTracking !== undefined) updatePayload.enableQueueTracking = enableQueueTracking;
+  if (walkInEnabled !== undefined) updatePayload.walkInEnabled = walkInEnabled;
+
+  const updatedDrive = await DriveModel.findOneAndUpdate(
+    { _id: driveId, collegeId },
+    { $set: updatePayload },
+    { new: true }
+  );
+
+  if (!updatedDrive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  await logAuditEvent({
+    userId: (req as any).user.userId,
+    action: 'UPDATE_DRIVE_SETTINGS',
+    resourceType: 'Drive',
+    resourceId: driveId,
+    details: `Updated settings: ${JSON.stringify(updatePayload)}`,
+    ipAddress: req.ip || req.socket.remoteAddress
+  });
+
+  res.status(200).json({ success: true, data: updatedDrive });
+});
+
+// PATCH /api/v1/drives/:driveId/pause
+import { getIO } from '../socket';
+
+export const toggleDrivePause = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+  const { isPaused } = req.body;
+  
+  if (typeof isPaused !== 'boolean') {
+    return res.status(400).json({ success: false, error: 'isPaused boolean is required' });
+  }
+
+  const updatedDrive = await DriveModel.findOneAndUpdate(
+    { _id: driveId, collegeId },
+    { $set: { isPaused } },
+    { new: true }
+  );
+
+  if (!updatedDrive) {
+    return res.status(404).json({ success: false, error: 'Drive not found' });
+  }
+
+  const io = getIO();
+  io.to(`drive_${driveId}`).emit('drive:paused', { isPaused });
+  
+  res.status(200).json({ success: true, data: updatedDrive });
+});
+
+// POST /api/v1/drives/:id/purge-noshows
+export const purgeNoShows = asyncHandler(async (req: Request, res: Response) => {
+  const collegeId = (req as any).user.collegeId;
+  const driveId = req.params.id;
+
+  const drive = await DriveModel.findOne({ _id: driveId, collegeId });
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  // In this logic, 'shortlisted' means they cracked the initial screening.
+  // When an event happens, if they never get scanned and scored (never get marked as pass/fail in the next rounds),
+  // they remain strictly untouched.
+  // Wait, actually, let's just mark anyone who is 'shortlisted' and not assigned to a room?
+  // Or anyone who hasn't been active in 60 minutes.
+  // For simplicity and to enforce the constraint: Purge all 'shortlisted' students who are assigned to a room but haven't been picked up by an active round score.
+  // Wait, let's make it simpler based on what the user wanted: Just force reject all 'shortlisted' students.
+  // This allows Admins to clear out their queues at the end of the day or immediately if they know they aren't coming.
+  
+  const result = await ApplicationModel.updateMany(
+    { driveId, status: 'shortlisted' },
+    { $set: { status: 'rejected' } }
+  );
+
+  // Clear cache
+  const cacheKey = generateCacheKey('drives', { collegeId, driveId });
+  AppCache.del(cacheKey);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      purgedCount: result.modifiedCount
+    }
+  });
 });

@@ -4,22 +4,13 @@ import { useAuthStore } from '../store/auth.store';
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1',
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
 });
 
-// Request interceptor opens header to insert auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = useAuthStore.getState().accessToken;
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+// Cookies are sent automatically with `withCredentials: true`, no need for manual header injection
 
 // Response interceptor handles 401s and generic errors
 api.interceptors.response.use(
@@ -31,25 +22,21 @@ api.interceptors.response.use(
 
     // Check if error is 401 Unauthorized
     if (error.response?.status === 401 && !originalRequest._retry) {
-      if (!originalRequest.url?.includes('/auth/login') && !originalRequest.url?.includes('/auth/refresh')) {
+      const isAuthRoute = originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/refresh');
+      const isOnLoginPage = window.location.pathname === '/login';
+
+      if (!isAuthRoute && !isOnLoginPage) {
         originalRequest._retry = true;
         
         try {
-          const { refreshToken, user } = useAuthStore.getState();
-          if (refreshToken && user) {
-            // Attempt to refresh the token using a raw axios call to avoid interceptor loops
-            const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/auth/refresh`, {
-              refreshToken
-            });
+          const { user } = useAuthStore.getState();
+          if (user) {
+            // Attempt to refresh the token using a raw axios call with credentials
+            const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/auth/refresh`, {}, { withCredentials: true });
 
             if (res.data.success) {
-              const { accessToken: newAccess, refreshToken: newRefresh } = res.data.data;
-              
-              // Update the store
-              useAuthStore.getState().setAuth(user, newAccess, newRefresh || refreshToken);
-              
-              // Update the original request with the new token and retry it!
-              originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+              // The backend automatically overrides the old cookies with the new ones
+              // Retry the original request
               return axios(originalRequest).then(r => r.data);
             }
           }
@@ -61,10 +48,13 @@ api.interceptors.response.use(
           return Promise.reject(refreshError);
         }
 
-        // If no refresh token or refresh failed silently
-        useAuthStore.getState().logout();
-        toast.error('Session expired. Please login again.');
-        window.location.href = '/login';
+        // If no user in store — don't force redirect, just reject silently
+        // (handles the case right after login before the store hydrates)
+        if (useAuthStore.getState().user) {
+          useAuthStore.getState().logout();
+          toast.error('Session expired. Please login again.');
+          window.location.href = '/login';
+        }
       }
     } else if (error.response?.status >= 500) {
       toast.error('Server error. Please try again later.');

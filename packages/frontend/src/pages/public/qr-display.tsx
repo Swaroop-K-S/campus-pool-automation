@@ -8,6 +8,7 @@ const QRDisplayPage: React.FC = () => {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [timeLeft, setTimeLeft] = useState(30);
   const [drive, setDrive] = useState<any>(null);
+  const [isFlipping, setIsFlipping] = useState(false);
 
   // Get auth token from zustand persisted store
   const getAuthHeaders = (): HeadersInit => {
@@ -53,9 +54,13 @@ const QRDisplayPage: React.FC = () => {
     socket.on('connect', joinRoom);
 
     socket.on('qr:rotate', ({ qrDataUrl, expiresAt }: any) => {
-      setQrDataUrl(qrDataUrl);
-      const secondsLeft = Math.floor((expiresAt - Date.now()) / 1000);
-      setTimeLeft(secondsLeft);
+      setIsFlipping(true);
+      setTimeout(() => {
+        setQrDataUrl(qrDataUrl);
+        const secondsLeft = Math.floor((expiresAt - Date.now()) / 1000);
+        setTimeLeft(secondsLeft);
+      }, 300); // Change image mid-flip
+      setTimeout(() => setIsFlipping(false), 600);
     });
 
     // Fetch drive info for display
@@ -116,9 +121,12 @@ const QRDisplayPage: React.FC = () => {
       </div>
 
       {/* QR Code with countdown ring */}
-      <div style={{ position: 'relative', marginBottom: 32, zIndex: 1 }}>
+      <div 
+        className={isFlipping ? 'animate-[flip_0.6s_ease-in-out]' : ''} 
+        style={{ position: 'relative', marginBottom: 32, zIndex: 1, perspective: '1000px' }}
+      >
         {/* Countdown SVG ring */}
-        <svg width="440" height="440" style={{ position: 'absolute', top: -20, left: -20 }}>
+        <svg width="440" height="440" style={{ position: 'absolute', top: -20, left: -20, zIndex: -1 }}>
           {/* Background ring */}
           <circle cx="220" cy="220" r="200" fill="none" stroke="#1E293B" strokeWidth="6" />
           {/* Progress ring */}
@@ -144,10 +152,25 @@ const QRDisplayPage: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 25px 60px rgba(0,0,0,0.5)'
+          boxShadow: '0 25px 60px rgba(0,0,0,0.5)',
+          transformStyle: 'preserve-3d',
+          position: 'relative'
         }}>
           {qrDataUrl ? (
-            <img src={qrDataUrl} width={352} height={352} style={{ borderRadius: 12, transition: 'opacity 0.4s ease' }} alt="QR Code" />
+            <>
+              <img src={qrDataUrl} width={352} height={352} style={{ borderRadius: 12, transition: 'opacity 0.4s ease' }} alt="QR Code" />
+              {/* Overlay Logo */}
+              <div style={{
+                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                background: 'white', borderRadius: '50%', width: 56, height: 56,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ width: 44, height: 44, background: '#4F46E5', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                </div>
+              </div>
+            </>
           ) : (
             <div style={{
               background: '#1E293B',
@@ -167,11 +190,8 @@ const QRDisplayPage: React.FC = () => {
                 animation: 'spin 1s linear infinite',
                 marginBottom: 16
               }}/>
-              <p style={{ color: '#64748B', fontSize: 14, textAlign: 'center', padding: '0 16px', margin: '0 0 8px' }}>
-                Generating QR code...
-              </p>
-              <p style={{ color: '#475569', fontSize: 12, margin: 0 }}>
-                This will only take a moment
+              <p style={{ color: '#64748B', fontSize: 14, textTransform: 'uppercase', textAlign: 'center', padding: '0 16px', margin: '0 0 8px', letterSpacing: 1, fontWeight: 700 }}>
+                Generating...
               </p>
             </div>
           )}
@@ -215,7 +235,15 @@ const QRDisplayPage: React.FC = () => {
           : ''}
       </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes flip {
+          0% { transform: rotateY(0deg); }
+          50% { transform: rotateY(90deg); }
+          100% { transform: rotateY(0deg); }
+        }
+        .animate-\\[flip_0\\.6s_ease-in-out\\] { animation: flip 0.6s ease-in-out; }
+      `}</style>
     </div>
   );
 };

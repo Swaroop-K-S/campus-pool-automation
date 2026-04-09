@@ -1,11 +1,91 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@theme {
+  /* Font */
+  --font-family-sans: "Inter", sans-serif;
+
+  /* Brand — Indigo */
+  --color-brand-50:  #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-900: #312e81;
+
+  /* Accent — Teal */
+  --color-accent-500: #14b8a6;
+  --color-accent-600: #0d9488;
+
+  /* Panic — Rose */
+  --color-panic-500: #f43f5e;
+  --color-panic-600: #e11d48;
+
+  /* Warn — Amber */
+  --color-warn-50:  #fffbeb;
+  --color-warn-100: #fef3c7;
+  --color-warn-200: #fde68a;
+  --color-warn-400: #fbbf24;
+  --color-warn-500: #f59e0b;
+  --color-warn-600: #d97706;
+  --color-warn-700: #b45309;
+
+  /* Slate overrides */
+  --color-slate-50:  #f8fafc;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+}
 
 body {
-  font-family: "Plus Jakarta Sans", sans-serif;
+  font-family: "Inter", sans-serif;
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  /* Global Premium UI Buttons */
+  .btn-primary {
+    @apply bg-brand-500 hover:bg-brand-600 text-white font-medium py-2 px-4 rounded-lg shadow-sm
+    transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+  
+  .btn-secondary {
+    @apply bg-brand-50 hover:bg-brand-100 text-brand-600 font-medium py-2 px-4 rounded-lg
+    transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+  
+  .btn-danger {
+    @apply bg-panic-500 hover:bg-panic-600 text-white font-medium py-2 px-4 rounded-lg shadow-sm
+    transition-all duration-200 active:scale-95 shadow-[0_0_15px_rgba(244,63,94,0.3)] hover:shadow-[0_0_20px_rgba(244,63,94,0.5)];
+  }
+  
+  .btn-ghost {
+    @apply hover:bg-slate-100 text-slate-700 font-medium py-2 px-4 rounded-lg
+    transition-colors duration-200 active:bg-slate-200 disabled:opacity-50;
+  }
+
+  /* Global Glassmorphism Panels */
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)];
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* slate-300 */
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* slate-400 */
 }
 
 /* Base interactive focus rings */
@@ -19,6 +99,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .page-enter {
   animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes morphCritical {
+  0%, 100% { background-color: #fef2f2; border-color: #ef4444; color: #b91c1c; } /* Red */
+  33% { background-color: #fff7ed; border-color: #f97316; color: #c2410c; } /* Orange */
+  66% { background-color: #fffbeb; border-color: #fbbf24; color: #b45309; } /* Amber */
+}
+.animate-morph-critical {
+  animation: morphCritical 1.5s infinite ease-in-out;
 }
 
 input, textarea, select {

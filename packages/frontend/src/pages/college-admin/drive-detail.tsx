@@ -7,7 +7,8 @@ import {
   ChevronDown, ChevronRight, Circle, CheckSquare, Calendar, FileText, 
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
   Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search, Eye,
-  Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Play, QrCode, Menu, BarChart2
+  Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Play, QrCode, Menu, BarChart2,
+  AlertTriangle, ArrowLeft, RefreshCcw, Minus, CheckCircle, Monitor
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
@@ -19,6 +20,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import { CSS } from '@dnd-kit/utilities';
 import DriveAuditLog from '../../components/admin/DriveAuditLog';
 import { EventDayRoadmap } from '../../components/admin/EventDayRoadmap';
+import RoomsTab from '../../components/admin/RoomsTab';
 
 const FIELD_TYPES = [
   { type: 'text', label: 'Text Field', icon: AlignLeft },
@@ -150,35 +152,38 @@ const SecureImage = ({ url, className, fallback }: { url: string, className?: st
   return <img src={src} className={className} alt="" />;
 };
 
-const handleSecureDownload = async (url: string, filename: string) => {
-  try {
-    const res: any = await api.get(url, { responseType: 'blob' });
-    const blobUrl = URL.createObjectURL(res);
-    const a = document.createElement('a');
-    a.href = blobUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(blobUrl);
-  } catch {
-    toast.error('Failed to download document');
-  }
-};
 
-const handleSecureView = async (url: string) => {
-  try {
-    const res: any = await api.get(url, { responseType: 'blob' });
-    const blobUrl = URL.createObjectURL(res);
-    window.open(blobUrl, '_blank');
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-  } catch {
-    toast.error('Failed to view document');
-  }
+
+const HighlightedTextarea = ({ value, onChange, rows, className }: { value: string, onChange: (e: any) => void, rows: number, className: string }) => {
+  const renderHighlighted = (text: string) => {
+    const parts = text.split(/(\{\{[^}]+\}\})/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('{{') && part.endsWith('}}')) {
+         return <span key={i} className="bg-indigo-100 text-transparent rounded-sm inline-block">{part}</span>;
+      }
+      return <span key={i} className="text-transparent">{part}</span>;
+    });
+  };
+
+  return (
+    <div className={`relative ${className} p-0 overflow-hidden group`}>
+      <div className="absolute inset-0 px-4 py-3 text-sm font-mono whitespace-pre-wrap break-words pointer-events-none z-0">
+        {renderHighlighted(value + (value.endsWith('\n') ? ' ' : ''))}
+      </div>
+      <textarea 
+        value={value} 
+        onChange={onChange} 
+        rows={rows}
+        className="block w-full h-full px-4 py-3 text-sm font-mono bg-transparent text-slate-800 focus:outline-none border-0 resize-none z-10 relative custom-scrollbar m-0 rounded-xl"
+        style={{ caretColor: '#3949ab' }} // indigo
+      />
+    </div>
+  );
 };
 
 export default function DriveDetailPage() {
   const { driveId } = useParams();
+  const { user } = useAuthStore();
   const [drive, setDrive] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('Overview');
   const [loading, setLoading] = useState(true);
@@ -239,12 +244,75 @@ export default function DriveDetailPage() {
   const [reportTime, setReportTime] = useState<string>('');
   const [rooms, setRooms] = useState<any[]>([]);
   const [showAddRoom, setShowAddRoom] = useState<string | null>(null);
+  const [resources, setResources] = useState<{ title: string; url: string }[]>([]);
+  const [newResTitle, setNewResTitle] = useState('');
+  const [newResUrl, setNewResUrl] = useState('');
+  const [isSavingResources, setIsSavingResources] = useState(false);
+
+  // Phase 5/6: God View States
+  const [expandedRoomId, setExpandedRoomId] = useState<string | null>(null);
+  const [isDrivePaused, setIsDrivePaused] = useState(false);
+  const [panicProgress, setPanicProgress] = useState(0);
+  const [liveEvents, setLiveEvents] = useState<{id: number, text: string, type: 'info'|'warning'|'critical'}[]>([]);
+
+  // Phase Next-Gen 1: MIA & Latecomer States
+  const [miaStudents, setMiaStudents] = useState<any[]>([]);
+  const [latecomers, setLatecomers] = useState<any[]>([]);
+  const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
+  const [miaLoading, setMiaLoading] = useState(false);
+
+  const fetchMIAStudents = async () => {
+    setMiaLoading(true);
+    try {
+      const [miaRes, latecomerRes] = await Promise.all([
+        api.get(`/event/${driveId}/mia-students`),
+        api.get(`/drives/${driveId}/applications?status=all&limit=200`).then((r: any) =>
+          (r.data?.applications || []).filter((a: any) => a.latecomer && !a.adminOverrideTime)
+        )
+      ]);
+      if ((miaRes as any).success) setMiaStudents((miaRes as any).data || []);
+      setLatecomers(Array.isArray(latecomerRes) ? latecomerRes : []);
+    } catch {}
+    finally { setMiaLoading(false); }
+  };
+
+  const approveLatecomer = async (appIds: string[]) => {
+    setApprovingIds(new Set(appIds));
+    try {
+      await api.post(`/event/${driveId}/latecomer-override`, { applicationIds: appIds });
+      toast.success(`${appIds.length} latecomer(s) approved!`);
+      fetchMIAStudents();
+    } catch {
+      toast.error('Failed to approve');
+    } finally {
+      setApprovingIds(new Set());
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'God View') {
+      const msgs = ['System nominal', 'Campus traffic stable', 'Panelists online', 'Check-ins flowing'];
+      setLiveEvents([{ id: Date.now(), text: 'God View Initialized', type: 'info' }]);
+      fetchMIAStudents();
+      const int = setInterval(() => {
+         setLiveEvents(p => [...p.slice(-5), { id: Date.now(), text: msgs[Math.floor(Math.random() * msgs.length)] + ' at ' + new Date().toLocaleTimeString(), type: 'info' }]);
+      }, 7000);
+      return () => clearInterval(int);
+    }
+  }, [activeTab]);
 
   // Import Form State
   const [showImportModal, setShowImportModal] = useState(false);
   const [allDrives, setAllDrives] = useState<any[]>([]);
   const [importingDriveId, setImportingDriveId] = useState('');
+  const [isPurgingQueue, setIsPurgingQueue] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+
+  // Walk-in fast-track state
+  const [showWalkInModal, setShowWalkInModal] = useState(false);
+  const [walkInForm, setWalkInForm] = useState({ name: '', usn: '', branch: '', phone: '', email: '' });
+  const [isRegisteringWalkIn, setIsRegisteringWalkIn] = useState(false);
+  const [lastWalkIn, setLastWalkIn] = useState<{ driveStudentId: string; name: string } | null>(null);
   const [newRoom, setNewRoom] = useState({ name: '', floor: '', capacity: 0, panelists: '' });
   const [liveStats, setLiveStats] = useState({ invited: 0, checkedIn: 0, activeRound: '', roomsOpen: 0 });
   const [expandedRounds, setExpandedRounds] = useState<Record<string, boolean>>({});
@@ -253,6 +321,8 @@ export default function DriveDetailPage() {
 
   // Applications tab state
   const [appStatusFilter, setAppStatusFilter] = useState('all');
+  const [isSweepingEligibility, setIsSweepingEligibility] = useState(false);
+  const [showSweepConfirmModal, setShowSweepConfirmModal] = useState(false);
 
   // Column picker state
   const [showColumnPicker, setShowColumnPicker] = useState(false);
@@ -342,11 +412,25 @@ export default function DriveDetailPage() {
     socket.on('event:stats', (data: any) => {
       setLiveStats(prev => ({ ...prev, ...data }));
     });
+    socket.on('student:latecomer', (data: any) => {
+      toast(`⏰ Latecomer Alert: ${data.studentName} is ${data.minutesLate}m late`, {
+        icon: '🟡',
+        duration: 8000,
+        style: { background: '#FEF3C7', color: '#92400E', fontWeight: 700 }
+      });
+      // Refresh MIA/latecomer lists if God View is active
+      setLatecomers(prev => [...prev, data]);
+    });
+    socket.on('latecomer:approved', () => {
+      fetchMIAStudents();
+    });
     return () => {
       socket.off('notify:progress');
       socket.off('round:status_changed');
       socket.off('student:verified');
       socket.off('event:stats');
+      socket.off('student:latecomer');
+      socket.off('latecomer:approved');
     };
   }, [driveId]);
 
@@ -446,6 +530,24 @@ export default function DriveDetailPage() {
     fetchApplications(nextPage, true);
   };
 
+  const runEligibilitySweep = async () => {
+    setIsSweepingEligibility(true);
+    try {
+      const res = await api.post(`/drives/${driveId}/applications/auto-reject`);
+      if ((res as any).success) {
+        toast.success(`Eligibility sweep complete! ${(res as any).data.rejectedCount} applications rejected.`);
+        fetchApplications(1, false); // Refresh list
+        api.get(`/drives/${driveId}/applications/stats`).then((res: any) => {
+          if (res.success) setAppStats(res.data);
+        }).catch(console.error);
+        setShowSweepConfirmModal(false);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to run eligibility sweep');
+    } finally {
+      setIsSweepingEligibility(false);
+    }
+  };
 
   const fetchShortlisted = async () => {
     try {
@@ -498,6 +600,58 @@ export default function DriveDetailPage() {
       return Array.isArray(data[match.id]) ? data[match.id].join(', ') : String(data[match.id]);
     }
     return null;
+  };
+
+  const handleAdjustCapacity = async (roomId: string, capacityDelta: number) => {
+    try {
+      const res = await api.patch(`/drives/${driveId}/rooms/${roomId}/capacity`, { capacityDelta });
+      if ((res as any).success) {
+        toast.success(`Capacity updated for room!`);
+        fetchRooms();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to update capacity');
+    }
+  };
+
+  const handlePurgeStaleQueue = async () => {
+    if (!window.confirm('Are you absolutely sure you want to PURGE ALL stale students? This applies to students checked-in over 45 minutes ago who were never assigned to or processed in a room. This moves them into the Rejected pile to clear up active queues.')) return;
+    setIsPurgingQueue(true);
+    try {
+      const res = await api.post(`/drives/${driveId}/purge-no-shows`);
+      if ((res as any).success) {
+        toast.success(`Successfully purged ${(res as any).data.purged} stagnant students.`);
+        fetchApplications();
+        fetchMIAStudents();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to purge stale queue');
+    } finally {
+      setIsPurgingQueue(false);
+    }
+  };
+
+  const handleWalkIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!walkInForm.name.trim() || !walkInForm.usn.trim()) {
+      toast.error('Name and USN are required.');
+      return;
+    }
+    setIsRegisteringWalkIn(true);
+    try {
+      const res: any = await api.post(`/drives/${driveId}/walk-in`, walkInForm);
+      if ((res as any).success) {
+        const { driveStudentId, message } = (res as any).data;
+        toast.success(message);
+        setLastWalkIn({ driveStudentId, name: walkInForm.name });
+        setWalkInForm({ name: '', usn: '', branch: '', phone: '', email: '' });
+        fetchApplications();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Walk-in registration failed');
+    } finally {
+      setIsRegisteringWalkIn(false);
+    }
   };
 
   const getStudentName = (s: any) => {
@@ -587,10 +741,31 @@ export default function DriveDetailPage() {
           setHallName(d.venueDetails.hallName || '');
           setCapacity(d.venueDetails.capacity || 0);
         }
-        // `scheduleState` state variable was removed because it was never read.
-        // We can safely omit parsing it here.
+        if(d.resources) setResources(d.resources);
       }
     } catch {}
+  };
+
+  const saveResources = async () => {
+    setIsSavingResources(true);
+    try {
+      await api.put(`/drives/${driveId}`, { resources });
+      toast.success('Prep materials saved!');
+    } catch { toast.error('Failed to save resources'); }
+    finally { setIsSavingResources(false); }
+  };
+
+  const addResource = () => {
+    const t = newResTitle.trim();
+    const u = newResUrl.trim();
+    if (!t || !u) return toast.error('Please enter both a title and a URL');
+    setResources(prev => [...prev, { title: t, url: u }]);
+    setNewResTitle('');
+    setNewResUrl('');
+  };
+
+  const removeResource = (idx: number) => {
+    setResources(prev => prev.filter((_, i) => i !== idx));
   };
 
   const fetchRooms = async () => {
@@ -660,7 +835,7 @@ export default function DriveDetailPage() {
     setArchiveLoading(true);
     try {
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/archive`, {
-        headers: { Authorization: `Bearer ${useAuthStore.getState().accessToken}` }
+        credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to archive');
       
@@ -808,6 +983,17 @@ export default function DriveDetailPage() {
     } catch (err) { toast.error('Failed to reopen form'); }
   };
 
+  const toggleWalkIn = async () => {
+    const newVal = !drive.walkInEnabled;
+    try {
+      await api.patch(`/drives/${driveId}/settings`, { walkInEnabled: newVal });
+      setDrive({ ...drive, walkInEnabled: newVal });
+      toast.success(newVal ? 'Walk-In Registrations Enabled!' : 'Walk-In Registrations Disabled!');
+    } catch (err) {
+      toast.error('Failed to update walk-in status');
+    }
+  };
+
   if (loading) return <div className="p-8 text-center text-slate-500 font-bold">Loading drive details...</div>;
   if (!drive) return <div className="p-8 text-center text-red-500 font-bold">Drive not found</div>;
 
@@ -893,7 +1079,7 @@ export default function DriveDetailPage() {
       {/* Premium TABS */}
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 px-8 flex gap-8 shrink-0 relative z-10 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] overflow-x-auto hide-scrollbar">
         <div className="max-w-7xl mx-auto flex gap-6 w-full h-14">
-          {['Overview', 'Form Builder', 'Applications', 'Shortlist', 'Event Day', 'Audit Log'].map(tab => (
+          {['Overview', 'Form Builder', 'Applications', 'Shortlist', 'Rooms', 'Event Day', 'Audit Log'].map(tab => (
             <button 
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -915,6 +1101,8 @@ export default function DriveDetailPage() {
 
       {/* CONTENT AREA */}
       <div className="flex-1 overflow-hidden relative">
+        
+        {activeTab === 'Rooms' && <RoomsTab drive={drive} driveId={driveId!} />}
         
         {activeTab === 'Overview' && (
           <div className="p-8 overflow-y-auto h-full flex flex-col gap-6 bg-slate-50/50">
@@ -968,6 +1156,17 @@ export default function DriveDetailPage() {
                      <span className="flex items-center gap-2"><AlignJustify size={16} className="text-slate-400 group-hover:text-slate-600" /> Modify Registration</span>
                      <ChevronRight size={16} className="text-slate-300" />
                   </button>
+                  <button onClick={toggleWalkIn}
+                      className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl transition-all font-bold text-sm ${drive.walkInEnabled ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'}`}
+                  >
+                     <span className="flex items-center gap-2">
+                       <UserPlus size={16} className={drive.walkInEnabled ? 'text-amber-600' : 'text-slate-400'} /> Walk-In Fast Track 
+                       {drive.walkInEnabled ? <span className="text-[10px] bg-amber-200/50 text-amber-800 px-1.5 py-0.5 rounded font-black uppercase">Active</span> : null}
+                     </span>
+                     <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${drive.walkInEnabled ? 'bg-amber-500' : 'bg-slate-300'}`}>
+                        <div className={`bg-white w-3 h-3 rounded-full shadow-sm transition-transform ${drive.walkInEnabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                     </div>
+                  </button>                 
                   {drive.status !== 'completed' && (
                     <button onClick={() => setShowCloseConfirm(true)}
                         className="w-full flex items-center justify-between px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl transition-all font-bold text-sm"
@@ -1097,7 +1296,7 @@ export default function DriveDetailPage() {
         )}
 
         {activeTab === 'Form Builder' && (
-          <div className="flex h-full w-full bg-slate-50">
+          <div className="flex h-full w-full bg-slate-50 overflow-hidden" style={{ maxHeight: 'calc(100vh - 120px)' }}>
             {/* LEFT PANEL */}
             <div className="w-64 bg-white border-r border-slate-200 p-4 overflow-y-auto shrink-0 z-10">
               <h3 className="text-sm font-bold text-slate-500 mb-3 uppercase tracking-wider">Default Fields</h3>
@@ -1124,8 +1323,8 @@ export default function DriveDetailPage() {
               </div>
             </div>
 
-            {/* CENTER PANEL */}
-            <div className="flex-1 flex flex-col p-6 overflow-y-auto relative">
+            {/* BUILD PANEL */}
+            <div className="flex-1 flex flex-col p-6 overflow-y-auto relative border-r border-slate-200 bg-slate-50/50 custom-scrollbar pb-32">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">Form Preview</h2>
                 <div className="flex items-center gap-3">
@@ -1251,6 +1450,46 @@ export default function DriveDetailPage() {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* LIVE PREVIEW PANEL */}
+            <div className="flex-1 bg-[#F8FAFC] overflow-y-auto p-4 lg:p-8 flex items-start justify-center relative shadow-[inset_4px_0_12px_rgba(0,0,0,0.02)] custom-scrollbar pb-32 border-r border-slate-200 hidden md:flex">
+              <div className="w-full max-w-sm lg:max-w-md bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden sticky top-0 transition-all">
+                 <div className="h-28 bg-gradient-to-r from-indigo-500 to-violet-600 relative p-6">
+                    <div className="w-14 h-14 bg-white rounded-2xl shadow-md absolute -bottom-7 flex items-center justify-center text-3xl border-4 border-white">🎓</div>
+                 </div>
+                 <div className="pt-10 p-6 space-y-5">
+                    <h2 className="text-xl font-black text-slate-800 leading-tight">{drive?.companyName || 'CampusPool'}<br/><span className="text-indigo-600">Application</span></h2>
+                    
+                    {fields.length === 0 ? (
+                       <div className="text-slate-400 text-sm py-4 border-t border-slate-100">Add fields to preview your form.</div>
+                    ) : (
+                       <div className="space-y-4 border-t border-slate-100 pt-5">
+                         {fields.map(f => (
+                            <div key={f.id} className="opacity-90">
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">{f.label} {f.required && <span className="text-red-500">*</span>}</label>
+                              {f.type === 'text' && <input readOnly type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none cursor-default" placeholder={f.placeholder || 'Type here...'} />}
+                              {f.type === 'textarea' && <textarea readOnly rows={2} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none cursor-default resize-none" placeholder={f.placeholder || 'Type here...'} />}
+                              {f.type === 'select' && <select disabled className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none cursor-default appearance-none"><option>Select option</option></select>}
+                              {f.type === 'file' && <div className="border border-dashed border-slate-300 rounded-lg p-3 bg-slate-50/50 text-center text-xs font-semibold text-slate-400 cursor-default">Upload {f.label}</div>}
+                              {(f.type === 'checkbox' || f.type === 'radio') && (
+                                <div className="space-y-1 mt-1">
+                                  {f.options?.map((opt:any, i:number) => (
+                                    <label key={i} className="flex items-center gap-2 cursor-default">
+                                      <input type={f.type} disabled className="rounded text-indigo-600" />
+                                      <span className="text-xs font-medium text-slate-600">{opt}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                         ))}
+                       </div>
+                    )}
+                    
+                    <button disabled className="w-full py-3 mt-2 bg-slate-100 text-slate-400 rounded-xl font-bold text-xs cursor-not-allowed">Submit Application</button>
+                 </div>
+              </div>
             </div>
 
             {/* RIGHT PANEL & SAVE BTN */}
@@ -1546,20 +1785,29 @@ export default function DriveDetailPage() {
                 <h3 className="text-xl font-bold text-slate-800">Student Applications</h3>
                 <span className="bg-slate-100 text-slate-600 text-sm px-2.5 py-1 rounded-full font-medium">{appTotal}</span>
               </div>
-              <div className="relative">
-                <button
-                  onClick={() => setShowColumnPicker(!showColumnPicker)}
-                  className="flex items-center gap-2 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium transition-colors"
-                >
-                  <Download size={15}/>
-                  Download XLSX
-                  <ChevronDown size={13} className={`transition-transform ${showColumnPicker ? 'rotate-180' : ''}`}/>
-                </button>
-
-                {/* Close overlay */}
-                {showColumnPicker && (
-                  <div className="fixed inset-0 z-40" onClick={() => setShowColumnPicker(false)}/>
+              <div className="flex items-center gap-3 relative">
+                {appTotal > 0 && (user?.role === 'admin' || user?.role === 'superadmin') && (drive.eligibility?.minCGPA || (drive.eligibility?.branches && drive.eligibility.branches.length > 0)) && (
+                  <button
+                    onClick={() => setShowSweepConfirmModal(true)}
+                    className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-xl px-4 py-2 text-sm font-bold transition-all shadow-sm"
+                  >
+                    ✨ Run Eligibility Sweep
+                  </button>
                 )}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowColumnPicker(!showColumnPicker)}
+                    className="flex items-center gap-2 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 font-medium transition-colors"
+                  >
+                    <Download size={15}/>
+                    Download XLSX
+                    <ChevronDown size={13} className={`transition-transform ${showColumnPicker ? 'rotate-180' : ''}`}/>
+                  </button>
+
+                  {/* Close overlay */}
+                  {showColumnPicker && (
+                    <div className="fixed inset-0 z-40" onClick={() => setShowColumnPicker(false)}/>
+                  )}
 
                 {/* Column Picker Popover */}
                 {showColumnPicker && (() => {
@@ -1646,11 +1894,11 @@ export default function DriveDetailPage() {
                             if (selectedColumns.length === 0) return;
                             setDownloadLoading(true);
                             try {
-                              const token = useAuthStore.getState().accessToken;
                               const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
                               const response = await fetch(`${apiBase}/drives/${driveId}/export/applications/custom`, {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                credentials: 'include',
+                                headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                   columns: selectedColumns,
                                   status: downloadStatus,
@@ -1685,8 +1933,32 @@ export default function DriveDetailPage() {
                     </div>
                   );
                 })()}
+                </div>
               </div>
             </div>
+              {/* Eligibility Sweep Confirm Modal */}
+              {showSweepConfirmModal && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                  <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 text-2xl">
+                      ✨
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800 mb-2">Run Eligibility Sweep?</h3>
+                    <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+                      This will automatically scan all <b>Applied</b> and <b>Shortlisted</b> candidates. 
+                      Anyone who does not meet the <span className="font-semibold text-slate-800">Min CGPA ({drive.eligibility?.minCGPA || 'N/A'})</span> or allowed branches will be permanently moved to <span className="text-red-600 font-bold">Rejected</span> status.
+                    </p>
+                    <div className="flex gap-3">
+                      <button onClick={() => setShowSweepConfirmModal(false)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm transition-colors">
+                        Cancel
+                      </button>
+                      <button onClick={runEligibilitySweep} disabled={isSweepingEligibility} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2">
+                        {isSweepingEligibility ? <><Loader2 size={16} className="animate-spin" /> Sweeping...</> : 'Yes, Run Sweep'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
             {/* Filter Chips */}
             <div className="flex gap-2 mb-4">
@@ -2188,14 +2460,51 @@ export default function DriveDetailPage() {
                   <span className="bg-indigo-100 text-indigo-700 text-sm px-2.5 py-0.5 rounded-full font-semibold">{shortlistedStudents.length}</span>
                 </div>
                 <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 mr-2 border-r border-slate-200 pr-5 hidden md:flex">
+                    <span className="text-sm font-semibold text-slate-500 flex items-center gap-1"><Users size={14}/> Smart Target:</span>
+                    <select 
+                      className="border border-slate-200 rounded-lg px-3 py-1.5 bg-slate-50 hover:bg-white text-sm font-medium outline-none focus:border-indigo-400 text-slate-700 transition-colors shadow-sm cursor-pointer min-w-[140px]"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) {
+                          setSelectedStudentIds(new Set());
+                          return;
+                        }
+                        let targets: any[] = [];
+                        if (val === 'all_shortlisted') {
+                          targets = shortlistedStudents;
+                        } else if (val === 'selected') {
+                          targets = shortlistedStudents.filter((s:any) => s.status === 'selected');
+                        } else if (val.startsWith('round_')) {
+                          const roundName = val.replace('round_', '');
+                          // Use currentRound to determine if a student passed a specific round
+                          const targetRoundIdx = drive.rounds.findIndex((r: any) => r.type === roundName);
+                          targets = shortlistedStudents.filter((s:any) => {
+                            if (s.status === 'selected' || s.currentRound === 'completed') return true;
+                            const studentRoundIdx = drive.rounds.findIndex((r: any) => r.type === s.currentRound);
+                            return studentRoundIdx > targetRoundIdx;
+                          });
+                        }
+                        setSelectedStudentIds(new Set(targets.map((t:any) => t._id)));
+                      }}
+                    >
+                      <option value="">-- Custom Selection --</option>
+                      <option value="all_shortlisted">All Shortlisted</option>
+                      {drive.rounds?.map((r:any) => (
+                         <option key={r.type} value={`round_${r.type}`}>Passed {r.label || r.type.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</option>
+                      ))}
+                      <option value="selected">Final Offers (Selected)</option>
+                    </select>
+                  </div>
+
                   {selectedStudentIds.size > 0 && (
-                    <span className="text-sm text-slate-500">{selectedStudentIds.size} selected</span>
+                    <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">{selectedStudentIds.size} selected</span>
                   )}
-                  <DownloadButton url={`/drives/${driveId}/export/shortlisted`} label="Download" size="sm"/>
+                  <DownloadButton url={`/drives/${driveId}/export/shortlisted`} label="Export" size="sm"/>
                   <button onClick={() => setShowTemplateBuilder(true)} disabled={shortlistedStudents.length === 0}
-                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-40 shadow-sm">
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                     <Send size={15}/>
-                    {selectedStudentIds.size > 0 ? `Send to ${selectedStudentIds.size} selected` : 'Send to All'}
+                    {selectedStudentIds.size > 0 ? `Message ${selectedStudentIds.size}` : 'Message All'}
                   </button>
                 </div>
               </div>
@@ -2324,9 +2633,9 @@ export default function DriveDetailPage() {
                               <span className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-white text-xs">W</span>
                               WhatsApp Message
                             </label>
-                            <textarea value={whatsappTemplate} onChange={e => setWhatsappTemplate(e.target.value)} rows={8}
-                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-green-400 focus:ring-2 focus:ring-green-50 font-mono resize-none"/>
-                            <p className="text-xs text-slate-400 mt-1">Use *text* for bold in WhatsApp</p>
+                            <HighlightedTextarea value={whatsappTemplate} onChange={e => setWhatsappTemplate(e.target.value)} rows={8}
+                              className="w-full border border-slate-200 rounded-xl bg-white focus-within:border-green-400 focus-within:ring-2 focus-within:ring-green-50"/>
+                            <p className="text-xs text-slate-400 mt-2">Use *text* for bold in WhatsApp</p>
                           </div>
                         )}
 
@@ -2335,10 +2644,10 @@ export default function DriveDetailPage() {
                           <div className="mb-5">
                             <label className="text-sm font-semibold text-slate-700 mb-2 block">📧 Email Subject</label>
                             <input value={emailSubject} onChange={e => setEmailSubject(e.target.value)}
-                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm mb-3 focus:outline-none focus:border-blue-400"/>
+                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm mb-4 focus:outline-none focus:border-blue-400"/>
                             <label className="text-sm font-semibold text-slate-700 mb-2 block">Email Body (HTML)</label>
-                            <textarea value={emailTemplate} onChange={e => setEmailTemplate(e.target.value)} rows={10}
-                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 font-mono resize-none"/>
+                            <HighlightedTextarea value={emailTemplate} onChange={e => setEmailTemplate(e.target.value)} rows={10}
+                              className="w-full border border-slate-200 rounded-xl bg-white focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-50"/>
                           </div>
                         )}
 
@@ -2449,6 +2758,58 @@ export default function DriveDetailPage() {
               <button onClick={saveVenueDetails}
                 className="w-full mt-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition-colors">
                 Save Venue Details
+              </button>
+            </div>
+
+            {/* ═══ SECTION: Prep Materials ═══ */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-5">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Pre-Drive Preparation Materials</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Links visible to shortlisted students on their status page</p>
+                </div>
+                <span className="text-xs bg-blue-50 text-blue-600 border border-blue-100 rounded-full px-3 py-1 font-semibold">{resources.length} resource{resources.length !== 1 ? 's' : ''}</span>
+              </div>
+
+              {/* Existing resources list */}
+              {resources.length > 0 && (
+                <div className="flex flex-col gap-2 mb-4">
+                  {resources.map((r, i) => (
+                    <div key={i} className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{r.title}</p>
+                        <p className="text-xs text-blue-500 truncate">{r.url}</p>
+                      </div>
+                      <button onClick={() => removeResource(i)} className="flex-shrink-0 p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new resource */}
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={newResTitle}
+                  onChange={e => setNewResTitle(e.target.value)}
+                  placeholder="Resource Title (e.g. Aptitude Guide PDF)"
+                  className="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <input
+                  type="url"
+                  value={newResUrl}
+                  onChange={e => setNewResUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <button onClick={addResource} className="flex-shrink-0 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold transition-colors">+ Add</button>
+              </div>
+
+              <button onClick={saveResources} disabled={isSavingResources}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-bold rounded-lg shadow-sm transition-colors">
+                {isSavingResources ? 'Saving...' : 'Save Prep Materials'}
               </button>
             </div>
 
@@ -2773,7 +3134,7 @@ export default function DriveDetailPage() {
       )}
 
       {/* CLOSE CONFIRM MODAL */}
-      {showCloseConfirm && (
+      {(showCloseConfirm ? (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-red-50/50">
@@ -2791,7 +3152,7 @@ export default function DriveDetailPage() {
             </div>
           </div>
         </div>
-      )}
+      ) : null) as any}
 
       {/* HISTORY MODAL */}
       {showHistoryModal && (
@@ -2835,6 +3196,131 @@ export default function DriveDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── Walk-in Fast-Track Modal ── */}
+      {showWalkInModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-teal-50">
+              <h3 className="font-black text-lg text-slate-800 flex items-center gap-2">
+                <UserPlus size={18} className="text-emerald-600" />
+                Walk-in Fast-Track
+              </h3>
+              <button
+                onClick={() => { setShowWalkInModal(false); setLastWalkIn(null); }}
+                className="text-slate-400 hover:text-slate-600 bg-white hover:bg-slate-100 p-1.5 rounded-lg border border-slate-200 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Success state */}
+              {lastWalkIn ? (
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle size={32} className="text-emerald-600" />
+                  </div>
+                  <h4 className="text-xl font-black text-slate-800 mb-1">Registered!</h4>
+                  <p className="text-slate-500 text-sm mb-4">{lastWalkIn.name} has been fast-tracked in.</p>
+                  <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-4 mb-5">
+                    <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">Drive Student ID</p>
+                    <p className="text-3xl font-black text-emerald-700 tracking-widest font-mono">{lastWalkIn.driveStudentId}</p>
+                    <p className="text-xs text-emerald-500 mt-1">Share this ID with the student for check-in</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setLastWalkIn(null)}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                    >
+                      <UserPlus size={16} /> Register Another
+                    </button>
+                    <button
+                      onClick={() => { setShowWalkInModal(false); setLastWalkIn(null); }}
+                      className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Entry form */
+                <form onSubmit={handleWalkIn} className="space-y-4">
+                  <p className="text-sm text-slate-500 font-medium -mt-1 mb-1">
+                    Instant registration for unregistered students. They'll be marked as <span className="font-bold text-emerald-600">Attended</span> immediately.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Full Name <span className="text-red-500">*</span></label>
+                      <input
+                        value={walkInForm.name}
+                        onChange={e => setWalkInForm(f => ({ ...f, name: e.target.value }))}
+                        placeholder="Rahul Kumar"
+                        required
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">USN <span className="text-red-500">*</span></label>
+                      <input
+                        value={walkInForm.usn}
+                        onChange={e => setWalkInForm(f => ({ ...f, usn: e.target.value.toUpperCase() }))}
+                        placeholder="1RV21CS001"
+                        required
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-bold font-mono outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-all uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Branch</label>
+                      <input
+                        value={walkInForm.branch}
+                        onChange={e => setWalkInForm(f => ({ ...f, branch: e.target.value }))}
+                        placeholder="CSE"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Phone</label>
+                      <input
+                        value={walkInForm.phone}
+                        onChange={e => setWalkInForm(f => ({ ...f, phone: e.target.value }))}
+                        placeholder="9876543210"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Email</label>
+                      <input
+                        type="email"
+                        value={walkInForm.email}
+                        onChange={e => setWalkInForm(f => ({ ...f, email: e.target.value }))}
+                        placeholder="rahul@example.com"
+                        className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-all"
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2 items-start">
+                    <AlertTriangle size={14} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-amber-700 font-medium">The drive must be in <strong>Event Day</strong> mode for walk-ins to work.</p>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isRegisteringWalkIn || !walkInForm.name || !walkInForm.usn}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-black py-3 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    {isRegisteringWalkIn
+                      ? <><Loader2 size={16} className="animate-spin" /> Registering...</>
+                      : <><UserPlus size={16} /> Register Walk-in</>
+                    }
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showImportModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -2844,6 +3330,7 @@ export default function DriveDetailPage() {
                 <X size={16} />
               </button>
             </div>
+
             <div className="p-6">
               <p className="text-sm text-slate-600 mb-4 font-medium">Select a previous drive to clone its form structure. <strong className="text-amber-600">Warning: This will overwrite your current unsaved fields.</strong></p>
               
@@ -2912,6 +3399,356 @@ export default function DriveDetailPage() {
           </div>
         </div>
       )}
+
+      {/* GOD VIEW TAB */}
+      {activeTab === 'God View' && (() => {
+        // Group rooms by round
+        const roundGroups: Record<string, any[]> = {};
+        rooms.forEach((r: any) => {
+          const rd = r.activeRound || 'R1';
+          if (!roundGroups[rd]) roundGroups[rd] = [];
+          roundGroups[rd].push(r);
+        });
+
+        const getCapacityStatus = (cap: number, assigned: number) => {
+          if (!cap) return { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-500', label: 'No Cap', pulse: false, morph: false };
+          const pct = assigned / cap;
+          if (pct === 0) return { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-500', label: 'Empty', pulse: false, morph: false };
+          if (pct < 0.5) return { bg: 'bg-emerald-50', border: 'border-emerald-300', text: 'text-emerald-700', label: 'Open', pulse: false, morph: false };
+          if (pct < 0.85) return { bg: 'bg-amber-50', border: 'border-amber-400', text: 'text-amber-700', label: 'Filling', pulse: false, morph: false };
+          if (pct < 1.0) return { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-700', label: 'Nearly Full', pulse: true, morph: false };
+          return { bg: 'bg-red-50', border: 'border-red-500', text: 'text-red-700', label: 'FULL', pulse: false, morph: true };
+        };
+
+        const totalAssigned = rooms.reduce((acc: number, r: any) => acc + (r.assignedStudents?.length || 0), 0);
+        const totalCap = rooms.reduce((acc: number, r: any) => acc + (r.capacity || 0), 0);
+        const overloadedRooms = rooms.filter((r: any) => r.assignedStudents?.length >= r.capacity && r.capacity > 0);
+
+        return (
+          <div className="p-6 h-full overflow-y-auto w-full max-w-7xl mx-auto pb-32 space-y-8">
+            {/* === HEADER COMMAND BAR === */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+                  🗺️ God View
+                  <span className="text-sm font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full border border-slate-200 shadow-inner">Live Room Heatmap</span>
+                </h2>
+                <p className="text-sm text-slate-500 font-medium mt-1">Real-time capacity tracking & operational control for {drive?.companyName || 'the event'}.</p>
+              </div>
+              <div className="flex items-center gap-4">
+                 {/* Panic Switch */}
+                 <div className="bg-slate-900 px-4 py-2 rounded-xl flex items-center gap-3 shadow-xl">
+                   <div className="relative w-32 h-8 bg-slate-800 rounded-full tracking-wider border border-slate-700 overflow-hidden" 
+                        onMouseLeave={() => { if(!isDrivePaused) setPanicProgress(0); }}>
+                      <div className="absolute inset-0 bg-red-600 transition-all duration-75" style={{ width: `${isDrivePaused ? 100 : panicProgress}%`}}></div>
+                      <div className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-white uppercase pointer-events-none select-none z-10">
+                        {isDrivePaused ? 'DRIVE HALTED' : 'HOLD TO PAUSE'}
+                      </div>
+                      {!isDrivePaused && (
+                         <div className="absolute inset-y-0 left-0 w-8 h-8 cursor-pointer rounded-full bg-slate-300 hover:bg-white shadow z-20 flex items-center justify-center" 
+                              onMouseDown={() => {
+                                let p = 0;
+                                const int = setInterval(() => {
+                                  p += 5;
+                                  setPanicProgress(p);
+                                  if (p >= 100) { clearInterval(int); setIsDrivePaused(true); setPanicProgress(100); }
+                                }, 50);
+                                const up = () => { clearInterval(int); if(p<100){ setPanicProgress(0); } document.removeEventListener('mouseup', up); };
+                                document.addEventListener('mouseup', up);
+                              }}>
+                              <AlertTriangle size={14} className="text-slate-900" />
+                         </div>
+                      )}
+                      {isDrivePaused && (
+                        <div className="absolute inset-y-0 right-0 w-8 h-8 cursor-pointer rounded-full bg-white shadow flex items-center justify-center z-20 animate-pulse" 
+                             onClick={() => { setIsDrivePaused(false); setPanicProgress(0); }}>
+                             <RefreshCcw size={14} className="text-red-900" />
+                        </div>
+                      )}
+                   </div>
+                 </div>
+                 
+                 <button onClick={handlePurgeStaleQueue} disabled={isPurgingQueue} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm font-bold text-sm transition-all focus:ring-2 focus:ring-red-400">
+                   <Trash2 size={16} /> 
+                   {isPurgingQueue ? 'Purging...' : 'Purge No-Shows'}
+                 </button>
+
+                 {/* Walk-in Fast-Track button */}
+                 <button
+                   onClick={() => { setShowWalkInModal(true); setLastWalkIn(null); }}
+                   className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm font-bold text-sm transition-all focus:ring-2 focus:ring-emerald-400"
+                 >
+                   <UserPlus size={16} />
+                   Walk-in Fast-Track
+                 </button>
+                 {/* Projector Display */}
+                 <a href={`/event/${driveId}/projector`} target="_blank" rel="noopener noreferrer" style={{textDecoration:'none'}} className="bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm font-bold text-sm transition-all">
+                   <Monitor size={16} />
+                   Projector Display
+                 </a>
+               </div>
+            </div>
+
+            {/* === STATS HUD === */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white border-2 border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-center">
+                 <span className="text-slate-500 uppercase font-black text-[10px] tracking-wider mb-1">Total Rooms Online</span>
+                 <div className="flex items-end gap-2"><span className="text-3xl font-black text-slate-800 leading-none">{rooms.length}</span><span className="text-sm font-bold text-slate-400 mb-1">active</span></div>
+              </div>
+              <div className="bg-white border-2 border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-center">
+                 <span className="text-slate-500 uppercase font-black text-[10px] tracking-wider mb-1">Global Seat Capacity</span>
+                 <div className="flex items-end gap-2"><span className="text-3xl font-black text-indigo-600 leading-none">{totalAssigned}</span><span className="text-sm font-bold text-slate-400 mb-1">/ {totalCap} filled</span></div>
+                 <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden"><div className="bg-indigo-500 h-full rounded-full" style={{width: `${totalCap ? (totalAssigned/totalCap)*100 : 0}%`}}></div></div>
+              </div>
+              <div className="bg-white border-2 border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col justify-center">
+                 <span className="text-slate-500 uppercase font-black text-[10px] tracking-wider mb-1">Overloaded Rooms</span>
+                 <div className="flex items-end gap-2">
+                   <span className={`text-3xl font-black leading-none ${overloadedRooms.length > 0 ? 'text-red-600' : 'text-emerald-500'}`}>{overloadedRooms.length}</span>
+                   {overloadedRooms.length > 0 && <span className="text-sm font-bold text-red-400 mb-1 animate-pulse">Needs attention</span>}
+                 </div>
+              </div>
+              <div className={`border-2 rounded-2xl p-4 shadow-sm flex flex-col justify-center transition-colors ${isDrivePaused ? 'bg-red-50 border-red-500' : 'bg-emerald-50 border-emerald-400'}`}>
+                 <span className={`uppercase font-black text-[10px] tracking-wider mb-1 ${isDrivePaused ? 'text-red-600' : 'text-emerald-700'}`}>System Status</span>
+                 <div className="flex items-end gap-2">
+                   <span className={`text-2xl font-black leading-none ${isDrivePaused ? 'text-red-700' : 'text-emerald-800'}`}>{isDrivePaused ? 'HALTED' : 'NOMINAL'}</span>
+                 </div>
+              </div>
+            </div>
+
+            {/* === MIA ALERTS + LATECOMER APPROVAL ROW === */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              
+              {/* MIA PANEL */}
+              <div className="bg-white border-2 border-orange-200 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${miaStudents.length > 0 ? 'bg-orange-500 animate-pulse' : 'bg-slate-300'}`} />
+                    <h3 className="font-black text-sm text-slate-700 uppercase tracking-wide">
+                      🔍 MIA Alerts
+                      {miaStudents.length > 0 && <span className="ml-2 bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-black">{miaStudents.length}</span>}
+                    </h3>
+                  </div>
+                  <button onClick={fetchMIAStudents} disabled={miaLoading} className="text-slate-400 hover:text-slate-700 p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
+                    <RefreshCcw size={14} className={miaLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+                {miaStudents.length === 0 ? (
+                  <div className="text-center py-6 text-slate-400">
+                    <p className="text-2xl mb-1">✅</p>
+                    <p className="text-sm font-bold">All attended students are room-assigned</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {miaStudents.map((s: any) => (
+                      <div key={s._id} className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">{s.name}</p>
+                          <p className="text-xs text-slate-500">{s.usn} · {s.branch} · Round {s.currentRound || '?'}</p>
+                        </div>
+                        <span className="text-[10px] font-black uppercase text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">Unroomed</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* LATECOMER APPROVAL PANEL */}
+              <div className="bg-white border-2 border-amber-200 rounded-2xl p-5 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${latecomers.length > 0 ? 'bg-amber-500 animate-pulse' : 'bg-slate-300'}`} />
+                    <h3 className="font-black text-sm text-slate-700 uppercase tracking-wide">
+                      ⏰ Latecomers on Hold
+                      {latecomers.length > 0 && <span className="ml-2 bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-black">{latecomers.length}</span>}
+                    </h3>
+                  </div>
+                  {latecomers.length > 0 && (
+                    <button
+                      onClick={() => approveLatecomer(latecomers.map((l: any) => l._id))}
+                      disabled={approvingIds.size > 0}
+                      className="text-xs bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                    >
+                      <UserCheck size={12} /> Approve All
+                    </button>
+                  )}
+                </div>
+                {latecomers.length === 0 ? (
+                  <div className="text-center py-6 text-slate-400">
+                    <p className="text-2xl mb-1">🟢</p>
+                    <p className="text-sm font-bold">No latecomers pending approval</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {latecomers.map((s: any) => (
+                      <div key={s._id} className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">{s.data?.fullName || s.data?.name || s.name || 'Unknown'}</p>
+                          <p className="text-xs text-slate-500">{s.data?.usn || s.usn || '—'} · {s.driveStudentId || '—'}</p>
+                        </div>
+                        <button
+                          onClick={() => approveLatecomer([s._id])}
+                          disabled={approvingIds.has(s._id)}
+                          className="text-[11px] bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white font-bold px-2.5 py-1 rounded-lg transition-colors"
+                        >
+                          {approvingIds.has(s._id) ? '...' : 'Approve'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* === HEATMAP MATRIX (MASONRY/GRID) === */}
+            <div className="space-y-6">
+               {Object.keys(roundGroups).map(round => (
+                 <div key={round} className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+                   <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                     <div className="w-2 h-2 rounded-full bg-slate-400"></div> Round {round}
+                   </h3>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                     {roundGroups[round].map(room => {
+                        const cap = room.capacity || 0;
+                        const ass = room.assignedStudents?.length || 0;
+                        let st = getCapacityStatus(cap, ass);
+
+                        const isDormant = ass > 0 && room.updatedAt && new Date().getTime() - new Date(room.updatedAt).getTime() > 20 * 60 * 1000;
+                        if (isDormant) {
+                          st = { bg: 'bg-purple-50', border: 'border-purple-400', text: 'text-purple-700', label: 'Dormant', pulse: true, morph: false };
+                        }
+
+                        return (
+                          <div key={room._id} 
+                               onClick={() => setExpandedRoomId(room._id)}
+                               className={`relative group cursor-pointer border-2 rounded-xl p-4 transition-all hover:shadow-md hover:-translate-y-1 ${st.bg} ${st.border} ${st.pulse && !st.morph ? 'animate-pulse' : ''} ${st.morph ? 'animate-morph-critical' : ''}`}>
+                             
+                             {isDormant && (
+                               <div className="absolute -top-3 -left-3 bg-purple-600 text-white p-1.5 rounded-full shadow-lg border-2 border-white animate-bounce z-10" title="No activity in 20+ mins">
+                                 <AlertTriangle size={14} />
+                               </div>
+                             )}
+
+                             <div className="flex justify-between items-start mb-4">
+                               <div>
+                                 <h4 className={`font-black text-lg ${st.text} leading-none mb-1`}>{room.name}</h4>
+                                 <p className="text-xs font-bold text-slate-400">Floor {room.floor || '-'}</p>
+                               </div>
+                               <div className="flex flex-col items-end gap-2">
+                                 <div className={`px-2 py-1 rounded border text-[10px] font-black uppercase tracking-wider bg-white/50 ${st.text} border-current opacity-70`}>
+                                   {st.label}
+                                 </div>
+                                 <div className={`flex items-center bg-white/60 border rounded shadow-sm opacity-0 group-hover:opacity-100 transition-opacity ${st.border}`}>
+                                   <button 
+                                     onClick={(e) => { e.stopPropagation(); handleAdjustCapacity(room._id, -5); }}
+                                     className={`p-1 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border-r ${st.border}`}
+                                   ><Minus size={12} strokeWidth={3}/></button>
+                                   <div className={`text-[10px] font-black px-1 text-slate-500`}>CAP</div>
+                                   <button 
+                                     onClick={(e) => { e.stopPropagation(); handleAdjustCapacity(room._id, 5); }}
+                                     className={`p-1 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border-l ${st.border}`}
+                                   ><Plus size={12} strokeWidth={3}/></button>
+                                 </div>
+                               </div>
+                             </div>
+
+                             <div className="flex items-end justify-between">
+                               <div className="w-full">
+                                  <div className="flex items-baseline gap-1 mb-1">
+                                    <span className={`font-black text-2xl ${st.text}`}>{ass}</span>
+                                    <span className={`font-bold text-xs opacity-50 ${st.text}`}>/ {cap || '?'}</span>
+                                  </div>
+                                  <div className="w-full bg-black/5 h-1.5 rounded-full overflow-hidden">
+                                     <div className={`h-full rounded-full transition-all duration-500 ${st.morph || st.pulse ? 'bg-red-500' : 'bg-current opacity-50'}`} style={{width: `${cap ? Math.min((ass/cap)*100, 100) : 0}%`}}></div>
+                                  </div>
+                               </div>
+                             </div>
+                             
+                             {/* Panelist Bubble */}
+                             {room.panelists && (
+                               <div className="absolute -top-3 -right-3 bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded-lg border-2 border-white shadow-sm flex items-center gap-1 group-hover:scale-110 transition-transform">
+                                 <Users size={10} />
+                                 <span className="truncate max-w-[60px]">{room.panelists.split(',')[0]}</span>
+                               </div>
+                             )}
+                          </div>
+                        );
+                     })}
+                   </div>
+                 </div>
+               ))}
+            </div>
+            
+            {/* Live Ticker Docked at Bottom */}
+            <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-slate-900 border-t border-slate-800 py-3 px-6 z-40 shadow-2xl flex items-center justify-between">
+              <div className="flex items-center gap-4 overflow-hidden mask-fade-right">
+                <span className="text-[10px] font-black text-slate-400 bg-slate-800 px-2 py-1 rounded uppercase tracking-widest shrink-0">Live Log</span>
+                <div className="flex items-center gap-6 whitespace-nowrap overflow-x-auto no-scrollbar" style={{scrollBehavior:'smooth'}}>
+                  {liveEvents.map(le => (
+                    <div key={le.id} className="flex items-center gap-2 text-xs font-bold text-slate-300">
+                      <div className={`w-1.5 h-1.5 rounded-full ${le.type === 'info' ? 'bg-indigo-400' : le.type === 'warning' ? 'bg-orange-400' : 'bg-red-500 animate-pulse'}`}></div>
+                      {le.text}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Room Expansion Modal */}
+      {expandedRoomId && (() => {
+         const room = rooms.find((r: any) => r._id === expandedRoomId);
+         if (!room) return null;
+         return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+             <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row transition-all max-h-[80vh]">
+               <div className="bg-slate-50 border-r border-slate-200 p-8 w-full md:w-1/3 flex flex-col">
+                 <button onClick={() => setExpandedRoomId(null)} className="self-start text-slate-400 hover:text-slate-600 mb-6 bg-white border rounded-full p-2 hover:shadow-sm transition-all"><ArrowLeft size={16}/></button>
+                 <h2 className="text-3xl font-black text-slate-800">{room.name}</h2>
+                 <p className="font-bold text-slate-400 mb-6">Floor {room.floor || '-'}</p>
+                 
+                 <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm mb-4">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Capacity</p>
+                   <p className="text-2xl font-black text-indigo-600">{(room.assignedStudents?.length || 0)} <span className="text-sm text-slate-400">/ {room.capacity || '?'}</span></p>
+                 </div>
+                 <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex-1">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Panelists</p>
+                   {room.panelists ? (
+                     <div className="space-y-2 mt-2">
+                       {room.panelists.split(',').map((p:string,i:number) => (
+                         <div key={i} className="flex items-center gap-2 text-sm font-bold text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                           <Users size={14} className="text-slate-400"/> {p.trim()}
+                         </div>
+                       ))}
+                     </div>
+                   ) : <span className="text-sm font-bold text-slate-300">Unassigned</span>}
+                 </div>
+               </div>
+               <div className="p-8 w-full md:w-2/3 bg-white overflow-y-auto">
+                 <h3 className="font-black text-slate-800 mb-4 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Candidate Ledger</h3>
+                 {(!room.assignedStudents || room.assignedStudents.length === 0) ? (
+                   <div className="text-center py-12 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                     <p className="font-bold text-slate-400">Room is currently empty</p>
+                   </div>
+                 ) : (
+                   <div className="space-y-2">
+                     {room.assignedStudents.map((st: any, i:number) => (
+                       <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/50 transition-colors">
+                         <div className="font-bold text-sm text-slate-700 flex items-center gap-3">
+                           <span className="text-slate-300 text-xs w-4">{i+1}.</span>
+                           {st.name || st}
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 )}
+               </div>
+             </div>
+          </div>
+         );
+      })()} 
 
     </div>
   );

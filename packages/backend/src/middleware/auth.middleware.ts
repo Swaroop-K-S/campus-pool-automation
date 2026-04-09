@@ -6,6 +6,7 @@ export interface AuthPayload {
   userId: string;
   collegeId: string;
   email: string;
+  role: string;
 }
 
 declare global {
@@ -17,13 +18,19 @@ declare global {
 }
 
 export const authenticate = (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
+  let token = req.cookies?.accessToken;
 
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ success: false, error: 'Access denied. No token provided.' });
+  // Fallback to Bearer token logic
+  if (!token) {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
   }
 
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Access denied. No token provided.' });
+  }
 
   try {
     const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as AuthPayload;

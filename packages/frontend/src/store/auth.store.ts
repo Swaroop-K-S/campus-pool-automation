@@ -1,19 +1,19 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { api } from '../services/api';
 
 interface AuthUser {
   userId: string;
   collegeId: string;
   name?: string;
   email?: string;
+  role?: string;
 }
 
 interface AuthState {
   user: AuthUser | null;
-  accessToken: string | null;
-  refreshToken: string | null;
   
-  setAuth: (user: AuthUser, accessToken: string, refreshToken: string) => void;
+  setUser: (user: AuthUser) => void;
   logout: () => void;
 }
 
@@ -21,22 +21,18 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
-      accessToken: null,
-      refreshToken: null,
       
-      setAuth: (user, accessToken, refreshToken) => set({ user, accessToken, refreshToken }),
+      setUser: (user) => set({ user }),
       
       logout: () => {
-        fetch('http://localhost:5000/api/v1/auth/logout', { 
-           method: 'POST',
-           headers: { 'Authorization': `Bearer ${useAuthStore.getState().accessToken}` }
-        }).catch(() => null);
-        
-        set({ user: null, accessToken: null, refreshToken: null });
+        // Send a request to the backend to clear the HttpOnly cookies
+        api.post('/auth/logout').catch(() => null);
+        set({ user: null });
       }
     }),
     {
       name: 'campuspool-auth',
+      partialize: (state) => ({ user: state.user }), // only persist user
     }
   )
 );

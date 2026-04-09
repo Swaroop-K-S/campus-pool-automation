@@ -1,17 +1,37 @@
 import { useState, useEffect } from 'react';
-import { Download, UploadCloud, Users, CheckCircle, Loader2, ArrowRight } from 'lucide-react';
+import { Download, UploadCloud, Users, CheckCircle, Loader2, ArrowRight, Megaphone } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
+import { useSocket } from '../../hooks/use-socket';
 
 export function LiveRoundsTab({ driveId, rounds, onUpdate }: { driveId: string, rounds: any[], onUpdate: () => void }) {
   const [selectedRound, setSelectedRound] = useState<string>(rounds[0]?.type || '');
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const socket = useSocket();
 
   useEffect(() => {
     if (selectedRound) fetchRoundStudents();
   }, [selectedRound]);
+
+  useEffect(() => {
+    if (!driveId) return;
+    socket.emit('join:drive', driveId);
+
+    const handleRefresh = () => {
+      if (selectedRound) fetchRoundStudents();
+    };
+
+    socket.on('student:verified', handleRefresh);
+    socket.on('drive:round_batch_updated', handleRefresh);
+
+    return () => {
+      socket.off('student:verified', handleRefresh);
+      socket.off('drive:round_batch_updated', handleRefresh);
+    };
+  }, [driveId, selectedRound]);
 
   const fetchRoundStudents = async () => {
     setLoading(true);
@@ -94,6 +114,14 @@ export function LiveRoundsTab({ driveId, rounds, onUpdate }: { driveId: string, 
     e.target.value = '';
   };
 
+  const handleBroadcast = () => {
+    if (!broadcastMessage.trim()) return;
+    if (!confirm(`Are you sure you want to broadcast this to all students?`)) return;
+    socket.emit('admin:broadcast', { driveId, message: broadcastMessage });
+    toast.success('Broadcast sent globally!');
+    setBroadcastMessage('');
+  };
+
   if (!rounds || rounds.length === 0) return <div className="p-8 text-center text-slate-500">No rounds configured.</div>;
 
   return (
@@ -125,6 +153,27 @@ export function LiveRoundsTab({ driveId, rounds, onUpdate }: { driveId: string, 
               Upload Hired CSV
               <input type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFinalSelection} disabled={uploadLoading} />
             </label>
+          </div>
+        </div>
+
+        {/* Megaphone Widget */}
+        <div className="mt-6 pt-6 border-t border-slate-200">
+          <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3 px-2 flex items-center gap-2">Global Comms <Megaphone size={14}/></h3>
+          <div className="bg-sky-50 rounded-xl p-3 border border-sky-100 shadow-inner">
+            <textarea
+              className="w-full text-xs font-medium p-2 rounded-lg border border-sky-200 resize-none focus:outline-none focus:ring-2 focus:ring-sky-400 bg-white placeholder-slate-400"
+              rows={3}
+              placeholder="e.g., LUNCH BREAK EXTENDED BY 15 MINS..."
+              value={broadcastMessage}
+              onChange={(e) => setBroadcastMessage(e.target.value)}
+            ></textarea>
+            <button 
+              onClick={handleBroadcast}
+              disabled={!broadcastMessage.trim()}
+              className="mt-2 w-full bg-sky-500 hover:bg-sky-600 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all text-white font-bold text-xs py-2 rounded-lg shadow-sm"
+            >
+              SEND BROADCAST
+            </button>
           </div>
         </div>
       </div>

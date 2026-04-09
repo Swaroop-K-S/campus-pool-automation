@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAuthStore } from '../../store/auth.store';
 
 interface DownloadButtonProps {
   url: string;
@@ -20,13 +19,11 @@ export const DownloadButton = ({
   const handleDownload = async () => {
     setLoading(true);
     try {
-      const token = useAuthStore.getState().accessToken;
-
       const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
       const fullUrl = url.startsWith('http') ? url : `${apiBase}${url.startsWith('/') ? url : '/' + url}`;
 
       const response = await fetch(fullUrl, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        credentials: 'include'
       });
 
       if (!response.ok) throw new Error('Download failed');

@@ -203,3 +203,72 @@ export const addManualCandidate = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, error: message });
   }
 };
+
+export const autoRejectEligibilitySweep = async (req: Request, res: Response) => {
+  try {
+    const { driveId } = req.params;
+    const collegeId = req.user?.collegeId;
+
+    const { DriveModel } = await import('../models/drive.model');
+    const drive = await DriveModel.findOne({ _id: driveId, collegeId }).lean();
+    
+    if (!drive) {
+      return res.status(404).json({ success: false, error: 'Drive not found' });
+    }
+
+    const { minCGPA, branches } = drive.eligibility || {};
+    
+    // Fetch all active applications (applied or shortlisted)
+    const applications = await ApplicationModel.find({ 
+      driveId, 
+      collegeId,
+      status: { $in: ['applied', 'shortlisted'] }
+    });
+
+    let rejectedCount = 0;
+    const rejectedIds = [];
+
+    for (const app of applications) {
+      let isEligible = true;
+      const data: any = app.data || {};
+      
+      // Check CGPA
+      if (minCGPA) {
+        const studentCGPA = parseFloat(data.cgpa || '0');
+        if (studentCGPA < minCGPA) isEligible = false;
+      }
+      
+      // Check Branch
+      if (isEligible && branches && branches.length > 0) {
+        const studentBranch = String(data.branch || '').toUpperCase();
+        // Allow if no branch specified on student profile, otherwise strict check
+        if (studentBranch && !branches.includes(studentBranch)) {
+          isEligible = false;
+        }
+      }
+
+      if (!isEligible) {
+        app.status = 'rejected';
+        if (!data.rejectedReason) {
+            app.data = { ...data, rejectedReason: 'Automated Eligibility Sweep (CGPA or Branch)' };
+            app.markModified('data');
+        }
+        await app.save();
+        rejectedIds.push(app._id);
+        rejectedCount++;
+      }
+    }
+
+    return res.json({ 
+      success: true, 
+      data: { 
+        rejectedCount,
+        rejectedIds
+      } 
+    });
+
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: message });
+  }
+};

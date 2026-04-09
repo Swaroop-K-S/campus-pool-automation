@@ -14,7 +14,10 @@ const applicationSchema = new Schema({
   driveStudentId: { type: String, unique: true, sparse: true, index: true },
   currentRound: { type: String },
   attendedAt: { type: Date },
-  submittedAt: { type: Date, default: Date.now }
+  submittedAt: { type: Date, default: Date.now },
+  latecomer: { type: Boolean, default: false },
+  adminOverrideTime: { type: Date },
+  assignedRoomId: { type: Schema.Types.ObjectId, ref: 'Room', default: null }  // direct room link
 }, {
   timestamps: true,
   toJSON: { virtuals: true },

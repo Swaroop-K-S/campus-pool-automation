@@ -432,6 +432,18 @@ export default function AdminDashboardPage() {
           ))}
         </div>
 
+        {/* View Toggle */}
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl shrink-0">
+          {([['grid', GridIcon], ['list', ListIcon], ['calendar', Calendar]] as const).map(([mode, Icon]) => (
+            <button key={mode} onClick={() => setViewMode(mode as 'grid' | 'list' | 'calendar')}
+              title={`${mode} view`}
+              className={`p-2 rounded-lg transition-all ${
+                viewMode === mode ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+              }`}>
+              <Icon size={16} />
+            </button>
+          ))}
+        </div>
 
       </div>
 
@@ -481,8 +493,13 @@ export default function AdminDashboardPage() {
       ) : viewMode === 'list' ? (
         <div className="flex flex-col gap-3">
           {filteredDrives.map(drive => (
-            <div key={drive._id} onClick={() => navigate(`/admin/drives/${drive._id}`)} 
-              className="bg-white rounded-2xl border border-slate-200/60 p-4 flex items-center gap-4 hover:border-indigo-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-0.5 active:scale-[0.99] transition-all cursor-pointer group">
+         <div key={drive._id} onClick={() => navigate(`/admin/drives/${drive._id}`)} 
+              className={`relative bg-white rounded-2xl border p-4 flex items-center gap-4 hover:-translate-y-0.5 active:scale-[0.99] transition-all cursor-pointer group
+                ${ drive.status === 'event_day' ? 'border-emerald-400/70 shadow-[0_0_0_1px_rgba(52,211,153,0.3),0_8px_30px_rgba(52,211,153,0.15)] hover:shadow-[0_0_0_1px_rgba(52,211,153,0.5),0_12px_40px_rgba(52,211,153,0.25)]' :
+                   drive.status === 'active' ? 'border-indigo-300/70 shadow-[0_0_0_1px_rgba(99,102,241,0.2),0_8px_30px_rgba(99,102,241,0.10)] hover:shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_12px_40px_rgba(99,102,241,0.18)]' :
+                   drive.status === 'completed' ? 'border-slate-200/60 opacity-60 grayscale-[30%] hover:opacity-80 hover:shadow-sm' :
+                   'border-slate-200/60 hover:border-indigo-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)]'
+                }`}>
                <div className="w-12 h-12 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-black text-lg shrink-0">
                  {drive.companyName.substring(0, 2).toUpperCase()}
                </div>
@@ -559,7 +576,12 @@ export default function AdminDashboardPage() {
 
             return (
               <div key={drive._id} onClick={() => navigate(`/admin/drives/${drive._id}`)}
-                className="group relative bg-white rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-500 cursor-pointer">
+                className={`group relative bg-white rounded-2xl border shadow-sm hover:-translate-y-1 transition-all duration-500 cursor-pointer overflow-hidden
+                  ${ drive.status === 'event_day' ? 'border-emerald-400/70 shadow-[0_0_0_1px_rgba(52,211,153,0.3),0_8px_30px_rgba(52,211,153,0.15)] hover:shadow-[0_0_0_1px_rgba(52,211,153,0.5),0_20px_60px_rgba(52,211,153,0.25)]' :
+                     drive.status === 'active' ? 'border-indigo-300/60 shadow-[0_0_0_1px_rgba(99,102,241,0.15),0_4px_20px_rgba(99,102,241,0.10)] hover:shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_20px_60px_rgba(99,102,241,0.18)]' :
+                     drive.status === 'completed' ? 'border-slate-200/60 opacity-60 grayscale-[40%] hover:opacity-80 hover:shadow-md hover:grayscale-0 hover:border-slate-300' :
+                     'border-slate-200/60 hover:shadow-2xl hover:shadow-indigo-500/10'
+                  }`}>
                 
                 <div className="flex h-full">
                   {/* Left Gradient Accent Strip */}

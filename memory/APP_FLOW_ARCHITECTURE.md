@@ -31,13 +31,18 @@ This document details the complete lifecycle of a placement drive within the Cam
 2. They manage physical infrastructure (**Room Management**), creating rooms and setting seating capacities.
 3. The **Room Assignment Engine** automatically (or manually) allocates checked-in students to specific rooms for the current round.
 
-## Phase 7: Live Round Progression
-1. **Invigilators** mark attendance in their assigned rooms and conduct the round (e.g., Aptitude test).
-2. Once the round concludes, results are updated in the system (Pass/Fail).
-3. **Real-time Synchronization:** Using `Socket.io`, these updates are pushed instantly to the students' mobile devices.
-4. A student looks at their phone and immediately sees if they have been **Selected** or **Rejected** for the next round.
-5. If selected, the app tells them **what to do next** and guides them to their newly assigned room for the subsequent round.
+## Phase 7: Administrative "God View" & Panic Control
+1. **Admins** monitor the entire campus in real-time via the **God View Heatmap**.
+2. This dashboard uses WebSockets to show room occupancy, capacity alerts (Green -> Red pulsing), and panelist activity across all rounds.
+3. In case of emergencies or coordination issues, the Admin can trigger the **Master Panic Switch**.
+4. **Instant Lockdown:** This fires a global socket event that renders an impenetrable "Operations Paused" overlay on every student phone and invigilator tablet simultaneously.
 
-## Phase 8: Final Selection
+## Phase 8: Dynamic Rubrics & Magic Links
+1. **HR Panelists** receive a **Secure Magic Link** (valid for 24h) for their specific room.
+2. They access a zero-login evaluation portal with **Dynamic Rubrics**.
+3. They score students on criteria like "Technical Skills", "Body Language", and "Eye Contact" (or custom traits they define on the fly).
+4. **Live Feedback:** Decisions (Selected/Rejected) are instantly synced to the student's personal dashboard with celebratory confetti.
+
+## Phase 9: Final Selection & Analytics
 1. This cycle repeats until the final HR round.
 2. The system generates a final list of placed students. Analytics dashboards aggregate the data for college records.

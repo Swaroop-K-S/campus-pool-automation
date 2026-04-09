@@ -17,6 +17,8 @@ export const ApplicationSchema = z.object({
   currentRound: z.string().optional(),
   attendedAt: z.date().optional(),
   submittedAt: z.date().optional(),
+  latecomer: z.boolean().default(false),
+  adminOverrideTime: z.date().optional(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
   isSelected: z.boolean().optional() // Computed virtual

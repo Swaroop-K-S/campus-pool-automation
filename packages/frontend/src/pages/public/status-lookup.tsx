@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, Clock, Trophy, MapPin, Calendar, Briefcase, Star } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Clock, Trophy, MapPin, Calendar, Briefcase, Star, FileText, ExternalLink } from 'lucide-react';
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
@@ -21,6 +21,7 @@ interface LookupResult {
     eventDate: string | null;
     reportTime: string | null;
     venueName: string | null;
+    resources?: { title: string; url: string }[];
   };
 }
 
@@ -336,6 +337,33 @@ export default function StatusLookupPage() {
                 </div>
               </div>
             )}
+            {/* Prep Materials for Shortlisted/Invited */}
+            {(result.status === 'shortlisted' || result.status === 'invited') && result.drive.resources && result.drive.resources.length > 0 && (
+              <div style={{
+                marginTop: 20, background: 'rgba(59,130,246,0.1)',
+                border: '1px solid rgba(59,130,246,0.3)',
+                borderRadius: 16, padding: '20px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#93C5FD', fontSize: 13, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 }}>
+                  <FileText size={16} /> Pre-Drive Preparation Materials
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {result.drive.resources.map((res, i) => (
+                    <a key={i} href={res.url} target="_blank" rel="noreferrer" style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: '12px 16px',
+                      color: 'white', textDecoration: 'none', transition: 'all 0.2s', border: '1px solid rgba(255,255,255,0.05)'
+                    }} 
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(59,130,246,0.2)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}>
+                      <span style={{ fontWeight: 600, fontSize: 14 }}>{res.title}</span>
+                      <ExternalLink size={16} color="#60A5FA" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Helper tip for shortlisted */}
@@ -357,6 +385,22 @@ export default function StatusLookupPage() {
           )}
         </div>
       )}
+
+      {/* Passport CTA */}
+      <div style={{ maxWidth: 520, margin: '20px auto 0', textAlign: 'center' }}>
+        <a href="/passport" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)',
+          borderRadius: 12, padding: '10px 20px',
+          color: '#A5B4FC', fontSize: 13, fontWeight: 700, textDecoration: 'none',
+          transition: 'all 0.2s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.2)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.1)'; }}
+        >
+          🛂 View your full placement history → CampusPool Passport
+        </a>
+      </div>
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }

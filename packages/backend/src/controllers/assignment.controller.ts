@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { DriveModel, ApplicationModel, RoomModel } from '../models';
-import { randomAssign, aiSuggestAssign, calcOverallMatchQuality } from '../services/room-assignment.service';
+import { randomAssignWithOverflow, aiSuggestAssignWithOverflow, calcOverallMatchQuality } from '../services/room-assignment.service';
 import { getIO } from '../socket';
 import { sendPushNotification } from '../services/push.service';
 import * as XLSX from 'xlsx';
@@ -20,9 +20,10 @@ export const autoAssign = async (req: Request, res: Response): Promise<void> => 
       statusFilter = ['attended', `${roundType}_pending`, `${roundType}_passed`]; // _pending is hypothetical, but we use what we have
     }
 
-    // Always fetch the students based on filter, plus any already passed for this specific round just in case
+    // Always fetch the students based on filter, specifically within the current round
     const students = await ApplicationModel.find({
       driveId,
+      currentRound: roundType,
       status: { $in: isFirstRound ? statusFilter : ['attended', 'shortlisted', 'invited', 'applied', `${roundType}_passed`] }
     }).select('_id data.branch data.name data.fullName data.gender').lean();
 
@@ -67,6 +68,7 @@ export const autoAssign = async (req: Request, res: Response): Promise<void> => 
 
     let assignments: any[] = [];
 
+    let unassignedResult: string[] = [];
     if (enforceGenderRatio) {
       // Separate by gender
       const boys = eligibleStudents.filter(s => (s.data?.gender || '').toString().toLowerCase().includes('male') && !(s.data?.gender || '').toString().toLowerCase().includes('female'));
@@ -81,10 +83,15 @@ export const autoAssign = async (req: Request, res: Response): Promise<void> => 
         if (boys[i]) splitIds.push(boys[i]._id.toString());
         if (others[i]) splitIds.push(others[i]._id.toString());
       }
-      assignments = randomAssign(splitIds, roomInputs);
+      
+      const resData = randomAssignWithOverflow(splitIds, roomInputs);
+      assignments = resData.assignments;
+      unassignedResult = resData.unassigned;
     } else {
       const studentIds = eligibleStudents.map(s => s._id.toString());
-      assignments = randomAssign(studentIds, roomInputs);
+      const resData = randomAssignWithOverflow(studentIds, roomInputs);
+      assignments = resData.assignments;
+      unassignedResult = resData.unassigned;
     }
 
     // Enrich with student names
@@ -108,7 +115,11 @@ export const autoAssign = async (req: Request, res: Response): Promise<void> => 
       data: {
         assignments: enriched,
         totalStudents: eligibleStudents.length,
-        overflow: Math.max(0, eligibleStudents.length - totalCapacity),
+        unassigned: unassignedResult.map((id: string) => ({
+          _id: id,
+          ...(studentMap.get(id) || { name: 'Unknown', branch: '' })
+        })),
+        overflow: unassignedResult.length,
         message: 'Preview generated. Confirm to save.'
       }
     });
@@ -125,6 +136,7 @@ export const aiSuggest = async (req: Request, res: Response): Promise<void> => {
 
     const students = await ApplicationModel.find({
       driveId,
+      currentRound: roundType,
       status: { $in: ['attended', 'shortlisted', 'invited', 'applied', `${roundType}_passed`] }
     }).select('_id data.branch data.name data.fullName').lean();
 
@@ -150,7 +162,9 @@ export const aiSuggest = async (req: Request, res: Response): Promise<void> => {
       }))
     }));
 
-    const assignments = aiSuggestAssign(studentInputs, roomInputs);
+    const resData = aiSuggestAssignWithOverflow(studentInputs, roomInputs);
+    const assignments = resData.assignments;
+    const unassignedResult = resData.unassigned;
     const overallMatch = calcOverallMatchQuality(assignments);
 
     const studentMap = new Map(students.map(s => [
@@ -172,6 +186,10 @@ export const aiSuggest = async (req: Request, res: Response): Promise<void> => {
       success: true,
       data: {
         assignments: enriched,
+        unassigned: unassignedResult.map(id => ({
+          _id: id,
+          ...(studentMap.get(id) || { name: 'Unknown', branch: '' })
+        })),
         totalStudents: students.length,
         overallMatchQuality: overallMatch,
         message: 'AI suggestions generated. Review and confirm.'
@@ -200,6 +218,7 @@ export const confirmAssignments = async (req: Request, res: Response): Promise<v
 
     try {
       getIO().to(`drive:${driveId}`).emit('assignments:confirmed', { roundType });
+      getIO().to(`drive:${driveId}`).emit('student:status_changed');
     } catch {}
 
     res.json({ success: true, data: { confirmed: true, totalAssigned } });
@@ -213,30 +232,75 @@ export const confirmAssignments = async (req: Request, res: Response): Promise<v
 export const getAssignments = async (req: Request, res: Response): Promise<void> => {
   try {
     const { driveId, roundType } = req.params;
+    
+    const drive = await DriveModel.findById(driveId).lean();
+    const isFirstRound = drive?.rounds?.[0]?.type === roundType;
+
     const rooms = await RoomModel.find({ driveId, round: roundType }).lean();
 
-    const allStudentIds = rooms.flatMap(r => r.assignedStudents || []);
-    const students = await ApplicationModel.find({ _id: { $in: allStudentIds } })
+    // Find all ELIGIBLE students for this round
+    let statusFilter: string[];
+    if (isFirstRound) {
+      statusFilter = ['shortlisted', 'invited'];
+    } else {
+      statusFilter = ['attended', `${roundType}_pending`, `${roundType}_passed`];
+    }
+    
+    const students = await ApplicationModel.find({
+      driveId,
+      currentRound: roundType,
+      status: { $in: isFirstRound ? statusFilter : ['attended', 'shortlisted', 'invited', 'applied', `${roundType}_passed`] }
+    }).select('_id data.branch data.name data.fullName data.gender data.usn data.email status').lean();
+
+    let eligibleStudents = students;
+    if (isFirstRound) {
+       eligibleStudents = students.filter(s => s.status === 'shortlisted' || s.status === 'invited');
+    } else {
+       eligibleStudents = students.filter(s => s.status === 'attended' || s.status === `${roundType}_passed`);
+    }
+    if (eligibleStudents.length === 0) { eligibleStudents = students; } // fallback
+
+    const allStudentIdsAssigned = rooms.flatMap(r => r.assignedStudents || []);
+    
+    // In case assigned students aren't perfectly in the 'eligible' pool due to status state
+    const assignedStudentsFallback = await ApplicationModel.find({ _id: { $in: allStudentIdsAssigned } })
       .select('_id data.name data.fullName data.branch data.usn data.email status').lean();
+      
+    const fullStudentMap = new Map([...eligibleStudents, ...assignedStudentsFallback].map(s => [s._id.toString(), s]));
 
-    const studentMap = new Map(students.map(s => [s._id.toString(), s]));
-
-    const enriched = rooms.map(r => ({
-      ...r,
-      assignedStudentDetails: (r.assignedStudents || []).map((id: any) => {
-        const s = studentMap.get(id.toString());
+    const enrichedRooms = rooms.map(r => ({
+      roomId: r._id,
+      roomName: r.name,
+      studentIds: r.assignedStudents || [],
+      matchScore: 0,
+      matchReason: '',
+      students: (r.assignedStudents || []).map((id: any) => {
+        const s = fullStudentMap.get(id.toString());
         return s ? {
-          _id: s._id,
-          name: s.data?.fullName || s.data?.name,
-          branch: s.data?.branch,
-          usn: s.data?.usn,
-          email: s.data?.email,
-          status: s.status
-        } : { _id: id, name: 'Unknown' };
+          _id: s._id.toString(),
+          name: s.data?.fullName || s.data?.name || 'Unknown',
+          branch: s.data?.branch || '',
+        } : { _id: id.toString(), name: 'Unknown', branch: '' };
       })
     }));
 
-    res.json({ success: true, data: enriched });
+    const assignedSet = new Set(allStudentIdsAssigned.map(id => id.toString()));
+    const unassignedStudents = eligibleStudents
+       .filter(s => !assignedSet.has(s._id.toString()))
+       .map(s => ({
+         _id: s._id.toString(),
+         name: s.data?.fullName || s.data?.name || 'Unknown',
+         branch: s.data?.branch || ''
+       }));
+
+    res.json({ 
+       success: true, 
+       data: {
+          assignments: enrichedRooms,
+          unassigned: unassignedStudents,
+          totalStudents: eligibleStudents.length
+       }
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

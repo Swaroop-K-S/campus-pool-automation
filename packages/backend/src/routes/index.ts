@@ -8,6 +8,8 @@ import qrRoutes from './qr.routes';
 import applicationRoutes from './application.routes';
 import exportRoutes from './export.routes';
 import ssoRoutes from './sso.routes';
+import invigilatorRoutes from './invigilator.routes';
+import passportRoutes from './passport.routes';
 
 const router = Router();
 
@@ -20,5 +22,7 @@ router.use('/', formRoutes);
 router.use('/event', qrRoutes);
 router.use('/drives', applicationRoutes);
 router.use('/sso', ssoRoutes);
+router.use('/invigilator', invigilatorRoutes);
+router.use('/passport', passportRoutes);
 
 export default router;

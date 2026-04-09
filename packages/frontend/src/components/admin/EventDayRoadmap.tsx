@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Download, UploadCloud, Users, CheckCircle, Loader2, Wand2, X } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
+import { useSocket } from '../../hooks/use-socket';
 
 export function EventDayRoadmap({ driveId, rounds, onUpdate }: { driveId: string, rounds: any[], onUpdate: () => void }) {
   const [selectedRound, setSelectedRound] = useState<string>(rounds[0]?.type || '');
@@ -14,12 +15,32 @@ export function EventDayRoadmap({ driveId, rounds, onUpdate }: { driveId: string
   const [assignLoading, setAssignLoading] = useState(false);
   const [enforceGenderRatio, setEnforceGenderRatio] = useState(false);
   const isFirstRound = rounds[0]?.type === selectedRound;
+  const socket = useSocket();
 
   useEffect(() => {
     if (selectedRound && selectedRound !== 'end_of_drive') {
       fetchRoundStudents();
     }
   }, [selectedRound]);
+
+  useEffect(() => {
+    if (!driveId) return;
+    socket.emit('join:drive', driveId);
+
+    const handleRefresh = () => {
+      if (selectedRound && selectedRound !== 'end_of_drive') {
+        fetchRoundStudents();
+      }
+    };
+
+    socket.on('student:verified', handleRefresh);
+    socket.on('drive:round_batch_updated', handleRefresh);
+
+    return () => {
+      socket.off('student:verified', handleRefresh);
+      socket.off('drive:round_batch_updated', handleRefresh);
+    };
+  }, [driveId, selectedRound]);
 
   const fetchRoundStudents = async () => {
     setLoading(true);

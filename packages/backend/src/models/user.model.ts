@@ -8,6 +8,8 @@ export interface IUser {
   role: string;
   isActive: boolean;
   refreshToken?: string;
+  failedLoginAttempts: number;
+  lockUntil?: Date;
 }
 
 const userSchema = new Schema({
@@ -17,7 +19,9 @@ const userSchema = new Schema({
   passwordHash: { type: String },
   role: { type: String, default: 'admin' },
   isActive: { type: Boolean, default: true },
-  refreshToken: { type: String }
+  refreshToken: { type: String },
+  failedLoginAttempts: { type: Number, default: 0 },
+  lockUntil: { type: Date }
 }, {
   timestamps: true
 });

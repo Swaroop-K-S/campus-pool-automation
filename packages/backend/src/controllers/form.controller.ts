@@ -167,8 +167,11 @@ export const submitApplication = async (req: Request, res: Response) => {
     const cgpaKey = keys.find(k => k.toLowerCase().includes('cgpa') || k.toLowerCase().includes('gpa'));
     if (cgpaKey && cgpaKey !== 'cgpa') { appData.cgpa = appData[cgpaKey]; delete appData[cgpaKey]; }
 
-    // Get Cloudinary URLs from request body (uploaded directly by frontend)
     const { resumeUrl, photoUrl } = req.body;
+
+    const isWalkIn = drive.walkInEnabled === true;
+    const initialStatus = isWalkIn ? 'shortlisted' : 'applied';
+    const firstRound = (isWalkIn && drive.rounds && drive.rounds.length > 0) ? drive.rounds[0].type : undefined;
 
     const application = await ApplicationModel.create({
       referenceNumber,
@@ -178,7 +181,8 @@ export const submitApplication = async (req: Request, res: Response) => {
       data: appData,
       resumeUrl: resumeUrl || undefined,
       photoUrl: photoUrl || undefined,
-      status: 'applied',
+      status: initialStatus,
+      currentRound: firstRound,
       submittedAt: new Date()
     });
 

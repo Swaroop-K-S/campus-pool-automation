@@ -4,7 +4,10 @@ interface RoomInput {
   _id: string;
   capacity: number;
   name: string;
+  isLocked?: boolean;
+  allowedBranches?: string[];
   panelists?: { name: string; expertise: string[] }[];
+  throughputLog?: { recordedAt: Date; processedCount: number }[];
 }
 
 interface StudentInput {
@@ -20,15 +23,21 @@ interface AssignmentResult {
   matchReason: string;
 }
 
+interface AssignmentResponse {
+  assignments: AssignmentResult[];
+  unassigned: string[];
+}
+
 /**
  * ALGORITHM 1 — Random Assignment (Aptitude round)
- * Fisher-Yates shuffle then round-robin fill
+ * Fisher-Yates shuffle then round-robin fill, respects locked rooms,
+ * tracks unassigned (overflow) students.
  */
-export function randomAssign(
+export function randomAssignWithOverflow(
   studentIds: string[],
-  rooms: RoomInput[]
-): AssignmentResult[] {
-  // Fisher-Yates shuffle
+  rooms: RoomInput[],
+  existingAssignments: Record<string, string[]> = {}
+): AssignmentResponse {
   const shuffled = [...studentIds];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -37,48 +46,49 @@ export function randomAssign(
 
   const assignments: AssignmentResult[] = rooms.map(r => ({
     roomId: r._id.toString(),
-    studentIds: [],
+    studentIds: [...(existingAssignments[r._id.toString()] || [])], // Keep existing if locked
     matchScore: 50,
     matchReason: 'Random assignment'
   }));
 
-  // True Round-Robin distribution to ensure even load balancing
   let sIndex = 0;
   while (sIndex < shuffled.length) {
     let assignedThisPass = false;
     for (let rIndex = 0; rIndex < rooms.length; rIndex++) {
       if (sIndex >= shuffled.length) break;
+      const room = rooms[rIndex];
+      if (room.isLocked) continue; // Skip locked rooms
       
-      // If this room still has capacity, assign the next student
-      if (assignments[rIndex].studentIds.length < rooms[rIndex].capacity) {
+      if (assignments[rIndex].studentIds.length < room.capacity) {
         assignments[rIndex].studentIds.push(shuffled[sIndex]);
         sIndex++;
         assignedThisPass = true;
       }
     }
-    // If we looped through all rooms and nobody took a student, it means all rooms are full
+    // All available unlocked rooms are literally full
     if (!assignedThisPass) break;
   }
 
-  return assignments;
+  const unassigned = shuffled.slice(sIndex);
+  return { assignments, unassigned };
 }
 
 /**
  * ALGORITHM 2 — AI-Suggested Assignment (GD / Interview rounds)
- * Matches student branches to panelist expertise
+ * Matches student branches to panelist expertise and respects locked rooms/overflow.
  */
-export function aiSuggestAssign(
+export function aiSuggestAssignWithOverflow(
   students: StudentInput[],
-  rooms: RoomInput[]
-): AssignmentResult[] {
+  rooms: RoomInput[],
+  existingAssignments: Record<string, string[]> = {}
+): AssignmentResponse {
   const assignments: AssignmentResult[] = rooms.map(r => ({
     roomId: r._id.toString(),
-    studentIds: [],
+    studentIds: [...(existingAssignments[r._id.toString()] || [])],
     matchScore: 0,
     matchReason: ''
   }));
 
-  // Group students by branch
   const branchGroups = new Map<string, string[]>();
   for (const s of students) {
     const branch = (s.branch || 'OTHER').toUpperCase();
@@ -97,6 +107,9 @@ export function aiSuggestAssign(
   };
 
   function roomScore(room: RoomInput, branch: string): number {
+    if (room.isLocked) return -1; // Never assign to locked
+    if (room.allowedBranches?.length && !room.allowedBranches.includes(branch)) return -1;
+
     const expertise = (room.panelists || [])
       .flatMap(p => p.expertise || [])
       .map(e => e.toUpperCase());
@@ -104,11 +117,16 @@ export function aiSuggestAssign(
     return expertise.filter(e => keywords.some(k => e.includes(k))).length;
   }
 
-  const usedCapacity = new Map<string, number>(rooms.map(r => [r._id.toString(), 0]));
+  const usedCapacity = new Map<string, number>(
+    rooms.map(r => [r._id.toString(), existingAssignments[r._id.toString()]?.length || 0])
+  );
+
+  const unassigned: string[] = [];
 
   for (const [branch, studentIds] of branchGroups) {
     const scored = rooms
       .map(r => ({ room: r, score: roomScore(r, branch) }))
+      .filter(r => r.score >= 0)
       .sort((a, b) => b.score - a.score);
 
     let remaining = [...studentIds];
@@ -127,13 +145,72 @@ export function aiSuggestAssign(
       if (assignment.matchScore === 0) {
         assignment.matchScore = score > 0 ? Math.min(100, score * 25 + 50) : 30;
         assignment.matchReason = score > 0
-          ? `${branch} students matched to ${room.panelists?.[0]?.name || 'panelist'} expertise`
-          : `${branch} students assigned to available room`;
+          ? `${branch} matched to ${room.panelists?.[0]?.name || 'panelist'} expertise`
+          : `Assigned based on availability`;
       }
+    }
+    
+    // Whatever is left didn't fit anywhere
+    unassigned.push(...remaining);
+  }
+
+  return { assignments, unassigned };
+}
+
+/**
+ * ALGORITHM 3 — Estimated Wait Time (EWT) Engine v2
+ * Uses recent throughput logs to predict actual wait time.
+ */
+export function computeRoomEWT(
+  studentQueueSize: number, 
+  throughputLog: { recordedAt: Date; processedCount: number }[] = []
+): { estimatedMinutes: number; accuracy: 'high' | 'medium' | 'low' } {
+  // We need at least recent samples (e.g. last 1 hour)
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recentLogs = throughputLog.filter(l => l.recordedAt > oneHourAgo);
+
+  // Fallback if no data: Assume 15 minutes per student
+  if (recentLogs.length === 0 || recentLogs.reduce((s, l) => s + l.processedCount, 0) === 0) {
+    return { estimatedMinutes: studentQueueSize * 15, accuracy: 'low' };
+  }
+
+  // Calculate throughput: students per minute over the total time span of recent logs
+  const oldest = recentLogs.reduce((earliest, log) => log.recordedAt < earliest ? log.recordedAt : earliest, new Date());
+  const elapsedMinutes = Math.max(5, (Date.now() - oldest.getTime()) / 60000); // min 5 mins to prevent spikes
+  const totalProcessed = recentLogs.reduce((s, l) => s + l.processedCount, 0);
+
+  const studentsPerMinute = totalProcessed / elapsedMinutes;
+  if (studentsPerMinute <= 0.01) { // practically stalled
+    return { estimatedMinutes: studentQueueSize * 15, accuracy: 'low' };
+  }
+
+  const minutesPerStudent = 1 / studentsPerMinute;
+  return { 
+    estimatedMinutes: Math.round(studentQueueSize * minutesPerStudent), 
+    accuracy: recentLogs.length > 3 ? 'high' : 'medium' 
+  };
+}
+
+/**
+ * ALGORITHM 4 — Late-Joiner Room Discovery
+ * Finds the room with the most available absolute capacity.
+ */
+export function findLeastFullRoom(rooms: RoomInput[], currentAssignments: Record<string, number>): RoomInput | null {
+  let bestRoom: RoomInput | null = null;
+  let maxAvailable = -1;
+
+  for (const room of rooms) {
+    if (room.isLocked) continue;
+    const assignedCount = currentAssignments[room._id.toString()] || 0;
+    const available = room.capacity - assignedCount;
+
+    if (available > maxAvailable && available > 0) {
+      maxAvailable = available;
+      bestRoom = room;
     }
   }
 
-  return assignments;
+  return bestRoom;
 }
 
 export function calcOverallMatchQuality(assignments: AssignmentResult[]): number {

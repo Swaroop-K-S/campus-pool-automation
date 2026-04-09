@@ -141,27 +141,126 @@ export const verifyStudent = async (req: Request, res: Response): Promise<void> 
           sessionToken,
           applicationId: application._id,
           studentName,
-          alreadyCheckedIn: true
+          alreadyCheckedIn: true,
+          latecomer: (application as any).latecomer || false
         }
       });
       return;
     }
 
-    // 5. Mark as attended
+    // 4b. Check if already flagged as latecomer (held, awaiting admin override)
+    if ((application as any).latecomer === true && !(application as any).adminOverrideTime) {
+      const sessionToken = jwt.sign(
+        { applicationId: application._id, driveId },
+        env.JWT_ACCESS_SECRET,
+        { expiresIn: '8h' }
+      );
+      res.json({
+        success: false,
+        code: 'LATECOMER_HOLD',
+        data: {
+          sessionToken,
+          applicationId: application._id,
+          studentName,
+          latecomer: true,
+          message: 'You arrived late. Please wait for admin approval to proceed.'
+        }
+      });
+      return;
+    }
+
+    // 5. Latecomer SLA check — 30 minute window after reportTime
+    const now = new Date();
+    const driveReportTime = (drive as any).reportTime;
+    const driveEventDate = (drive as any).eventDate;
+    if (driveReportTime && driveEventDate) {
+      // Construct a full datetime from eventDate + reportTime (e.g. "09:00")
+      const eventDateStr = new Date(driveEventDate).toISOString().split('T')[0];
+      const [reportHour, reportMin] = driveReportTime.split(':').map(Number);
+      const reportDateTime = new Date(`${eventDateStr}T${String(reportHour).padStart(2,'0')}:${String(reportMin).padStart(2,'0')}:00`);
+      const lateThreshold = new Date(reportDateTime.getTime() + 30 * 60 * 1000);
+
+      if (now > lateThreshold) {
+        // Flag as latecomer — hold for admin approval
+        (application as any).latecomer = true;
+        await application.save();
+
+        // Emit latecomer alert to admin dashboard
+        try {
+          getIO().to(`drive:${driveId}`).emit('student:latecomer', {
+            studentName,
+            driveStudentId: application.driveStudentId,
+            applicationId: application._id,
+            minutesLate: Math.floor((now.getTime() - lateThreshold.getTime()) / 60000) + 30
+          });
+        } catch {}
+
+        const sessionToken = jwt.sign(
+          { applicationId: application._id, driveId },
+          env.JWT_ACCESS_SECRET,
+          { expiresIn: '8h' }
+        );
+        res.json({
+          success: false,
+          code: 'LATECOMER_HOLD',
+          data: {
+            sessionToken,
+            applicationId: application._id,
+            studentName,
+            latecomer: true,
+            message: 'You arrived after the 30-minute window. Please wait for admin approval to proceed.'
+          }
+        });
+        return;
+      }
+    }
+
+    // 6. Mark as attended
     application.status = 'attended' as any;
     application.attendedAt = new Date();
+
+    // 6b. Auto-assign to least-full room for current round
+    let assignedRoomInfo = null;
+    if (application.currentRound && application.currentRound !== 'completed') {
+      const rooms = await RoomModel.find({ driveId, round: application.currentRound, isLocked: false });
+      if (rooms.length > 0) {
+        let bestRoom = null;
+        let maxAvailable = -1;
+        for (const room of rooms) {
+          const available = room.capacity - (room.assignedStudents?.length || 0);
+          if (available > maxAvailable) {
+            maxAvailable = available;
+            bestRoom = room;
+          }
+        }
+        
+        if (bestRoom && maxAvailable > 0) {
+          await RoomModel.findByIdAndUpdate(bestRoom._id, {
+             $addToSet: { assignedStudents: application._id }
+          });
+          (application as any).assignedRoomId = bestRoom._id;
+          assignedRoomInfo = bestRoom.name;
+        }
+      }
+    }
+    
     await application.save();
 
-    // 6. Emit Socket.io
+    // 7. Emit Socket.io
     const attendedCount = await ApplicationModel.countDocuments({
       driveId,
       status: { $in: ['attended', 'selected'] }
     });
     try {
       getIO().to(`drive:${driveId}`).emit('student:verified', { count: attendedCount, studentName });
+      getIO().to(`drive:${driveId}`).emit('drive:round_batch_updated', { currentRound: application.currentRound });
+      getIO().to(`app:${application._id}`).emit('student:status_changed', { 
+        status: 'attended', 
+        message: assignedRoomInfo ? `Assigned to ${assignedRoomInfo}` : undefined 
+      });
     } catch {}
 
-    // 7. Generate session token (8h)
+    // 8. Generate session token (8h)
     const sessionToken = jwt.sign(
       { applicationId: application._id, driveId },
       env.JWT_ACCESS_SECRET,
@@ -174,7 +273,8 @@ export const verifyStudent = async (req: Request, res: Response): Promise<void> 
         sessionToken,
         applicationId: application._id,
         studentName,
-        alreadyCheckedIn: false
+        alreadyCheckedIn: false,
+        latecomer: false
       }
     });
   } catch (error: any) {
@@ -206,10 +306,13 @@ export const getWelcomeData = async (req: Request, res: Response): Promise<void>
     const drive = await DriveModel.findById(driveId);
     if (!drive) { res.status(404).json({ success: false, error: 'Drive not found' }); return; }
 
-    // Find active round
-    const activeRound = drive.rounds?.find(r => r.status === 'active') || null;
+    // Isolate the specific round the student is physically participating in.
+    // They are immune to the drive's global 'active' status.
+    const activeRound = application.currentRound && application.currentRound !== 'completed'
+      ? drive.rounds?.find(r => r.type === application.currentRound) || null
+      : null;
 
-    // Find room assigned to this student
+    // Find room assigned to this student exclusively for their current active round
     let assignedRoom = null;
     if (activeRound) {
       assignedRoom = await RoomModel.findOne({
@@ -253,7 +356,7 @@ export const getWelcomeData = async (req: Request, res: Response): Promise<void>
 export const getDriveInfo = async (req: Request, res: Response): Promise<void> => {
   try {
     const drive = await DriveModel.findById(req.params.driveId)
-      .select('companyName jobRole eventDate venueDetails status');
+      .select('companyName jobRole eventDate venueDetails status resources');
     if (!drive) { res.status(404).json({ success: false, error: 'Drive not found' }); return; }
     res.json({ success: true, data: drive });
   } catch (error: any) {
@@ -293,7 +396,7 @@ export const getStatusLookup = async (req: Request, res: Response): Promise<void
     }
 
     const drive = await DriveModel.findById(driveId)
-      .select('companyName jobRole eventDate venueDetails reportTime status rounds ctc');
+      .select('companyName jobRole eventDate venueDetails reportTime status rounds ctc resources');
     if (!drive) {
       res.status(404).json({ success: false, error: 'Drive not found.' });
       return;
@@ -358,6 +461,104 @@ export const getStatusLookup = async (req: Request, res: Response): Promise<void
     });
   } catch (error: any) {
     console.error('getStatusLookup ERROR:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// POST /event/:driveId/latecomer-override (Admin only)
+// Approves one or more latecomers — stamps adminOverrideTime and marks them attended
+export const approveLatecomers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driveId } = req.params;
+    const { applicationIds } = req.body as { applicationIds: string[] };
+
+    if (!applicationIds?.length) {
+      res.status(400).json({ success: false, error: 'applicationIds array is required' });
+      return;
+    }
+
+    const now = new Date();
+    const result = await ApplicationModel.updateMany(
+      { _id: { $in: applicationIds }, driveId, latecomer: true },
+      {
+        $set: {
+          status: 'attended',
+          attendedAt: now,
+          adminOverrideTime: now
+        }
+      }
+    );
+
+    // Notify each student's live session
+    try {
+      for (const appId of applicationIds) {
+        getIO().to(`app:${appId}`).emit('student:status_changed', {
+          status: 'attended',
+          message: 'Admin has approved your entry. Please proceed to your assigned room.'
+        });
+      }
+      getIO().to(`drive:${driveId}`).emit('latecomer:approved', { applicationIds, approvedAt: now });
+    } catch {}
+
+    res.json({
+      success: true,
+      data: {
+        modifiedCount: result.modifiedCount,
+        message: `${result.modifiedCount} latecomer(s) approved and marked as attended.`
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// GET /event/:driveId/mia-students (Admin only)
+// Returns students who checked in (attended) but are NOT assigned to any room — they may be 'missing'
+export const getMIAStudents = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driveId } = req.params;
+
+    // Get all attended/latecomer students for this drive
+    const attendedApps = await ApplicationModel.find({
+      driveId,
+      $or: [{ status: 'attended' }, { latecomer: true }]
+    }).select('_id driveStudentId data currentRound attendedAt latecomer');
+
+    if (!attendedApps.length) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+
+    // Find which ones have a room assignment
+    const appIds = attendedApps.map(a => a._id);
+    const assignedRooms = await RoomModel.find({
+      driveId,
+      assignedStudents: { $in: appIds }
+    }).select('assignedStudents');
+
+    const assignedSet = new Set<string>();
+    for (const room of assignedRooms) {
+      for (const sid of (room as any).assignedStudents) {
+        assignedSet.add(sid.toString());
+      }
+    }
+
+    // MIA = attended but not in any room
+    const miaStudents = attendedApps
+      .filter(a => !assignedSet.has((a._id as any).toString()))
+      .map(a => ({
+        _id: a._id,
+        driveStudentId: (a as any).driveStudentId,
+        name: (a as any).data?.fullName || (a as any).data?.name || 'Unknown',
+        branch: (a as any).data?.branch || '—',
+        usn: (a as any).data?.usn || '—',
+        currentRound: (a as any).currentRound || '—',
+        attendedAt: (a as any).attendedAt || null,
+        latecomer: (a as any).latecomer || false
+      }));
+
+    res.json({ success: true, data: miaStudents });
+  } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 };
