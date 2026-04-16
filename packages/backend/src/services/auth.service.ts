@@ -35,7 +35,8 @@ export const login = async (credentials: { email: string; password: string }) =>
     userId: user._id.toString(),
     collegeId: user.collegeId?.toString(),
     email: user.email,
-    role: user.role
+    role: user.role,
+    ...(user.role === 'company_hr' && (user as any).driveId ? { driveId: (user as any).driveId.toString() } : {}),
   };
 
   const tokens = generateTokens(payload);
@@ -44,7 +45,7 @@ export const login = async (credentials: { email: string; password: string }) =>
   user.refreshToken = tokens.refreshToken;
   await user.save();
 
-  return { ...tokens, user: { userId: user._id.toString(), name: user.name, email: user.email, collegeId: user.collegeId } };
+  return { ...tokens, user: { userId: user._id.toString(), name: user.name, email: user.email, collegeId: user.collegeId, role: user.role, driveId: (user as any).driveId } };
 };
 
 export const refresh = async (token: string) => {

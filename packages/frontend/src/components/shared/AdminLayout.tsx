@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, BarChart2, Settings, LogOut, GraduationCap, Menu, X, Plus, Clock } from 'lucide-react';
+import { LayoutDashboard, BarChart2, Settings, LogOut, GraduationCap, Menu, X, Plus, Clock, Shield } from 'lucide-react';
 import { useAuthStore } from '../../store/auth.store';
 import { useAppStore } from '../../store/app.store';
 import { api } from '../../services/api';
 import { CommandPalette } from './CommandPalette';
+import { GlobalOfflineBanner } from './GlobalOfflineBanner';
 
 export default function AdminLayout() {
   const location = useLocation();
@@ -47,6 +48,7 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
+      <GlobalOfflineBanner />
       <CommandPalette />
       {/* Mobile backdrop */}
       {sidebarOpen && (
@@ -143,6 +145,13 @@ export default function AdminLayout() {
               {sidebarCollapsed && !sidebarOpen ? '—' : 'System'}
             </div>
             <div className="space-y-1">
+              <Link to="/admin/students" onClick={() => setSidebarOpen(false)} title="Student Watchlist"
+                className={`flex items-center gap-3 py-2.5 rounded-xl transition-all font-medium text-sm group shrink-0
+                  ${location.pathname.includes('/students') ? 'bg-violet-500/10 text-violet-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}
+                  ${sidebarCollapsed && !sidebarOpen ? 'justify-center px-0' : 'px-3'}`}>
+                <Shield size={18} className={`shrink-0 ${location.pathname.includes('/students') ? 'text-violet-400' : 'text-slate-500 group-hover:text-slate-300'}`}/>
+                <span className={`transition-opacity duration-200 ${sidebarCollapsed && !sidebarOpen ? 'hidden opacity-0 w-0' : 'opacity-100'}`}>Watchlist</span>
+              </Link>
               <Link to="/admin/settings" onClick={() => setSidebarOpen(false)} title="Settings"
                 className={`flex items-center gap-3 py-2.5 rounded-xl transition-all font-medium text-sm group shrink-0
                   ${location.pathname.includes('/settings') ? 'bg-indigo-500/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}

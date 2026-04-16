@@ -10,6 +10,7 @@ export interface IUser {
   refreshToken?: string;
   failedLoginAttempts: number;
   lockUntil?: Date;
+  driveId?: mongoose.Types.ObjectId; // For company_hr role — scoped to one drive
 }
 
 const userSchema = new Schema({
@@ -21,7 +22,8 @@ const userSchema = new Schema({
   isActive: { type: Boolean, default: true },
   refreshToken: { type: String },
   failedLoginAttempts: { type: Number, default: 0 },
-  lockUntil: { type: Date }
+  lockUntil: { type: Date },
+  driveId: { type: Schema.Types.ObjectId, ref: 'Drive' },
 }, {
   timestamps: true
 });

@@ -117,3 +117,18 @@ input, textarea, select {
 input::placeholder, textarea::placeholder {
   color: #94A3B8 !important;
 }
+
+@media print {
+  body.print-drawer-only > *:not(#drawer-root) {
+    display: none !important;
+  }
+  body.print-drawer-only {
+    background: white !important;
+  }
+  /* Remove Tailwind shadows and rounded borders for cleaner prints */
+  .print-clean {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+}

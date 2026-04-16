@@ -1,6 +1,6 @@
 # Long-Term Memory
 
-**Last Updated:** 2026-04-02 (Session 3 — Walk-in, Projector, Passport, Prep Resources)
+**Last Updated:** 2026-04-16 (Session 6 — Global Rooms Database, Campus Infrastructure Settings, Room Provisioning Engine)
 
 ## Project Goal
 **CampusPool** is a full-stack campus placement automation platform designed to streamline the entire placement drive lifecycle — from drive creation through to final student selection.
@@ -91,7 +91,11 @@ Key fields: `companyName`, `jobRole`, `ctc`, `status`, `isPaused` (emergency tog
 Key fields: `driveId`, `collegeId`, `data` (Mixed — dynamic form fields), `status` (applied/shortlisted/invited/attended/selected/rejected), `driveStudentId` (unique, sparse, e.g. `INF0042`, `WI-001` for walk-ins), `referenceNumber`, `attendedAt`, `currentRound`
 
 ### Room
-Key fields: `driveId`, `collegeId`, `name`, `floor`, `capacity`, `round`, `assignedStudents[]`, `panelists[]`
+Key fields: `driveId`, `collegeId`, `name`, `floor` (optional, legacy), `location` (optional, human-readable), `sourceRoomId` (links back to `College.campusRooms[].id`), `capacity`, `round`, `assignedStudents[]`, `panelists[]`, `throughputLog[]`
+
+**NEW — Global Campus Rooms (embedded in College document)**
+`College.campusRooms[]` array: `{ id: string, name: string, capacity: number, location?: string }`.  
+Managed via **Settings → Campus Infrastructure** section. Admin adds/edits/deletes rooms globally. Rooms are *provisioned* into individual drive rounds via the Room Assignment page's Provision Modal. The `sourceRoomId` field on a `Room` document links it back to the originating global room for audit.
 
 ### QRSession
 Key fields: `driveId`, `token`, `expiresAt` (30s TTL)
@@ -149,8 +153,12 @@ CRUD + activate + clone + archive + form builder + form schedule + shortlist upl
 | `POST /event-setup` | Admin JWT | Update event day config + resources |
 | `GET /event-setup` | Admin JWT | Fetch event config (includes resources[]) |
 | `PATCH /start-event` | Admin JWT | Begin event day |
-| `POST /rooms` | Admin JWT | Create room |
+| `POST /rooms` | Admin JWT | Create room (accepts `name`, `capacity`, `location`, `round`, `sourceRoomId`) |
 | `GET /rooms`, `DELETE /rooms/:id` | Admin JWT | Room management |
+| `PATCH /rooms/:id/lock` | Admin JWT | Lock/unlock room from new assignments |
+| `POST /rooms/:id/transfer-student` | Admin JWT | Move a student between rooms live |
+| `GET /rooms/:id/ewt` | Admin JWT | Estimated Wait Time for a room |
+| `POST /rotate-rooms` | Admin JWT | Re-distribute students into next-round rooms |
 | `POST /rounds/:type/advance-present` | Admin JWT | **Single-click advance all attended students** |
 | **`POST /walk-in`** | Admin JWT | **Fast-track register unregistered walk-in student** |
 
@@ -171,6 +179,14 @@ CRUD + activate + clone + archive + form builder + form schedule + shortlist upl
 |----------|------|---------|
 | **`POST /passport/verify`** | None | Verify USN+email against applications, issue 8h Passport JWT |
 | **`GET /passport/profile`** | Passport JWT | Full cross-drive history, stats, drive list |
+
+### College (`/api/v1/college`) ← NEW
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| `GET /profile` | Admin JWT | Get full college profile including `campusRooms[]` |
+| `PUT /profile` | Admin JWT | Update profile + save `campusRooms[]` in one call |
+| `PUT /smtp` | Admin JWT | Update SMTP config only |
+| `PUT /twilio` | Admin JWT | Update Twilio/WhatsApp config only |
 
 ### Analytics (`/api/v1/analytics`)
 `GET /summary`, `GET /branch-distribution`, `GET /drives-history`, `GET /selected`
@@ -297,7 +313,9 @@ VITE_API_URL=http://localhost:5000/api/v1
 11. **Projector display endpoint is intentionally public (no auth).** It's designed to run on a wall-mounted screen with no admin interaction. Only exposes non-sensitive aggregate data — no individual contact details.
 12. **StudentProfile is upserted, never duplicated.** `findOneAndUpdate({ usn, collegeId }, data, { upsert: true })` ensures one profile per student per college regardless of how many times they verify.
 
----
+13. **Global Rooms Database is embedded in the College document** (not a separate collection). `College.campusRooms[]` stores the physical room manifest. When provisioning into a drive, `POST /drives/:driveId/rooms` is called per room with `sourceRoomId` set to the global room's `id`. The room's `floor` field is now optional — use `location` for a human-readable string (e.g. "Block B, 2nd Floor").
+14. **Settings page has 5 sections:** College Profile, Campus Infrastructure (Global Rooms), SMTP Config, Twilio Config, Create HR Account, Change Password. Rooms are saved via `PUT /college/profile` with the entire `campusRooms[]` array as payload.
+15. **Room provisioning flow:** Admin opens Room Assignment page → no rooms found → "Provision from Campus Rooms" button opens a modal listing `campusRooms[]` → admin selects rooms → system POSTs each to `/drives/:driveId/rooms` → page refreshes with rooms ready for auto/AI assignment.
 
 ## Phase Completion Status
 
@@ -337,6 +355,10 @@ VITE_API_URL=http://localhost:5000/api/v1
 | **CampusPool Passport (Student Identity Vault)** | ✅ StudentProfileModel + JWT auth + cross-drive history dashboard |
 | **Walk-in Fast-Track Registration** | ✅ POST /walk-in → WI-001 IDs + God View modal + Socket.io broadcast |
 | **Projector Wall Display** | ✅ Public polling endpoint + full dark 1080p React page + God View button |
+| **SMS/WhatsApp Nudge Automation (Twilio)** | ✅ twilio.service.ts; fires on `invigilator:summon` socket event; mock-safe |
+| **Student Resume Builder (ATS PDF)** | ✅ Print-to-PDF in passport.tsx; @media print CSS hides UI |
+| **Global Campus Rooms Database** | ✅ College.campusRooms[]; Settings page CRUD; Room provisioning modal in Room Assignment |
+| **College Profile API** | ✅ New `/college` routes: GET/PUT profile, PUT smtp, PUT twilio |
 
 ---
 
@@ -344,8 +366,8 @@ VITE_API_URL=http://localhost:5000/api/v1
 
 | Phase | Items | Done | Remaining highlights |
 |-------|-------|------|----------------------|
-| Phase 1 — Event Day Ecosystem | 20 | ~15 | Walk-in ✅, Projector ✅, Panic ✅, God View ✅, Queue ✅. Missing: Estimated Wait Time engine, Offline PWA, WebRTC audio, Badge printing |
-| Phase 2 — Room Logistics Engine | 10 | ~2 | Basic rooms + capacity done. Missing: drag-and-drop re-assign, auto-spillover, constraint AI |
+| Phase 1 — Event Day Ecosystem | 20 | ~17 | Walk-in ✅, Projector ✅, Panic ✅, God View ✅, Queue ✅, EWT ✅. Missing: Offline PWA, WebRTC audio, Badge printing |
+| Phase 2 — Room Logistics Engine | 10 | ~8 | Global Rooms DB ✅, Provision Modal ✅, drag-and-drop re-assign ✅, auto-assign ✅, AI suggest ✅, lock/transfer ✅, rotate-rooms ✅. Missing: constraint AI tuning |
 | Phase 3 — Student Web Experience | 10 | 10 | **100% COMPLETE** — Passport ✅, Prep Resources ✅, Status Lookup ✅ |
-| Phase 4 — Admin Controls & Rules | 10 | ~1 | Drive cloning only. Missing: policy engine, audit trails, company CRM, NOC generator |
-| Phase 5 — Hyper-Scale Infrastructure | 10 | 0 | Cmd+K palette, Redis cache, E2E tests, microservices — not started |
+| Phase 4 — Admin Controls & Rules | 10 | ~4 | Drive cloning ✅, Audit log ✅, HR portal ✅, College Profile API ✅. Missing: policy engine, company CRM, NOC generator |
+| Phase 5 — Hyper-Scale Infrastructure | 10 | ~2 | Twilio SMS ✅, Resume PDF ✅. Missing: Cmd+K palette Redis cache, E2E tests, microservices |

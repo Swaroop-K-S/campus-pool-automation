@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { ApplicationModel } from '../models';
 import { FormFieldModel } from '../models/form-field.model';
 import { AppCache, generateCacheKey } from '../utils/cache';
+import { logAuditEvent } from '../services/audit.service';
 
 export const getApplications = async (req: Request, res: Response) => {
   try {
@@ -14,7 +15,11 @@ export const getApplications = async (req: Request, res: Response) => {
 
     const query: any = { driveId, collegeId };
     if (status && status !== 'all') {
-      query.status = status;
+      if (status === 'exceptions') {
+        query['data.isExceptionFlagged'] = true;
+      } else {
+        query.status = status;
+      }
     }
 
     // Get form fields for this drive (to know what columns to show)
@@ -26,6 +31,7 @@ export const getApplications = async (req: Request, res: Response) => {
       .sort({ submittedAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
+      .populate('studentProfileId', 'strikes')
       .lean();
 
     // Add hasResume and hasPhoto flags (supports both Cloudinary URLs and legacy GridFS)
@@ -84,7 +90,7 @@ export const getApplicationStats = async (req: Request, res: Response) => {
     const collegeId = req.user?.collegeId;
 
     const cacheKey = generateCacheKey('app-stats', { driveId, collegeId });
-    const cachedData = AppCache.get(cacheKey);
+    const cachedData = await AppCache.get(cacheKey);
     if (cachedData) {
       return res.json({ success: true, data: cachedData, cached: true });
     }
@@ -114,7 +120,7 @@ export const getApplicationStats = async (req: Request, res: Response) => {
       }
     });
 
-    AppCache.set(cacheKey, result);
+    await AppCache.set(cacheKey, result);
     return res.json({ success: true, data: result, cached: false });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -141,6 +147,15 @@ export const updateApplicationStatus = async (req: Request, res: Response) => {
     if (!application) {
       return res.status(404).json({ success: false, error: 'Application not found' });
     }
+
+    await logAuditEvent({
+      userId: (req as any).user.userId,
+      action: 'UPDATE_APPLICATION_STATUS',
+      resourceType: 'Application',
+      resourceId: appId,
+      details: `Status changed to '${status}' for application in drive ${driveId}`,
+      ipAddress: req.ip || req.socket.remoteAddress
+    });
 
     return res.json({ success: true, data: application });
   } catch (error: unknown) {
@@ -216,7 +231,8 @@ export const autoRejectEligibilitySweep = async (req: Request, res: Response) =>
       return res.status(404).json({ success: false, error: 'Drive not found' });
     }
 
-    const { minCGPA, branches } = drive.eligibility || {};
+    const branches = drive.eligibility?.branches || [];
+    const minCGPA = drive.eligibility?.cgpa?.minimum || 0;
     
     // Fetch all active applications (applied or shortlisted)
     const applications = await ApplicationModel.find({ 
@@ -233,7 +249,7 @@ export const autoRejectEligibilitySweep = async (req: Request, res: Response) =>
       const data: any = app.data || {};
       
       // Check CGPA
-      if (minCGPA) {
+      if (minCGPA > 0) {
         const studentCGPA = parseFloat(data.cgpa || '0');
         if (studentCGPA < minCGPA) isEligible = false;
       }

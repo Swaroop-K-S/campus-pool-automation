@@ -33,7 +33,10 @@ export default function PublicApplyPage() {
   const [ssoId, setSsoId] = useState('');
   const [ssoLoading, setSsoLoading] = useState(false);
 
-  const { register, handleSubmit, formState: { errors }, trigger, setValue } = useForm();
+  const { register, handleSubmit, formState: { errors }, trigger, setValue, watch } = useForm();
+  
+  // Watch education path to determine if 12th or Diploma is shown
+  const educationPath = watch('field_education_path');
 
   const pages = useMemo(() => {
     if (!config?.fields) return [];
@@ -408,8 +411,13 @@ export default function PublicApplyPage() {
 
             {config?.fields?.map((field: FormFieldConfig) => {
               if (field.type === 'page_break') return null;
+
+              // Hide conditionally based on education path
+              if (field.id === 'field_twelfth' && educationPath !== '12th Standard / PUC') return null;
+              if (field.id === 'field_diploma' && educationPath !== 'Diploma (Lateral Entry)') return null;
+
               const isOnCurrentPage = pages[currentPage]?.fields.some(f => f.id === field.id);
-              
+
               return (
               <div key={field.id} className={isOnCurrentPage ? 'block animate-in fade-in duration-300' : 'hidden'}>
                 <label className="block text-sm font-bold text-slate-700 mb-2">
@@ -424,6 +432,17 @@ export default function PublicApplyPage() {
                     placeholder={field.placeholder || ''}
                     {...register(field.id, { 
                       required: field.required ? 'This field is required' : false,
+                      validate: (value) => {
+                         // Even if empty, if it's required we should probably validate it if React hook form reaches here.
+                         // But required: field.required handles emptiness. If it has a value, check criteria.
+                         if (value) {
+                           if (field.id === 'field_cgpa' && config.eligibility?.cgpa?.ruleType === 'strict' && parseFloat(value) < config.eligibility.cgpa.minimum) return `Requires ≥ ${config.eligibility.cgpa.minimum} CGPA`;
+                           if (field.id === 'field_tenth' && config.eligibility?.tenth?.ruleType === 'strict' && parseFloat(value) < config.eligibility.tenth.minPercentage) return `Requires ≥ ${config.eligibility.tenth.minPercentage}%`;
+                           if (field.id === 'field_twelfth' && config.eligibility?.twelfth?.ruleType === 'strict' && parseFloat(value) < config.eligibility.twelfth.minPercentage) return `Requires ≥ ${config.eligibility.twelfth.minPercentage}%`;
+                           if (field.id === 'field_diploma' && config.eligibility?.diploma?.ruleType === 'strict' && parseFloat(value) < config.eligibility.diploma.minCGPA) return `Requires ≥ ${config.eligibility.diploma.minCGPA}`;
+                         }
+                         return true;
+                      },
                       ...(field.validation?.pattern ? {
                         pattern: {
                           value: new RegExp(field.validation.pattern),

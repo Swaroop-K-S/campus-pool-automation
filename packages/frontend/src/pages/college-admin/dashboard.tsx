@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy, Plus, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2, Link, Tag, QrCode, Building, Activity, TrendingUp, Users, Bell, Clock, ChevronRight } from 'lucide-react';
+import { Trophy, Plus, Search, X, Grid as GridIcon, List as ListIcon, MapPin, DollarSign, Calendar, GraduationCap, MoreVertical, Pencil, Copy, Play, CalendarCheck, CheckCircle, Trash2, Link, Tag, QrCode, Building, Activity, TrendingUp, Users, Bell, Clock, ChevronRight, CheckSquare, Square } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
-import { io } from 'socket.io-client';
+import { useSocket } from '../../hooks/use-socket';
 import { useRef } from 'react';
 import { DriveCalendar } from '../../components/admin/DriveCalendar';
+import { DrivePreflightModal } from '../../components/admin/DrivePreflightModal';
 
 
 
@@ -40,7 +41,7 @@ const DriveOptionsMenu = ({ drive, onEdit, onDelete, onDuplicate, onChangeStatus
             </button>
           )}
           {drive.status === 'active' && (
-            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(drive._id, 'event_day'); setOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-green-600 hover:bg-green-50">
+            <button onClick={(e) => { e.stopPropagation(); onChangeStatus(drive._id, 'event_day', drive); setOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-green-600 hover:bg-green-50">
               <CalendarCheck size={15}/> Start Event Day
             </button>
           )}
@@ -195,6 +196,46 @@ export default function AdminDashboardPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Bulk selection state
+  const [selectedDriveIds, setSelectedDriveIds] = useState<Set<string>>(new Set());
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+
+  const toggleDriveSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedDriveIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkClone = async () => {
+    setIsBulkProcessing(true);
+    try {
+      for (const id of selectedDriveIds) {
+        await api.post(`/drives/${id}/clone`);
+      }
+      toast.success(`Cloned ${selectedDriveIds.size} drive(s)!`);
+      setSelectedDriveIds(new Set());
+      fetchData();
+    } catch { toast.error('Bulk clone failed'); }
+    finally { setIsBulkProcessing(false); }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Delete ${selectedDriveIds.size} selected drive(s)? This cannot be undone.`)) return;
+    setIsBulkProcessing(true);
+    try {
+      for (const id of selectedDriveIds) {
+        await api.delete(`/drives/${id}`);
+      }
+      toast.success(`Deleted ${selectedDriveIds.size} drive(s)!`);
+      setSelectedDriveIds(new Set());
+      fetchData();
+    } catch { toast.error('Bulk delete failed'); }
+    finally { setIsBulkProcessing(false); }
+  };
+
   useEffect(() => {
     localStorage.setItem('dashboardView', viewMode);
   }, [viewMode]);
@@ -253,10 +294,21 @@ export default function AdminDashboardPage() {
     finally { setDeleteLoading(false); }
   };
 
-  const handleChangeStatus = async (driveId: string, newStatus: string) => {
+  const [showPreflightDrive, setShowPreflightDrive] = useState<any>(null);
+
+  const handleChangeStatus = async (driveId: string, newStatus: string, driveDetails?: any) => {
+    if (newStatus === 'event_day' && driveDetails) {
+      // Show Preflight instead of instantly starting
+      setShowPreflightDrive(driveDetails);
+      return;
+    }
+
     try {
       const endpoint = newStatus === 'active' ? 'activate' : newStatus === 'event_day' ? 'start-event' : 'complete';
       await api.patch(`/drives/${driveId}/${endpoint}`);
+      if (newStatus === 'event_day') {
+         setShowPreflightDrive(null);
+      }
       toast.success(`Drive status updated!`);
       fetchData();
     } catch { toast.error('Failed to update status'); }
@@ -267,8 +319,7 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     fetchData();
     
-    const socketUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api/v1', '') : 'http://localhost:5000';
-    const socket = io(socketUrl);
+    const socket = useSocket();
     
     socket.on('student:verified', () => fetchData());
     socket.on('round:results_uploaded', () => {
@@ -276,7 +327,37 @@ export default function AdminDashboardPage() {
       toast('Round results updated', { icon: '🔄' });
     });
 
-    return () => { socket.disconnect(); };
+    // ── Live Drive Lifecycle Events ──────────────────────────────────────────
+    // Patch status on the specific drive card without full refetch
+    socket.on('drive:status_changed', ({ driveId, status, companyName }: any) => {
+      setDrives(prev => prev.map(d =>
+        d._id === driveId ? { ...d, status } : d
+      ));
+      if (status === 'event_day') toast(`🚀 ${companyName} is now Live!`, { icon: '⚡' });
+      if (status === 'completed') toast.success(`${companyName} drive completed`);
+    });
+
+    // Update shortlist count on the card when shortlist is uploaded
+    socket.on('drive:shortlist_updated', ({ driveId, count }: any) => {
+      setDrives(prev => prev.map(d =>
+        d._id === driveId ? { ...d, shortlistedCount: (d.shortlistedCount || 0) + count } : d
+      ));
+    });
+
+    // New drive created (by another tab or clone) — refetch list
+    socket.on('drive:created', () => fetchData());
+
+    // Pipeline counter update from QR check-ins
+    socket.on('drive:stats_updated', () => fetchData());
+
+    return () => {
+      socket.off('student:verified');
+      socket.off('round:results_uploaded');
+      socket.off('drive:status_changed');
+      socket.off('drive:shortlist_updated');
+      socket.off('drive:created');
+      socket.off('drive:stats_updated');
+    };
   }, []);
 
   const filteredDrives = useMemo(() => {
@@ -499,7 +580,18 @@ export default function AdminDashboardPage() {
                    drive.status === 'active' ? 'border-indigo-300/70 shadow-[0_0_0_1px_rgba(99,102,241,0.2),0_8px_30px_rgba(99,102,241,0.10)] hover:shadow-[0_0_0_1px_rgba(99,102,241,0.4),0_12px_40px_rgba(99,102,241,0.18)]' :
                    drive.status === 'completed' ? 'border-slate-200/60 opacity-60 grayscale-[30%] hover:opacity-80 hover:shadow-sm' :
                    'border-slate-200/60 hover:border-indigo-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)]'
-                }`}>
+                } ${selectedDriveIds.has(drive._id) ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}>
+               {/* Bulk select checkbox */}
+               <button
+                 onClick={(e) => toggleDriveSelect(drive._id, e)}
+                 className={`absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full transition-all z-10 ${
+                   selectedDriveIds.has(drive._id)
+                     ? 'opacity-100 bg-indigo-600 text-white shadow-md'
+                     : 'opacity-0 group-hover:opacity-100 bg-white border border-slate-300 text-transparent hover:border-indigo-400 hover:text-indigo-400 shadow-sm'
+                 }`}
+               >
+                 {selectedDriveIds.has(drive._id) ? <CheckSquare size={13}/> : <Square size={13}/>}
+               </button>
                <div className="w-12 h-12 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-black text-lg shrink-0">
                  {drive.companyName.substring(0, 2).toUpperCase()}
                </div>
@@ -828,6 +920,47 @@ export default function AdminDashboardPage() {
       {showEditModal && <EditDriveModal drive={editingDrive} onClose={() => setShowEditModal(false)} onSave={handleSaveEdit} />}
       {showDeleteModal && <DeleteDriveModal drive={deletingDrive} onClose={() => setShowDeleteModal(false)} onConfirm={handleConfirmDelete} loading={deleteLoading} />}
 
+      {showPreflightDrive && (
+        <DrivePreflightModal
+          driveId={showPreflightDrive._id}
+          drive={showPreflightDrive}
+          onCancel={() => setShowPreflightDrive(null)}
+          onConfirm={() => handleChangeStatus(showPreflightDrive._id, 'event_day')}
+          onNavigate={(path) => navigate(path)}
+        />
+      )}
+
+      {/* ── Bulk Action Floating Bar ──────────────────────────────────── */}
+      {selectedDriveIds.size > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-3 bg-slate-900 border border-slate-700 rounded-2xl px-5 py-3 shadow-2xl shadow-black/40">
+            <div className="flex items-center gap-2 pr-3 border-r border-slate-700">
+              <CheckSquare size={16} className="text-indigo-400" />
+              <span className="text-white font-black text-sm">{selectedDriveIds.size} selected</span>
+            </div>
+            <button
+              onClick={handleBulkClone}
+              disabled={isBulkProcessing}
+              className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
+            >
+              <Copy size={13} /> Clone All
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={isBulkProcessing}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
+            >
+              <Trash2 size={13} /> Delete All
+            </button>
+            <button
+              onClick={() => setSelectedDriveIds(new Set())}
+              className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

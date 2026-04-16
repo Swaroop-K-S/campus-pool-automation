@@ -12,6 +12,8 @@ import RoundManagementPage from './pages/college-admin/round-management';
 import AnalyticsPage from './pages/college-admin/analytics';
 import SettingsPage from './pages/college-admin/settings';
 import PrintManifestPage from './pages/college-admin/print-manifest';
+import StudentsPage from './pages/college-admin/students';
+import EventCommandCenter from './pages/college-admin/event-command-center';
 
 // Public pages
 import PublicApplyPage from './pages/public/apply';
@@ -23,6 +25,7 @@ import NotFoundPage from './pages/not-found';
 import InvigilatorPortal from './pages/public/invigilator';
 import PassportPage from './pages/public/passport';
 import ProjectorPage from './pages/public/projector';
+import HRDashboard from './pages/hr/HRDashboard';
 
 const ErrorBoundary = () => (
   <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -30,9 +33,9 @@ const ErrorBoundary = () => (
       <div className="text-4xl mb-4">⚠️</div>
       <h2 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h2>
       <p className="text-slate-500 mb-4">An unexpected error occurred.</p>
-      <button onClick={() => window.location.reload()}
+      <button onClick={() => window.location.href = '/'}
         className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-500">
-        Refresh Page
+        Return to Home
       </button>
     </div>
   </div>
@@ -48,6 +51,7 @@ export const router = createBrowserRouter([
   { path: '/event/:driveId/projector', element: <ProjectorPage />, errorElement: <ErrorBoundary /> },
   { path: '/invigilator/:token', element: <InvigilatorPortal />, errorElement: <ErrorBoundary /> },
   { path: '/passport', element: <PassportPage />, errorElement: <ErrorBoundary /> },
+  { path: '/hr', element: <HRDashboard />, errorElement: <ErrorBoundary /> },
   { path: '/login', element: <LoginPage />, errorElement: <ErrorBoundary /> },
 
   // All admin pages (single authenticated layout)
@@ -66,8 +70,16 @@ export const router = createBrowserRouter([
         { path: 'drives/:driveId/rooms/:roomId/print', element: <PrintManifestPage /> },
         { path: 'analytics', element: <AnalyticsPage /> },
         { path: 'settings', element: <SettingsPage /> },
+        { path: 'students', element: <StudentsPage /> },
       ]
     }]
+  },
+
+  // Full-screen pages (outside AdminLayout — no sidebar)
+  {
+    path: '/admin',
+    element: <ProtectedRoute />,
+    children: [{ path: 'drives/:driveId/command-center', element: <EventCommandCenter /> }]
   },
 
   // Root redirect

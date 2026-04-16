@@ -4,8 +4,8 @@ import { env } from './config/env';
 import mongoose from 'mongoose';
 import { initSocket } from './socket';
 
+
 const server = http.createServer(app);
-initSocket(server);
 
 const PORT = env.PORT || 5000;
 
@@ -39,6 +39,7 @@ const startServer = async () => {
       );
     }, 60000); // every 60 seconds
 
+    await initSocket(server);
     console.log('⏰ Form auto-close scheduler started');
 
     server.listen(Number(PORT), '0.0.0.0', () => {

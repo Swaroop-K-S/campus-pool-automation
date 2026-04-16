@@ -148,10 +148,20 @@ export const evaluateStudent = async (req: Request, res: Response): Promise<void
 
     // 3. Emit Real-Time Socket Updates
     const io = getIO();
+    // Targeted event for God View evaluation counter
+    io.to(`drive:${payload.driveId}`).emit('invigilator:evaluation_submitted', {
+      applicationId: application._id.toString(),
+      roomId: payload.roomId,
+      roundType: payload.round,
+      decision,
+      evaluatorName: evaluatorName || 'Panelist',
+    });
+    // Student-facing status update
     io.to(`app:${application._id}`).emit('student:status_changed', {
       status: application.status,
       currentRound: application.currentRound
     });
+    // General batch refresh for round views
     io.to(`drive:${payload.driveId}`).emit('drive:round_batch_updated', {
       roundType: payload.round,
       source: 'panelist_evaluation'

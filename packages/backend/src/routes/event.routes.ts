@@ -3,7 +3,7 @@ import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
 import { driveGuard } from '../middleware/drive-guard.middleware';
 import { authorizeRoles } from '../middleware/rbac.middleware';
-import { updateEventSetup, getEventSetup, createRoom, getRooms, getRoomWithStudents, updateRoom, deleteRoom, activateRound, completeRound, startEventDay, advanceRound, advancePresentStudents, updateRoomCapacity, purgeNoShows, walkInRegistration, getProjectorStats, lockRoom, transferStudent, getRoomEWT, rotateRooms } from '../controllers/event.controller';
+import { updateEventSetup, getEventSetup, createRoom, getRooms, getRoomWithStudents, updateRoom, deleteRoom, activateRound, completeRound, startEventDay, advanceRound, advancePresentStudents, updateRoomCapacity, purgeNoShows, walkInRegistration, getProjectorStats, lockRoom, transferStudent, getRoomEWT, rotateRooms, getRoundStudents, finalSelection, broadcastMessage } from '../controllers/event.controller';
 
 const router = Router({ mergeParams: true });
 const upload = multer({ storage: multer.memoryStorage() });
@@ -41,7 +41,18 @@ router.post('/rounds/:roundType/advance', driveGuard, authorizeRoles('admin', 's
 router.post('/rounds/:roundType/advance-present', driveGuard, authorizeRoles('admin', 'superadmin'), advancePresentStudents);
 router.patch('/start-event', driveGuard, authorizeRoles('admin', 'superadmin'), startEventDay);
 router.post('/walk-in', driveGuard, authorizeRoles('admin', 'superadmin'), walkInRegistration);
+router.post('/broadcast', driveGuard, authorizeRoles('admin', 'superadmin'), broadcastMessage);
 
+// ─── Round Student Data & Progression ──────────────────────────────────────
+router.get('/rounds/:roundType/students', getRoundStudents);
+router.get('/rounds/:roundType/export', advanceRound); // reuses CSV export logic via GET flag
+router.post('/rounds/:roundType/results', driveGuard, authorizeRoles('admin', 'superadmin'), upload.single('file'), advanceRound);
 
+// ─── Final Selection (closes drive) ────────────────────────────────────────
+router.post('/final-selection', driveGuard, authorizeRoles('admin', 'superadmin'), upload.single('file'), finalSelection);
+
+// ─── Room Rotation (inter-round transit) ────────────────────────────────────
+router.post('/rooms/rotate', driveGuard, authorizeRoles('admin', 'superadmin'), rotateRooms);
 
 export default router;
+

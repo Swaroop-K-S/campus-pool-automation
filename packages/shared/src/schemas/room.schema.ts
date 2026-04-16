@@ -7,7 +7,8 @@ export const RoomSchema = z.object({
   collegeId: ObjectIdSchema,
   round: z.string(),
   name: z.string().min(1),
-  floor: z.string().min(1),
+  floor: z.string().optional(),
+  location: z.string().optional(),
   capacity: z.number().min(1),
   panelists: z.array(z.object({
     name: z.string(),

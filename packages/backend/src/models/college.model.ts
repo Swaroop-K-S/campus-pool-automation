@@ -18,6 +18,12 @@ const collegeSchema = new Schema({
   },
   vapidPublicKey: String,
   vapidPrivateKey: String,
+  campusRooms: [{
+    id: { type: String, required: true },
+    name: { type: String, required: true },
+    capacity: { type: Number, required: true },
+    location: { type: String }
+  }],
   isActive: { type: Boolean, default: true }
 }, {
   timestamps: true

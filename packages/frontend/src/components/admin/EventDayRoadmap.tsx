@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, UploadCloud, Users, CheckCircle, Loader2, Wand2, X } from 'lucide-react';
+import { Download, UploadCloud, Users, CheckCircle, Loader2, Wand2, X, Zap, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { useSocket } from '../../hooks/use-socket';
@@ -9,6 +9,9 @@ export function EventDayRoadmap({ driveId, rounds, onUpdate }: { driveId: string
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [advanceLoading, setAdvanceLoading] = useState(false);
+  const [rotateLoading, setRotateLoading] = useState(false);
+  // Evaluation tally tracking removed (rendered in GodViewTab instead);
 
   // Auto-Assign State
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -33,12 +36,18 @@ export function EventDayRoadmap({ driveId, rounds, onUpdate }: { driveId: string
       }
     };
 
+    const handleEvalSubmit = (_data: any) => {
+      // eval tallies are tracked in GodViewTab — no-op here
+    };
+
     socket.on('student:verified', handleRefresh);
     socket.on('drive:round_batch_updated', handleRefresh);
+    socket.on('invigilator:evaluation_submitted', handleEvalSubmit);
 
     return () => {
       socket.off('student:verified', handleRefresh);
       socket.off('drive:round_batch_updated', handleRefresh);
+      socket.off('invigilator:evaluation_submitted', handleEvalSubmit);
     };
   }, [driveId, selectedRound]);
 
@@ -54,7 +63,7 @@ export function EventDayRoadmap({ driveId, rounds, onUpdate }: { driveId: string
   const handleExport = async () => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/rounds/${selectedRound}/export`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('campuspool-auth') ? JSON.parse(localStorage.getItem('campuspool-auth') || '{}').state?.accessToken : ''}` }
+        credentials: 'include'
       });
       if (!res.ok) throw new Error();
       const blob = await res.blob();
@@ -63,7 +72,34 @@ export function EventDayRoadmap({ driveId, rounds, onUpdate }: { driveId: string
       a.href = url;
       a.download = `Round_${selectedRound}_Students.csv`;
       document.body.appendChild(a); a.click();
+      URL.revokeObjectURL(url);
     } catch { toast.error('Failed to export students'); }
+  };
+
+  const handleAdvancePresent = async () => {
+    if (!selectedRound) return;
+    if (!confirm(`Advance ALL students who physically attended "${selectedRound}" and reject no-shows?`)) return;
+    setAdvanceLoading(true);
+    try {
+      const res: any = await api.post(`/drives/${driveId}/rounds/${selectedRound}/advance-present`);
+      if (res.success) { toast.success(res.data.message); fetchRoundStudents(); onUpdate(); }
+      else throw new Error(res.error);
+    } catch (err: any) { toast.error(err.message || 'Failed to advance'); }
+    setAdvanceLoading(false);
+  };
+
+  const handleRotateToNext = async () => {
+    const currentIdx = rounds.findIndex(r => r.type === selectedRound);
+    const nextRound = rounds[currentIdx + 1];
+    if (!nextRound) { toast.error('No next round configured'); return; }
+    if (!confirm(`Rotate students from "${selectedRound}" rooms into "${nextRound.type}" rooms?`)) return;
+    setRotateLoading(true);
+    try {
+      const res: any = await api.post(`/drives/${driveId}/rooms/rotate`, { fromRound: selectedRound, toRound: nextRound.type });
+      if (res.success) { toast.success(`Rotated ${res.data.totalAssigned} students to ${nextRound.type} rooms`); onUpdate(); }
+      else throw new Error(res.error);
+    } catch (err: any) { toast.error(err.message || 'Rotation failed'); }
+    setRotateLoading(false);
   };
 
   const handleUploadResults = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,9 +111,10 @@ export function EventDayRoadmap({ driveId, rounds, onUpdate }: { driveId: string
       const formData = new FormData();
       formData.append('file', file);
       
+      // Use credentials:include (cookie auth) instead of manual token
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/rounds/${selectedRound}/results`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('campuspool-auth') ? JSON.parse(localStorage.getItem('campuspool-auth') || '{}').state?.accessToken : ''}` },
+        credentials: 'include',
         body: formData
       });
       const data = await res.json();
@@ -105,9 +142,10 @@ export function EventDayRoadmap({ driveId, rounds, onUpdate }: { driveId: string
       const formData = new FormData();
       formData.append('file', file);
       
+      // Use credentials:include (cookie auth)
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/final-selection`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('campuspool-auth') ? JSON.parse(localStorage.getItem('campuspool-auth') || '{}').state?.accessToken : ''}` },
+        credentials: 'include',
         body: formData
       });
       const data = await res.json();
@@ -240,16 +278,23 @@ export function EventDayRoadmap({ driveId, rounds, onUpdate }: { driveId: string
                   <Users size={14} /> {students.length} students waiting in this round
                 </p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-2">
                 <button onClick={() => setShowAssignModal(true)} disabled={students.length === 0}
                   className="flex items-center gap-2 bg-gradient-to-br from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 transition-all shadow-sm shadow-indigo-500/20">
                   <Wand2 size={16} /> Auto-Assign Rooms
+                </button>
+                <button onClick={handleAdvancePresent} disabled={advanceLoading || students.length === 0}
+                  className="flex items-center gap-2 bg-gradient-to-br from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 transition-all shadow-sm">
+                  {advanceLoading ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />} Advance All Present
+                </button>
+                <button onClick={handleRotateToNext} disabled={rotateLoading}
+                  className="flex items-center gap-2 bg-white border border-slate-200 hover:border-teal-300 hover:text-teal-700 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 transition-all shadow-sm">
+                  {rotateLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} Rotate to Next Round
                 </button>
                 <button onClick={handleExport} disabled={students.length === 0}
                   className="flex items-center gap-2 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-600 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 transition-all shadow-sm">
                   <Download size={16} /> Export CSV
                 </button>
-                
                 <label className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-black transition-all shadow-md cursor-pointer ${
                     uploadLoading ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' : 'bg-slate-800 hover:bg-slate-900 text-white shadow-slate-900/20 hover:-translate-y-0.5'
                   }`}>

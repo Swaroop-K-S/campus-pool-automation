@@ -31,6 +31,8 @@ applicationSchema.index({ status: 1 });
 applicationSchema.index({ collegeId: 1, status: 1 });
 applicationSchema.index({ referenceNumber: 1 });
 applicationSchema.index({ driveStudentId: 1 }, { unique: true, sparse: true });
+// Compound index for event day queries (getRoundStudents, EWT, invigilator dashboard)
+applicationSchema.index({ driveId: 1, currentRound: 1, status: 1 });
 
 applicationSchema.virtual('isSelected').get(function() {
   return this.status === 'selected';

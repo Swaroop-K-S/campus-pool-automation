@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive, archiveDrive, scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted, updateSettings, toggleDrivePause, purgeNoShows } from '../controllers/drive.controller';
+import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive, archiveDrive, scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted, updateSettings, toggleDrivePause, purgeNoShows, getAuditLogs, checkConflict, matchCandidates } from '../controllers/drive.controller';
+import { generateNOC } from '../controllers/noc.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { authorizeRoles } from '../middleware/rbac.middleware';
 import shortlistRoutes from './shortlist.routes';
@@ -14,6 +15,8 @@ router.route('/')
   .get(getDrives)
   .post(authorizeRoles('admin', 'superadmin'), createDrive);
 
+router.get('/schedule/check-conflict', authorizeRoles('admin', 'superadmin'), checkConflict);
+
 router.route('/:driveId')
   .get(getDriveById)
   .put(authorizeRoles('admin', 'superadmin'), updateDrive)
@@ -27,6 +30,9 @@ router.patch('/:driveId/complete', authorizeRoles('admin', 'superadmin'), markCo
 router.patch('/:driveId/settings', authorizeRoles('admin', 'superadmin'), updateSettings);
 router.patch('/:driveId/pause', authorizeRoles('admin', 'superadmin'), toggleDrivePause);
 router.post('/:driveId/purge-noshows', authorizeRoles('admin', 'superadmin'), purgeNoShows);
+router.get('/:driveId/audit-logs', authorizeRoles('admin', 'superadmin'), getAuditLogs);
+router.get('/:driveId/noc/:appId', authorizeRoles('admin', 'superadmin'), generateNOC);
+router.get('/:driveId/match', authorizeRoles('admin', 'superadmin'), matchCandidates);
 
 // The original file had a duplicate import for these, consolidating them into the first import.
 // import { scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted } from '../controllers/drive.controller';

@@ -1,10 +1,14 @@
 import { Request, Response } from 'express';
-import { DriveModel, ApplicationModel, FormFieldModel, RoomModel } from '../models';
+import { DriveModel, ApplicationModel, FormFieldModel, RoomModel, StudentProfileModel, UserModel } from '../models';
 import mongoose from 'mongoose';
+import exceljs from 'exceljs';
 import { asyncHandler } from '../utils/async-handler';
 import { DriveStatusEnum } from '@campuspool/shared';
 import { AppCache, generateCacheKey } from '../utils/cache';
 import { logAuditEvent } from '../services/audit.service';
+import { getIO } from '../socket';
+import { startQRRotation } from '../socket/handlers/qr.handler';
+import { NotificationModel } from '../models/notification.model';
 
 // GET /api/v1/drives
 export const getDrives = asyncHandler(async (req: Request, res: Response) => {
@@ -53,46 +57,97 @@ export const createDrive = asyncHandler(async (req: Request, res: Response) => {
     description: req.body.description,
     status: DriveStatusEnum.enum.draft,
     eligibility: {
-      minCGPA: req.body.eligibilityCriteria?.minCgpa || 0,
+      cgpa: req.body.eligibilityCriteria?.cgpa || { minimum: 0, ruleType: 'strict' },
       branches: req.body.eligibilityCriteria?.allowedBranches || [],
-      tenth: req.body.eligibilityCriteria?.tenth || { required: false, minPercentage: 0 },
-      twelfth: req.body.eligibilityCriteria?.twelfth || { required: false, minPercentage: 0 },
-      diploma: req.body.eligibilityCriteria?.diploma || { required: false, minCGPA: 0 }
+      tenth: req.body.eligibilityCriteria?.tenth || { required: false, minPercentage: 0, ruleType: 'strict' },
+      twelfth: req.body.eligibilityCriteria?.twelfth || { required: false, minPercentage: 0, ruleType: 'strict' },
+      diploma: req.body.eligibilityCriteria?.diploma || { required: false, minCGPA: 0, ruleType: 'strict' }
     },
     rounds: req.body.rounds || [],
+    scorecardTraits: req.body.scorecardTraits || [],
     tags: req.body.tags || [],
     eventDate: req.body.eventDate || null,
-    reportTime: req.body.reportTime || null,
-    venueDetails: req.body.venueDetails || null
+    reportTime: req.body.reportTime || null
   });
+
+  // Construct initial locked form fields based on Drive Configuration
+  const initialFields: any[] = [
+    { id: 'field_name', type: 'text', label: 'Full Name', required: true, locked: true, order: 0 },
+    { id: 'field_usn', type: 'text', label: 'USN', required: true, locked: true, order: 1, validation: { pattern: '^[A-Za-z0-9]{5,20}$', customErrorMessage: 'Must be a valid alphanumeric USN/Roll No' } },
+    { id: 'field_email', type: 'email', label: 'Email Address', required: true, locked: true, order: 2, validation: { pattern: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$', customErrorMessage: 'Valid email required' } },
+    { id: 'field_phone', type: 'phone', label: 'Phone Number', required: true, locked: true, order: 3, validation: { pattern: '^\\d{10}$', customErrorMessage: 'Must be exactly 10 digits' } },
+    { id: 'field_gender', type: 'dropdown', label: 'Gender', required: true, locked: true, order: 4, options: ['Male', 'Female', 'Other'] },
+    { id: 'field_branch', type: 'dropdown', label: 'Branch', required: true, locked: true, order: 5, options: ['CSE', 'CSE (AIML)', 'CSE (Data Science)', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'OTHER'] },
+    { id: 'field_cgpa', type: 'number', label: 'Degree CGPA', required: true, locked: true, order: 6, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' } },
+  ];
+
+  let currentOrder = 7;
+
+  // If 10th is enabled, add a locked 10th field
+  if (newDrive.eligibility?.tenth?.required) {
+    initialFields.push({
+      id: 'field_tenth', type: 'number', label: '10th Percentage', required: true, locked: true, order: currentOrder++, validation: { min: 0, max: 100, customErrorMessage: 'Percentage must be between 0 and 100' }
+    });
+  }
+
+  // If 12th or Diploma is enabled, add an education path selector
+  if (newDrive.eligibility?.twelfth?.required || newDrive.eligibility?.diploma?.required) {
+    initialFields.push({
+      id: 'field_education_path', type: 'dropdown', label: '10+2 Education Path', required: true, locked: true, order: currentOrder++, options: ['12th Standard / PUC', 'Diploma (Lateral Entry)']
+    });
+    
+    if (newDrive.eligibility?.twelfth?.required) {
+       initialFields.push({
+         id: 'field_twelfth', type: 'number', label: '12th Percentage', required: false, locked: true, order: currentOrder++, validation: { min: 0, max: 100, customErrorMessage: 'Percentage must be between 0 and 100' }
+       });
+    }
+
+    if (newDrive.eligibility?.diploma?.required) {
+       initialFields.push({
+         id: 'field_diploma', type: 'number', label: 'Diploma CGPA', required: false, locked: true, order: currentOrder++, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' }
+       });
+    }
+  }
 
   // Seed default form fields for the new drive
   await FormFieldModel.create({
     driveId: newDrive._id,
     collegeId,
-    fields: [
-      { id: 'field_name', type: 'text', label: 'Full Name', required: true, locked: true, order: 0 },
-      { id: 'field_usn', type: 'text', label: 'USN', required: true, locked: true, order: 1, validation: { pattern: '^[A-Za-z0-9]{5,20}$', customErrorMessage: 'Must be a valid alphanumeric USN/Roll No' } },
-      { id: 'field_email', type: 'email', label: 'Email Address', required: true, locked: true, order: 2, validation: { pattern: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$', customErrorMessage: 'Valid email required' } },
-      { id: 'field_phone', type: 'phone', label: 'Phone Number', required: true, locked: true, order: 3, validation: { pattern: '^\\d{10}$', customErrorMessage: 'Must be exactly 10 digits' } },
-      { id: 'field_gender', type: 'dropdown', label: 'Gender', required: true, locked: true, order: 4, options: ['Male', 'Female', 'Other'] },
-      { id: 'field_branch', type: 'dropdown', label: 'Branch', required: true, locked: true, order: 5, options: ['CSE', 'CSE (AIML)', 'CSE (Data Science)', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'OTHER'] },
-      { id: 'field_cgpa', type: 'number', label: 'CGPA', required: true, locked: true, order: 6, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' } },
-    ]
+    fields: initialFields
   });
 
-  // Automatically create a Room if venue details are provided
-  if (req.body.venueDetails && req.body.venueDetails.hallName) {
-    const initialRoundType = (req.body.rounds && req.body.rounds.length > 0) ? req.body.rounds[0].type : 'ppt';
-    await RoomModel.create({
-      driveId: newDrive._id,
-      collegeId,
-      round: initialRoundType,
-      name: req.body.venueDetails.hallName,
-      floor: 'Ground', // Default value
-      capacity: req.body.venueDetails.capacity || 100,
-      panelists: []
-    });
+  // THE BOOTSTRAPPER: Pre-seed empty Rooms for the Drive based on mappedRooms payload mapping
+  if (req.body.mappedRooms && typeof req.body.mappedRooms === 'object') {
+    const mappedRooms = req.body.mappedRooms;
+    const roomPromises = [];
+    
+    for (const roundId of Object.keys(mappedRooms)) {
+      const roundObj = (req.body.rounds || []).find((r: any) => r.id === roundId);
+      // We map the UI's roundId to the structural roundType (e.g., 'aptitude', 'technical')
+      const roundType = roundObj ? roundObj.type : 'ppt';
+      
+      const roomsForRound = mappedRooms[roundId];
+      if (Array.isArray(roomsForRound)) {
+        for (const roomData of roomsForRound) {
+          if (!roomData.name) continue; // Skip empty room names 
+          roomPromises.push(
+            RoomModel.create({
+              driveId: newDrive._id,
+              collegeId,
+              round: roundType,
+              name: roomData.name,
+              floor: 'Ground', // Default value, can be updated later
+              capacity: roomData.capacity || 60,
+              panelists: []
+            })
+          );
+        }
+      }
+    }
+    
+    if (roomPromises.length > 0) {
+      await Promise.all(roomPromises);
+    }
   }
 
   await logAuditEvent({
@@ -116,7 +171,7 @@ export const getDriveById = asyncHandler(async (req: Request, res: Response) => 
   const collegeId = (req as any).user.collegeId;
 
   const cacheKey = generateCacheKey('drive-by-id', { driveId, collegeId });
-  const cachedData = AppCache.get(cacheKey);
+  const cachedData = await AppCache.get(cacheKey);
   if (cachedData) {
     return res.status(200).json({ success: true, data: cachedData, cached: true });
   }
@@ -127,7 +182,7 @@ export const getDriveById = asyncHandler(async (req: Request, res: Response) => 
     return res.status(404).json({ success: false, error: 'Drive not found' });
   }
 
-  AppCache.set(cacheKey, drive);
+  await AppCache.set(cacheKey, drive);
   res.status(200).json({ success: true, data: drive, cached: false });
 });
 
@@ -146,6 +201,9 @@ export const updateDrive = asyncHandler(async (req: Request, res: Response) => {
     return res.status(404).json({ success: false, error: 'Drive not found' });
   }
 
+  // Invalidate cache so all tabs get fresh data
+  try { await AppCache.del(generateCacheKey('drive-by-id', { driveId, collegeId })); } catch {}
+
   res.status(200).json({ success: true, data: updatedDrive });
 });
 
@@ -161,6 +219,16 @@ export const activateDrive = asyncHandler(async (req: Request, res: Response) =>
   
   initialDrive.status = DriveStatusEnum.enum.active;
   await initialDrive.save();
+
+  // Invalidate cache + broadcast live status change to dashboard
+  try { await AppCache.del(generateCacheKey('drive-by-id', { driveId, collegeId })); } catch {}
+  try {
+    getIO().to(`drive:${driveId}`).emit('drive:status_changed', {
+      driveId,
+      status: 'active',
+      companyName: initialDrive.companyName
+    });
+  } catch {}
 
   res.status(200).json({ success: true, data: initialDrive });
 });
@@ -246,8 +314,6 @@ export const reopenForm = asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json({ success: true, data: updatedDrive });
 });
 
-import { NotificationModel } from '../models/notification.model';
-
 // DELETE /api/v1/drives/:driveId
 export const deleteDrive = asyncHandler(async (req: Request, res: Response) => {
   const driveId = req.params.driveId;
@@ -261,7 +327,8 @@ export const deleteDrive = asyncHandler(async (req: Request, res: Response) => {
     ApplicationModel.deleteMany({ driveId }),
     FormFieldModel.deleteMany({ driveId }),
     RoomModel.deleteMany({ driveId }),
-    NotificationModel.deleteMany({ driveId })
+    NotificationModel.deleteMany({ driveId }),
+    UserModel.deleteMany({ driveId, role: 'company_hr' }) // Cascade delete assigned HR users
   ]);
 
   await logAuditEvent({
@@ -281,6 +348,19 @@ export const startEventDay = asyncHandler(async (req: Request, res: Response) =>
   const driveId = req.params.driveId;
   const collegeId = (req as any).user.collegeId;
 
+  // ─── API-Level Preflight Guard ─────────────────────────────────────────────
+  // Even with the frontend modal, the API must independently verify readiness.
+  const [roomCount, shortlistedCount] = await Promise.all([
+    RoomModel.countDocuments({ driveId }),
+    ApplicationModel.countDocuments({ driveId, status: 'shortlisted' })
+  ]);
+  if (roomCount === 0) {
+    return res.status(400).json({ success: false, error: 'Cannot start event: No rooms configured. Please set up at least one room first.' });
+  }
+  if (shortlistedCount === 0) {
+    return res.status(400).json({ success: false, error: 'Cannot start event: No shortlisted candidates. Please upload a shortlist first.' });
+  }
+
   const drive = await DriveModel.findOneAndUpdate(
     { _id: driveId, collegeId },
     { status: 'event_day' },
@@ -288,6 +368,20 @@ export const startEventDay = asyncHandler(async (req: Request, res: Response) =>
   );
 
   if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  // Auto-start QR rotation immediately
+  try { await startQRRotation(driveId, getIO()); } catch (e) {
+    console.warn('QR auto-start failed (non-fatal):', e);
+  }
+
+  // Invalidate cache + broadcast status change
+  try { await AppCache.del(generateCacheKey('drive-by-id', { driveId, collegeId })); } catch {}
+  try {
+    getIO().to(`drive:${driveId}`).emit('drive:status_changed', {
+      driveId, status: 'event_day', companyName: drive.companyName
+    });
+  } catch {}
+
   res.status(200).json({ success: true, data: drive });
 });
 
@@ -303,13 +397,17 @@ export const markCompleted = asyncHandler(async (req: Request, res: Response) =>
   );
 
   if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  try { await AppCache.del(generateCacheKey('drive-by-id', { driveId, collegeId })); } catch {}
+  try {
+    getIO().to(`drive:${driveId}`).emit('drive:status_changed', { driveId, status: 'completed', companyName: drive.companyName });
+  } catch {}
+
   res.status(200).json({ success: true, data: drive });
 });
 
 // GET /api/v1/drives/:driveId/archive
 // 1-Click Archive & Compliance Report
-import exceljs from 'exceljs';
-
 export const archiveDrive = asyncHandler(async (req: Request, res: Response) => {
   const driveId = req.params.driveId;
   const collegeId = (req as any).user.collegeId;
@@ -392,6 +490,12 @@ export const archiveDrive = asyncHandler(async (req: Request, res: Response) => 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename=${(drive?.companyName || 'Drive').replace(/\s+/g,'_')}_Compliance_Archive.xlsx`);
 
+  // Broadcast archived status before streaming response
+  try { await AppCache.del(generateCacheKey('drive-by-id', { driveId, collegeId })); } catch {}
+  try {
+    getIO().to(`drive:${driveId}`).emit('drive:status_changed', { driveId, status: 'archived', companyName: drive?.companyName });
+  } catch {}
+
   await workbook.xlsx.write(res);
   res.end();
 });
@@ -450,6 +554,20 @@ export const cloneDrive = asyncHandler(async (req: Request, res: Response) => {
     });
   }
 
+  await logAuditEvent({
+    userId: (req as any).user.userId,
+    action: 'CLONE_DRIVE',
+    resourceType: 'Drive',
+    resourceId: newDrive._id.toString(),
+    details: `Cloned drive from source ${driveId}`,
+    ipAddress: req.ip || req.socket.remoteAddress
+  });
+
+  // Broadcast new drive to dashboard live feed
+  try {
+    getIO().emit('drive:created', { driveId: newDrive._id.toString(), companyName: newDrive.companyName, collegeId });
+  } catch {}
+
   res.status(201).json({ success: true, data: newDrive });
 });
 
@@ -486,8 +604,6 @@ export const updateSettings = asyncHandler(async (req: Request, res: Response) =
 });
 
 // PATCH /api/v1/drives/:driveId/pause
-import { getIO } from '../socket';
-
 export const toggleDrivePause = asyncHandler(async (req: Request, res: Response) => {
   const driveId = req.params.driveId;
   const collegeId = (req as any).user.collegeId;
@@ -507,8 +623,8 @@ export const toggleDrivePause = asyncHandler(async (req: Request, res: Response)
     return res.status(404).json({ success: false, error: 'Drive not found' });
   }
 
-  const io = getIO();
-  io.to(`drive_${driveId}`).emit('drive:paused', { isPaused });
+  // FIX: was emitting to 'drive_${driveId}' (underscore) — changed to colon format
+  try { getIO().to(`drive:${driveId}`).emit('drive:paused', { isPaused }); } catch {}
   
   res.status(200).json({ success: true, data: updatedDrive });
 });
@@ -521,23 +637,39 @@ export const purgeNoShows = asyncHandler(async (req: Request, res: Response) => 
   const drive = await DriveModel.findOne({ _id: driveId, collegeId });
   if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
 
-  // In this logic, 'shortlisted' means they cracked the initial screening.
-  // When an event happens, if they never get scanned and scored (never get marked as pass/fail in the next rounds),
-  // they remain strictly untouched.
-  // Wait, actually, let's just mark anyone who is 'shortlisted' and not assigned to a room?
-  // Or anyone who hasn't been active in 60 minutes.
-  // For simplicity and to enforce the constraint: Purge all 'shortlisted' students who are assigned to a room but haven't been picked up by an active round score.
-  // Wait, let's make it simpler based on what the user wanted: Just force reject all 'shortlisted' students.
-  // This allows Admins to clear out their queues at the end of the day or immediately if they know they aren't coming.
-  
+  // Find students who are about to be purged to increment their strikes.
+  // Note: We use 'applied' as well to catch people who applied but never checked in.
+  // But to preserve existing behavior, it targets 'shortlisted' or whatever criteria admin sets.
+  const appsToPurge = await ApplicationModel.find(
+    { driveId, status: { $in: ['shortlisted', 'applied'] } }
+  ).lean();
+
+  const usnList = appsToPurge.map(app => (app.data as any)?.usn).filter(Boolean);
+
+  if (usnList.length > 0) {
+    await StudentProfileModel.updateMany(
+      { collegeId, usn: { $in: usnList } },
+      { $inc: { strikes: 1 } }
+    );
+  }
+
   const result = await ApplicationModel.updateMany(
-    { driveId, status: 'shortlisted' },
+    { driveId, status: { $in: ['shortlisted', 'applied'] } },
     { $set: { status: 'rejected' } }
   );
 
   // Clear cache
   const cacheKey = generateCacheKey('drives', { collegeId, driveId });
-  AppCache.del(cacheKey);
+  await AppCache.del(cacheKey);
+
+  await logAuditEvent({
+    userId: (req as any).user.userId,
+    action: 'PURGE_NO_SHOWS',
+    resourceType: 'Drive',
+    resourceId: driveId,
+    details: `Purged ${result.modifiedCount} no-shows and incremented strikes.`,
+    ipAddress: req.ip || req.socket.remoteAddress
+  });
 
   res.status(200).json({
     success: true,
@@ -546,3 +678,108 @@ export const purgeNoShows = asyncHandler(async (req: Request, res: Response) => 
     }
   });
 });
+
+import { AuditLogModel } from '../models/audit-log.model';
+
+// GET /api/v1/drives/:driveId/audit-logs
+export const getAuditLogs = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  // Ensure the drive belongs to this college admin
+  const drive = await DriveModel.findOne({ _id: driveId, collegeId }).lean();
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  const logs = await AuditLogModel.find({ resourceId: driveId })
+    .populate('userId', 'name email')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  res.status(200).json({
+    success: true,
+    data: logs
+  });
+});
+
+// GET /api/v1/drives/schedule/check-conflict
+export const checkConflict = asyncHandler(async (req: Request, res: Response) => {
+  const collegeId = (req as any).user.collegeId;
+  const { date, excludeDriveId } = req.query;
+
+  if (!date) return res.status(400).json({ success: false, error: 'Date is required' });
+
+  const startOfDay = new Date(date as string);
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date(date as string);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const query: any = {
+    collegeId,
+    eventDate: { $gte: startOfDay, $lte: endOfDay },
+    status: { $nin: ['completed', 'archived'] }
+  };
+
+  if (excludeDriveId) {
+    query._id = { $ne: excludeDriveId };
+  }
+
+  const overlappingDrives = await DriveModel.find(query)
+    .select('companyName jobRole eventDate')
+    .lean();
+
+  res.status(200).json({
+    success: true,
+    data: {
+      hasConflict: overlappingDrives.length > 0,
+      conflictingDrives: overlappingDrives
+    }
+  });
+});
+
+// GET /api/v1/drives/:driveId/match
+export const matchCandidates = asyncHandler(async (req: Request, res: Response) => {
+  const collegeId = (req as any).user.collegeId;
+  const { driveId } = req.params;
+
+  const drive = await DriveModel.findOne({ _id: driveId, collegeId }).lean();
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  const matchQuery: any = { collegeId: new mongoose.Types.ObjectId(collegeId) };
+  
+  if ((drive.eligibility?.cgpa?.minimum ?? 0) > 0) {
+    matchQuery.cgpa = { $gte: drive.eligibility?.cgpa?.minimum };
+  }
+  if (drive.eligibility?.branches && drive.eligibility.branches.length > 0) {
+    matchQuery.branch = { $in: drive.eligibility.branches };
+  }
+  if (drive.eligibility?.tenth?.required && (drive.eligibility?.tenth?.minPercentage || 0) > 0) {
+    matchQuery.tenthPercentage = { $gte: drive.eligibility.tenth.minPercentage };
+  }
+  if (drive.eligibility?.twelfth?.required && (drive.eligibility?.twelfth?.minPercentage || 0) > 0) {
+    matchQuery.twelfthPercentage = { $gte: drive.eligibility.twelfth.minPercentage };
+  }
+  if (drive.eligibility?.diploma?.required && (drive.eligibility?.diploma?.minCGPA || 0) > 0) {
+    matchQuery.diplomaCGPA = { $gte: drive.eligibility.diploma.minCGPA };
+  }
+
+  const potentialCandidates = await StudentProfileModel.find(matchQuery).lean();
+
+  const existingApps = await ApplicationModel.find({ driveId }).select('data').lean();
+  const appliedEmails = existingApps.map(app => (app.data?.email || app.data?.Email)?.toLowerCase()).filter(Boolean);
+  const appliedUSNs = existingApps.map(app => (app.data?.usn || app.data?.USN)?.toLowerCase()).filter(Boolean);
+
+  const matched = potentialCandidates.filter(candidate => {
+    return !appliedEmails.includes(candidate.email?.toLowerCase()) && !appliedUSNs.includes(candidate.usn?.toLowerCase());
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      totalFound: potentialCandidates.length,
+      alreadyApplied: potentialCandidates.length - matched.length,
+      matchedCandidates: matched
+    }
+  });
+});
+

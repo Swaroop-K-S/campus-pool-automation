@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { DriveModel, RoomModel } from '../models';
+import { DriveModel, RoomModel, ApplicationModel } from '../models';
+import xlsx from 'xlsx';
 import { getIO } from '../socket';
 
 export const updateEventSetup = async (req: Request, res: Response): Promise<void> => {
@@ -193,9 +194,6 @@ export const startEventDay = async (req: Request, res: Response): Promise<void> 
     res.status(500).json({ success: false, error: error.message || 'Failed to start event day' });
   }
 };
-import * as xlsx from 'xlsx';
-import { ApplicationModel } from '../models';
-
 export const advanceRound = async (req: Request, res: Response): Promise<void> => {
   try {
     const { driveId, roundType } = req.params;
@@ -762,7 +760,21 @@ export const rotateRooms = async (req: Request, res: Response): Promise<void> =>
     }
 
     try {
-      getIO().to(`drive:${driveId}`).emit('drive:round_rotated', { fromRound, toRound, totalAssigned });
+      const io = getIO();
+      // Broadcast bulk rotation event to God View
+      io.to(`drive:${driveId}`).emit('drive:round_rotated', { fromRound, toRound, totalAssigned });
+      // Notify each student individually of their new room assignment
+      for (const assignment of result.assignments) {
+        const room = rooms.find(r => r._id.toString() === assignment.roomId);
+        for (const appId of assignment.studentIds) {
+          io.to(`app:${appId}`).emit('student:room_assigned', {
+            applicationId: appId,
+            roomId: assignment.roomId,
+            roomName: room?.name || 'Room',
+            floor: (room as any)?.floor
+          });
+        }
+      }
     } catch {}
 
     res.json({ success: true, data: { confirmed: true, totalAssigned, overflow: result.unassigned.length } });
@@ -771,3 +783,153 @@ export const rotateRooms = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+// ─── NEW: GET /drives/:driveId/rounds/:roundType/students ───────────────────
+export const getRoundStudents = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driveId, roundType } = req.params;
+    const apps = await ApplicationModel.find({ driveId, currentRound: roundType })
+      .select('_id data referenceNumber driveStudentId status currentRound assignedRoomId attendedAt latecomer')
+      .lean();
+
+    const students = apps.map((a: any) => ({
+      _id: a._id,
+      name: a.data?.fullName || a.data?.name,
+      usn: a.data?.usn,
+      branch: a.data?.branch,
+      cgpa: a.data?.cgpa,
+      status: a.status,
+      driveStudentId: a.driveStudentId,
+      referenceNumber: a.referenceNumber,
+      assignedRoomId: a.assignedRoomId,
+      attendedAt: a.attendedAt,
+      latecomer: a.latecomer,
+    }));
+
+    res.json({ success: true, data: students });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// ─── NEW: POST /drives/:driveId/final-selection ─────────────────────────────
+// Parses an XLSX/CSV of hired students (identified by USN or email), marks them
+// as `selected`, rejects all others still in flight, and closes the drive.
+export const finalSelection = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driveId } = req.params;
+
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'Please upload a file.' });
+      return;
+    }
+
+    const drive = await DriveModel.findById(driveId);
+    if (!drive) { res.status(404).json({ success: false, error: 'Drive not found' }); return; }
+
+    // Parse the uploaded file
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows: any[] = xlsx.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (rows.length === 0) {
+      res.status(400).json({ success: false, error: 'Uploaded file is empty.' });
+      return;
+    }
+
+    // Auto-detect identifier column (usn, roll, email, id)
+    const firstRow = rows[0] || {};
+    const identKey = Object.keys(firstRow).find(k => /usn|roll|email|id/i.test(k)) || Object.keys(firstRow)[0];
+
+    const hiredIdentifiers: string[] = rows
+      .map((r: any) => String(r[identKey] || '').trim().toLowerCase())
+      .filter(Boolean);
+
+    if (hiredIdentifiers.length === 0) {
+      res.status(400).json({ success: false, error: 'No valid identifiers found. Ensure a USN or email column exists.' });
+      return;
+    }
+
+    // Fetch all non-rejected applications for this drive
+    const candidateApps = await ApplicationModel.find({
+      driveId,
+      status: { $nin: ['rejected'] },
+    }).lean();
+
+    const hiredIds: string[] = [];
+    const rejectedIds: string[] = [];
+
+    for (const app of candidateApps as any[]) {
+      const usn = (app.data?.usn || '').toLowerCase();
+      const email = (app.data?.email || '').toLowerCase();
+      if (hiredIdentifiers.includes(usn) || hiredIdentifiers.includes(email)) {
+        hiredIds.push(app._id.toString());
+      } else {
+        rejectedIds.push(app._id.toString());
+      }
+    }
+
+    if (hiredIds.length > 0) {
+      await ApplicationModel.updateMany(
+        { _id: { $in: hiredIds } },
+        { $set: { status: 'selected', currentRound: 'completed' } }
+      );
+    }
+    if (rejectedIds.length > 0) {
+      await ApplicationModel.updateMany(
+        { _id: { $in: rejectedIds } },
+        { $set: { status: 'rejected' } }
+      );
+    }
+
+    // Mark drive completed
+    (drive as any).status = 'completed';
+    await drive.save();
+
+    try {
+      const io = getIO();
+      // Notify all sockets in drive room (God View, HR portal)
+      io.to(`drive:${driveId}`).emit('drive:completed', {
+        driveId,
+        hiredCount: hiredIds.length,
+        companyName: drive.companyName,
+      });
+      // Broadcast status change to dashboard
+      io.to(`drive:${driveId}`).emit('drive:status_changed', {
+        driveId, status: 'completed', companyName: drive.companyName
+      });
+      // Notify each selected student individually (confetti!)
+      for (const appId of hiredIds) {
+        io.to(`app:${appId}`).emit('student:selected', { applicationId: appId });
+      }
+    } catch {}
+
+    res.json({
+      success: true,
+      data: {
+        hiredCount: hiredIds.length,
+        rejectedCount: rejectedIds.length,
+        message: `${hiredIds.length} students hired. Drive marked as completed.`,
+      },
+    });
+  } catch (error: any) {
+    console.error('finalSelection ERROR:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// POST /drives/:driveId/broadcast
+export const broadcastMessage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { driveId } = req.params;
+    const { message, type = 'info' } = req.body;
+    if (!message?.trim()) {
+      res.status(400).json({ success: false, error: 'Message is required' });
+      return;
+    }
+    const payload = { message: message.trim(), type, sentAt: new Date().toISOString() };
+    try { getIO().to(`drive:${driveId}`).emit('drive:broadcast', payload); } catch {}
+    res.json({ success: true, data: payload });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

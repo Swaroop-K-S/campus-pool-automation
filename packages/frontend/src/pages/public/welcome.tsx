@@ -27,6 +27,8 @@ const WelcomePage: React.FC = () => {
   const [broadcastData, setBroadcastData] = useState<any | null>(null);
   const [summonData, setSummonData] = useState<any | null>(null);
   const [hallPassMode, setHallPassMode] = useState(false);
+  // Drive completed overlay
+  const [driveCompleted, setDriveCompleted] = useState(false);
 
   const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
   const sessionToken = localStorage.getItem(`campuspool_session_${appId}`);
@@ -126,6 +128,17 @@ const WelcomePage: React.FC = () => {
       if ('vibrate' in navigator) navigator.vibrate([500, 200, 500, 200, 500]);
     });
 
+    // Drive completed — show a full-screen overlay to all students
+    socket.on('drive:completed', () => {
+      setDriveCompleted(true);
+      if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+    });
+
+    // Room assigned without reload (after rotation)
+    socket.on('student:room_assigned', (_d: any) => {
+      fetchWelcomeData();
+    });
+
     return () => {
       socket.off('round:status_changed');
       socket.off('assignments:confirmed');
@@ -134,6 +147,8 @@ const WelcomePage: React.FC = () => {
       socket.off('student:selected');
       socket.off('drive:broadcast');
       socket.off('student:summoned');
+      socket.off('drive:completed');
+      socket.off('student:room_assigned');
     };
   }, [driveId, appId]);
 
@@ -233,13 +248,51 @@ const WelcomePage: React.FC = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#F8FAFC',
+      background: 'linear-gradient(180deg, #0F172A 0%, #1E1B4B 100%)',
       fontFamily: "'Inter', 'Segoe UI', sans-serif",
       maxWidth: 480,
       margin: '0 auto',
       position: 'relative',
-      paddingBottom: '80px' /* Space for bottom nav */
-    }} className="animate-in fade-in zoom-in-95 duration-500">
+      paddingBottom: '80px', /* Space for bottom nav */
+      overflowX: 'hidden'
+    }} className="animate-in fade-in zoom-in-95 duration-500 text-white">
+
+      {/* Decorative Background Orbs */}
+      <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+        <div style={{ position: 'absolute', top: '-10%', left: '-20%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)', filter: 'blur(40px)' }} />
+        <div style={{ position: 'absolute', top: '40%', right: '-30%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)', filter: 'blur(50px)' }} />
+        <div style={{ position: 'absolute', bottom: '10%', left: '-10%', width: 250, height: 250, borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)', filter: 'blur(40px)' }} />
+      </div>
+
+      {/* All subsequent content must have a relative z-index to sit above orbs */}
+      <div style={{ position: 'relative', zIndex: 1 }}>
+
+      {/* === DRIVE COMPLETED OVERLAY === */}
+      {driveCompleted && !showCongrats && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100000,
+          background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: 32, textAlign: 'center'
+        }}>
+          <div style={{ fontSize: 80, marginBottom: 16 }}>🏁</div>
+          <h1 style={{ fontSize: 30, fontWeight: 900, color: 'white', marginBottom: 8 }}>Drive Concluded</h1>
+          <p style={{ color: '#94A3B8', fontSize: 16, lineHeight: 1.7, maxWidth: 360 }}>
+            The <strong style={{ color: '#E0E7FF' }}>selection process is now complete</strong>. Results will be announced by the college placement cell shortly.
+          </p>
+          <div style={{
+            marginTop: 32, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 16, padding: '20px 24px', width: '100%', maxWidth: 340
+          }}>
+            <p style={{ color: '#64748B', fontSize: 13, marginBottom: 8 }}>Drive</p>
+            <p style={{ color: 'white', fontWeight: 800, fontSize: 16 }}>{data?.drive?.companyName} — {data?.drive?.jobRole}</p>
+          </div>
+          <p style={{ color: '#475569', fontSize: 12, marginTop: 32, lineHeight: 1.8 }}>
+            Thank you for your patience and professionalism.
+            Please collect your belongings and proceed to the exit in an orderly manner.
+          </p>
+        </div>
+      )}
 
       {/* === PHASE 9: DIGITAL HALL PASS FULLSCREEN === */}
       {hallPassMode && (
@@ -247,17 +300,27 @@ const WelcomePage: React.FC = () => {
           position: 'fixed', inset: 0, zIndex: 99999,
           background: assignedRoom ? getFloorColor(assignedRoom.floor) : '#94A3B8',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          color: 'white', padding: 24, textAlign: 'center'
+          color: 'white', padding: 24, textAlign: 'center',
+          boxShadow: 'inset 0 0 150px rgba(0,0,0,0.5)'
         }} className="animate-in zoom-in duration-300" onClick={() => setHallPassMode(false)}>
-          <div style={{ fontSize: 24, fontWeight: 800, opacity: 0.9, letterSpacing: 2, textTransform: 'uppercase' }}>
-            {assignedRoom ? assignedRoom.floor : 'WAITING'}
+          <div style={{
+            background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(20px)',
+            border: '2px solid rgba(255,255,255,0.3)', borderRadius: 32,
+            padding: '40px 24px', width: '100%', maxWidth: 360,
+            boxShadow: '0 20px 50px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{ fontSize: 20, fontWeight: 900, opacity: 0.9, letterSpacing: 3, textTransform: 'uppercase' }}>
+              {assignedRoom ? assignedRoom.floor : 'WAITING'}
+            </div>
+            <div style={{ fontSize: 130, fontWeight: 900, lineHeight: 1, margin: '20px 0', textShadow: '0 10px 30px rgba(0,0,0,0.4)' }}>
+              {assignedRoom ? assignedRoom.name.replace(/[^0-9]/g, '') : '?'}
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 800 }}>{student?.name?.split(' ')[0]}</div>
+            <div style={{ fontSize: 18, marginTop: 12, color: 'rgba(255,255,255,0.8)', fontFamily: 'monospace', letterSpacing: 2 }}>
+              {student?.driveStudentId}
+            </div>
           </div>
-          <div style={{ fontSize: 120, fontWeight: 900, lineHeight: 1, margin: '20px 0' }}>
-            {assignedRoom ? assignedRoom.name.replace(/[^0-9]/g, '') : '?'}
-          </div>
-          <div style={{ fontSize: 32, fontWeight: 700 }}>{student?.name?.split(' ')[0]}</div>
-          <div style={{ fontSize: 18, marginTop: 10, opacity: 0.8, fontFamily: 'monospace' }}>{student?.driveStudentId}</div>
-          <div style={{ position: 'absolute', bottom: 40, fontSize: 14, opacity: 0.6 }}>Tap anywhere to close</div>
+          <div style={{ position: 'absolute', bottom: 40, fontSize: 14, opacity: 0.6, letterSpacing: 1, fontWeight: 600 }}>Tap anywhere to close</div>
         </div>
       )}
 
@@ -265,18 +328,23 @@ const WelcomePage: React.FC = () => {
       {summonData && !isPaused && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 99000,
-          background: 'linear-gradient(135deg, #16A34A 0%, #22C55E 100%)',
+          background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          color: 'white', padding: 32, textAlign: 'center'
+          color: 'white', padding: 32, textAlign: 'center',
+          boxShadow: 'inset 0 0 100px rgba(0,0,0,0.3)'
         }} className="animate-in slide-in-from-bottom duration-500">
-          <div style={{ fontSize: 100, marginBottom: 20, animation: 'bounce 1s infinite' }}>🔔</div>
-          <h1 style={{ fontSize: 42, fontStyle: 'italic', fontWeight: 900, textTransform: 'uppercase', lineHeight: 1 }}>IT'S YOUR TURN</h1>
-          <p style={{ fontSize: 24, fontWeight: 600, marginTop: 24 }}>Please enter <strong style={{ color: '#064E3B' }}>{summonData.roomName}</strong> immediately.</p>
+          <div style={{ fontSize: 120, marginBottom: 20, animation: 'bounce 1s infinite', filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))' }}>🔔</div>
+          <h1 style={{ fontSize: 48, fontStyle: 'italic', fontWeight: 900, textTransform: 'uppercase', lineHeight: 1, textShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>IT'S YOUR TURN</h1>
+          <p style={{ fontSize: 24, fontWeight: 600, marginTop: 24, color: '#D1FAE5' }}>Please enter</p>
+          <div style={{ background: 'rgba(255,255,255,0.2)', padding: '12px 32px', borderRadius: 20, marginTop: 12, border: '2px solid rgba(255,255,255,0.4)', backdropFilter: 'blur(10px)' }}>
+            <strong style={{ color: 'white', fontSize: 36, letterSpacing: -1 }}>{summonData.roomName}</strong>
+          </div>
+          <p style={{ fontSize: 20, fontWeight: 600, marginTop: 16, color: '#D1FAE5' }}>immediately.</p>
           <button onClick={() => setSummonData(null)} style={{
-            marginTop: 40, background: 'white', color: '#16A34A', border: 'none', borderRadius: 30,
-            padding: '16px 40px', fontSize: 20, fontWeight: 800, cursor: 'pointer',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
-          }}>
+            marginTop: 48, background: 'white', color: '#059669', border: 'none', borderRadius: 30,
+            padding: '18px 48px', fontSize: 20, fontWeight: 900, cursor: 'pointer',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)', transition: 'transform 0.1s'
+          }} className="active:scale-95">
             I'M GOING IN
           </button>
         </div>
@@ -360,32 +428,43 @@ const WelcomePage: React.FC = () => {
 
       {/* === SECTION 1: Welcome Banner === */}
       <div style={{
-        background: 'linear-gradient(135deg, #4F46E5 0%, #6366F1 100%)',
-        padding: '32px 24px 40px',
-        borderRadius: '0 0 32px 32px',
+        background: 'linear-gradient(135deg, rgba(79,70,229,0.3) 0%, rgba(99,102,241,0.1) 100%)',
+        backdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        padding: '36px 24px 44px',
+        borderRadius: '0 0 36px 36px',
         color: 'white',
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
       }}>
         {/* Pattern overlay */}
         <div style={{
-          position: 'absolute', top: 0, right: 0, width: 200, height: 200,
-          background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%)',
-          borderRadius: '50%', transform: 'translate(30%, -30%)'
+          position: 'absolute', top: 0, right: 0, width: 250, height: 250,
+          background: 'radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%)',
+          borderRadius: '50%', transform: 'translate(20%, -20%)'
         }} />
 
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ fontSize: 15, color: '#C7D2FE', fontWeight: 500, marginBottom: 4 }}>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22C55E', animation: 'pulse 2s infinite' }} />
+            <span style={{ fontSize: 13, color: '#A5B4FC', fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>Live Connection</span>
+          </div>
+          
+          <div style={{ fontSize: 14, color: '#E0E7FF', fontWeight: 500, marginBottom: 4, opacity: 0.9 }}>
             {drive?.companyName} • {drive?.jobRole}
           </div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, margin: '8px 0' }}>
-            Hello, {student?.name}! 👋
+          <h1 style={{ fontSize: 32, fontWeight: 900, margin: '4px 0 16px', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+            Hello, {student?.name?.split(' ')[0]}! 👋
           </h1>
-          <div className="flex items-center gap-3 mt-3">
+          
+          <div className="flex flex-wrap items-center gap-3 w-full">
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: '#22C55E', padding: '6px 14px', borderRadius: 20,
-              fontSize: 13, fontWeight: 700
+              background: 'linear-gradient(135deg, #16A34A 0%, #22C55E 100%)',
+              padding: '8px 16px', borderRadius: 12,
+              fontSize: 13, fontWeight: 800, color: 'white',
+              boxShadow: '0 4px 15px rgba(34,197,94,0.3)'
             }}>
               ✓ Checked In
             </span>
@@ -393,14 +472,14 @@ const WelcomePage: React.FC = () => {
               <>
                 <button 
                   onClick={copyIdToClipboard}
-                  className="btn-ghost text-white bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full text-sm font-bold flex items-center gap-2 active:scale-95 transition-all"
+                  className="bg-white/10 hover:bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 active:scale-95 transition-all outline-none border border-white/20"
                 >
-                  <span>ID: {student.driveStudentId}</span>
-                  <Copy size={12} className="opacity-80"/>
+                  <span className="font-mono tracking-wider">ID: {student.driveStudentId}</span>
+                  <Copy size={14} className="opacity-70"/>
                 </button>
                 <button 
                   onClick={() => setHallPassMode(true)}
-                  className="text-white bg-indigo-900/40 hover:bg-indigo-900/60 px-3 py-1.5 rounded-full text-sm font-bold border border-indigo-400/30 active:scale-95 transition-all shadow-inner"
+                  className="bg-indigo-500/30 hover:bg-indigo-500/50 backdrop-blur-md px-4 py-2 rounded-xl text-sm font-bold border border-indigo-400/40 active:scale-95 transition-all flex items-center gap-2"
                 >
                   Hall Pass 🪄
                 </button>
@@ -413,124 +492,136 @@ const WelcomePage: React.FC = () => {
       {/* === SECTION 2: Current Round OR Standby === */}
       {activeRound ? (
         <div style={{
-          margin: '24px 16px 0',
-          background: 'white',
-          borderRadius: 20,
-          border: '2px solid #C7D2FE',
-          padding: 20,
-          boxShadow: '0 4px 15px rgba(99,102,241,0.08)'
+          margin: '24px 20px 0',
+          background: 'rgba(255,255,255,0.05)',
+          backdropFilter: 'blur(16px)',
+          borderRadius: 24,
+          border: '1px solid rgba(255,255,255,0.1)',
+          padding: 24,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
         }}>
-          <div style={{ fontSize: 11, color: '#6366F1', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>
+          <div style={{ fontSize: 12, color: '#818CF8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#818CF8', boxShadow: '0 0 10px #818CF8', animation: 'pulse 2s infinite' }} />
             Currently Active
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-            <span style={{
-              width: 10, height: 10, borderRadius: '50%', background: '#6366F1',
-              animation: 'pulse 2s infinite', display: 'inline-block'
-            }} />
-            <span style={{ fontSize: 22, fontWeight: 800, color: '#0F172A' }}>
-              {activeRound.type.replace('_', ' ').toUpperCase()}
-            </span>
+          <div style={{ fontSize: 26, fontWeight: 900, color: 'white', marginTop: 8, letterSpacing: -0.5 }}>
+            {activeRound.type.replace('_', ' ').toUpperCase()}
           </div>
 
           {assignedRoom ? (
             <div style={{
-              background: '#EEF2FF', borderRadius: 14, padding: 14, marginTop: 16,
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.15) 100%)',
+              borderRadius: 16, padding: 20, marginTop: 20,
+              border: '1px solid rgba(99,102,241,0.2)',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center'
             }}>
               <div>
-                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Your Room</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: '#4F46E5', marginTop: 2 }}>{assignedRoom.name}</div>
-                <div style={{ fontSize: 13, color: '#64748B', marginTop: 2 }}>{assignedRoom.floor}</div>
+                <div style={{ fontSize: 11, color: '#A5B4FC', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1 }}>Your Assigned Room</div>
+                <div style={{ fontSize: 28, fontWeight: 900, color: 'white', marginTop: 4, letterSpacing: -1 }}>{assignedRoom.name}</div>
+                <div style={{ fontSize: 14, color: '#C7D2FE', marginTop: 2, fontWeight: 500 }}>{assignedRoom.floor}</div>
               </div>
               
               <button onClick={openMap} style={{
-                background: 'white', border: '1px solid #C7D2FE', borderRadius: '50%',
-                width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 6px rgba(99,102,241,0.1)', cursor: 'pointer', color: '#4F46E5', flexShrink: 0
-              }}>
+                background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)',
+                width: 54, height: 54, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 8px 16px rgba(0,0,0,0.15)', cursor: 'pointer', color: 'white', flexShrink: 0,
+                transition: 'all 0.2s'
+              }} className="active:scale-95 hover:bg-white/20">
                 <MapPin size={24} />
               </button>
             </div>
           ) : (
             <div style={{
-              background: '#FFFBEB', borderRadius: 14, padding: 14, marginTop: 16,
-              border: '1px solid #FDE68A'
+              background: 'rgba(245,158,11,0.1)', borderRadius: 16, padding: 18, marginTop: 20,
+              border: '1px solid rgba(245,158,11,0.2)', display: 'flex', gap: 14, alignItems: 'flex-start'
             }}>
-              <div style={{ fontSize: 14, color: '#92400E', fontWeight: 600 }}>
-                ⏳ Room assignments will be announced soon
-              </div>
-              <div style={{ fontSize: 13, color: '#A16207', marginTop: 4 }}>
-                Please wait in {drive?.venueDetails?.hallName || 'the main hall'}
-              </div>
-            </div>
-          )}
-          
-          {/* QUEUE TRACKER UI */}
-          {data?.drive?.enableQueueTracking && queueData && queueData.position !== null && queueData.position > 0 && (
-            <div style={{
-              background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-              borderRadius: 14, padding: 16, marginTop: 16, color: 'white',
-              boxShadow: '0 4px 12px rgba(16,185,129,0.2)', position: 'relative', overflow: 'hidden'
-            }}>
-              <div style={{ position: 'absolute', top: -10, right: -10, opacity: 0.1, transform: 'scale(2)' }}>
-                <LifeBuoy size={100} />
-              </div>
-              <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.9 }}>Live Queue Position</div>
-                  <div style={{ fontSize: 32, fontWeight: 900, marginTop: 2, display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                    #{queueData.position}
-                    <span style={{ fontSize: 13, fontWeight: 600, opacity: 0.8 }}> / {queueData.totalRemaining}</span>
-                  </div>
+              <Clock style={{ flexShrink: 0, color: '#FCD34D', marginTop: 2 }} size={24} />
+              <div>
+                <div style={{ fontSize: 15, color: '#FDE68A', fontWeight: 700, lineHeight: 1.3 }}>
+                  Room assignments soon
                 </div>
-                <div style={{ textAlign: 'right', background: 'rgba(0,0,0,0.1)', padding: '10px 14px', borderRadius: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.9 }}>Estimated Wait</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, marginTop: 2 }}>{queueData.estimatedWaitTime} min</div>
+                <div style={{ fontSize: 14, color: '#D97706', marginTop: 6, lineHeight: 1.4 }}>
+                  Please wait in <strong style={{ color: '#FCD34D' }}>{drive?.venueDetails?.hallName || 'the main hall'}</strong>. You will be summoned when it is your turn.
                 </div>
               </div>
             </div>
           )}
 
+          {/* QUEUE TRACKER UI — uses dedicated queue endpoint OR welcome data EWT */}
+          {(() => {
+            const pos   = (queueData?.position != null && queueData.position > 0) ? queueData.position : data?.queuePosition;
+            const wait  = queueData?.estimatedWaitTime != null ? queueData.estimatedWaitTime : data?.estimatedWaitMinutes;
+            const total = queueData?.totalRemaining ?? null;
+            if (!pos || pos <= 0) return null;
+            return (
+              <div style={{
+                background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                borderRadius: 16, padding: 20, marginTop: 16, color: 'white',
+                boxShadow: '0 8px 24px rgba(16,185,129,0.25)', position: 'relative', overflow: 'hidden'
+              }}>
+                <div style={{ position: 'absolute', top: -10, right: -10, opacity: 0.1, transform: 'scale(2) rotate(-15deg)' }}>
+                  <LifeBuoy size={120} />
+                </div>
+                <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.9 }}>Live Queue Position</div>
+                    <div style={{ fontSize: 36, fontWeight: 900, marginTop: 2, display: 'flex', alignItems: 'baseline', gap: 6, textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+                      #{pos}
+                      {total != null && <span style={{ fontSize: 16, fontWeight: 600, opacity: 0.8 }}>/ {total}</span>}
+                    </div>
+                  </div>
+                  {wait != null && (
+                    <div style={{ textAlign: 'right', background: 'rgba(0,0,0,0.15)', padding: '12px 16px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.9 }}>Estimated Wait</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>
+                        {wait === 0 ? 'Your turn!' : `~${wait} min`}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
         </div>
       ) : !data.isSelected && (
         /* STANDBY — checked in, rounds not started yet */
-        <div className="mx-4 mt-6 bg-warn-50 rounded-2xl border-2 border-warn-400 p-6 text-center shadow-[0_4px_15px_rgba(245,158,11,0.1)] relative overflow-hidden">
-          <div className="absolute inset-0 border-2 border-warn-400 rounded-2xl animate-pulse ring-4 ring-warn-100"></div>
-          <div className="text-[40px] mb-3 animate-bounce">⏳</div>
-          <div className="text-warn-600 font-black text-lg mb-2 relative z-10">
-            {latecomerApproved ? '✅ Entry Approved!' : 'Standby — You\'re Checked In!'}
+        <div className="mx-5 mt-6 bg-slate-800/50 backdrop-blur-xl rounded-3xl border border-slate-700/50 p-8 text-center shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 border-2 border-indigo-500/20 rounded-3xl"></div>
+          <div className="text-[48px] mb-4 animate-bounce drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">⏳</div>
+          <div className="text-white font-black text-2xl mb-3 relative z-10 tracking-tight">
+            {latecomerApproved ? '✅ Entry Approved!' : 'You\'re Checked In!'}
           </div>
-          <div className="text-slate-600 text-sm leading-relaxed relative z-10">
+          <div className="text-slate-300 text-[15px] leading-relaxed relative z-10 mb-6">
             {latecomerApproved
               ? 'Your late entry has been approved. Please proceed to your assigned room.'
               : (<>Rounds haven't started yet. Please proceed to<br />
-                <strong className="text-brand-600">{drive?.venueDetails?.hallName || 'the main hall'}</strong> and wait for further instructions.</>)
+                <strong className="text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-md mx-1">{drive?.venueDetails?.hallName || 'the main hall'}</strong> and relax.</>)
             }
           </div>
           {drive?.reportTime && !latecomerApproved && (
-            <div className="mt-4 bg-white rounded-xl py-2 px-4 inline-block text-[13px] font-bold text-slate-700 border border-brand-100 relative z-10 shadow-sm">
-              🕘 Report by: {drive.reportTime}
+            <div className="bg-slate-900/60 rounded-xl py-3 px-5 inline-flex items-center gap-2 text-sm font-bold text-slate-200 border border-slate-700 relative z-10 shadow-inner">
+              <Clock size={16} className="text-indigo-400" /> Report by: {drive.reportTime}
             </div>
           )}
           {/* LIVE WAIT TIME PILL */}
           {estimatedWait && !latecomerApproved && (
-            <div className="mt-3 relative z-10 flex justify-center">
+            <div className="mt-5 relative z-10 flex justify-center">
               <div style={{
                 background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
                 color: 'white',
                 borderRadius: 999,
-                padding: '6px 16px',
-                fontSize: 13,
+                padding: '8px 20px',
+                fontSize: 14,
                 fontWeight: 800,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 6,
-                boxShadow: '0 2px 8px rgba(245,158,11,0.35)',
+                gap: 8,
+                boxShadow: '0 4px 15px rgba(245,158,11,0.4)',
                 animation: 'pulse 2s ease-in-out infinite'
               }}>
-                <span style={{ width: 6, height: 6, background: 'white', borderRadius: '50%', display: 'inline-block', opacity: 0.85 }}></span>
+                <span style={{ width: 8, height: 8, background: 'white', borderRadius: '50%', display: 'inline-block', boxShadow: '0 0 10px white' }}></span>
                 Est. wait: ~{estimatedWait} min
               </div>
             </div>
@@ -541,14 +632,18 @@ const WelcomePage: React.FC = () => {
 
       {/* === SECTION 3: Event Roadmap === */}
       <div style={{
-        margin: '24px 16px 0',
-        background: 'white',
-        borderRadius: 20,
-        padding: 20,
-        boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
-        border: '1px solid #E2E8F0'
+        margin: '24px 20px 0',
+        background: 'rgba(255,255,255,0.03)',
+        backdropFilter: 'blur(16px)',
+        borderRadius: 24,
+        padding: '24px 24px 8px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+        border: '1px solid rgba(255,255,255,0.08)'
       }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0F172A', marginBottom: 20 }}>Event Schedule</h3>
+        <h3 style={{ fontSize: 18, fontWeight: 800, color: 'white', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ padding: 6, background: 'rgba(99,102,241,0.2)', borderRadius: 8, color: '#818CF8' }}><Clock size={18} /></div>
+          Event Roadmap
+        </h3>
 
         <div style={{ position: 'relative' }}>
           {drive?.rounds?.map((round: any, i: number) => {
@@ -558,55 +653,57 @@ const WelcomePage: React.FC = () => {
 
             return (
               <div key={round.type} style={{
-                display: 'flex', gap: 16, marginBottom: isLast ? 0 : 24,
+                display: 'flex', gap: 20, marginBottom: isLast ? 0 : 32,
                 position: 'relative'
               }}>
                 {/* Timeline dot */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <div style={{
-                    width: 32, height: 32, borderRadius: '50%',
+                    width: 36, height: 36, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 14, fontWeight: 700, flexShrink: 0,
+                    fontSize: 16, fontWeight: 800, flexShrink: 0, transition: 'all 0.3s ease',
                     ...(status === 'completed'
-                      ? { background: '#22C55E', color: 'white' }
+                      ? { background: 'linear-gradient(135deg, #22C55E 0%, #16A34A 100%)', color: 'white', boxShadow: '0 4px 15px rgba(34,197,94,0.4)' }
                       : status === 'active'
-                        ? { background: '#4F46E5', color: 'white', boxShadow: '0 0 0 4px rgba(99,102,241,0.2)' }
-                        : { background: '#E2E8F0', color: '#94A3B8' })
+                        ? { background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)', color: 'white', boxShadow: '0 0 0 4px rgba(99,102,241,0.3), 0 4px 20px rgba(99,102,241,0.5)' }
+                        : { background: 'rgba(255,255,255,0.05)', color: '#64748B', border: '1px solid rgba(255,255,255,0.1)' })
                   }}>
                     {status === 'completed' ? '✓' : status === 'active' ? '●' : (i + 1)}
                   </div>
                   {/* Connecting line */}
                   {!isLast && (
                     <div style={{
-                      width: 2, flex: 1, minHeight: 24,
-                      background: status === 'completed' ? '#22C55E' : '#E2E8F0'
+                      width: 2, flex: 1, minHeight: 32, margin: '8px 0',
+                      background: status === 'completed' ? 'linear-gradient(to bottom, #22C55E, rgba(34,197,94,0.3))' : 'rgba(255,255,255,0.05)'
                     }} />
                   )}
                 </div>
 
                 {/* Content */}
-                <div style={{ paddingBottom: isLast ? 0 : 4, flex: 1 }}>
+                <div style={{ paddingBottom: isLast ? 24 : 8, flex: 1, marginTop: 4 }}>
                   <div style={{
-                    fontSize: 15,
-                    fontWeight: status === 'active' ? 700 : 500,
-                    color: status === 'completed' ? '#94A3B8' : status === 'active' ? '#4F46E5' : '#334155'
+                    fontSize: 17,
+                    fontWeight: status === 'active' ? 800 : 600,
+                    color: status === 'completed' ? '#94A3B8' : status === 'active' ? 'white' : '#64748B',
+                    letterSpacing: -0.3
                   }}>
                     {round.type.replace('_', ' ').toUpperCase()}
                   </div>
                   {scheduleItem?.startTime && (
-                    <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>
+                    <div style={{ fontSize: 13, color: status === 'completed' ? '#64748B' : '#94A3B8', marginTop: 4, fontWeight: 500 }}>
                       {scheduleItem.startTime} • {scheduleItem.duration} mins
                     </div>
                   )}
                   {status === 'active' && (
-                    <span style={{
-                      display: 'inline-block', marginTop: 6,
-                      background: '#EEF2FF', color: '#4F46E5',
-                      fontSize: 11, fontWeight: 700, padding: '3px 10px',
-                      borderRadius: 10
+                    <div style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10,
+                      background: 'rgba(99,102,241,0.15)', color: '#A5B4FC',
+                      fontSize: 12, fontWeight: 700, padding: '4px 12px',
+                      borderRadius: 12, border: '1px solid rgba(99,102,241,0.3)'
                     }}>
-                      ● In Progress
-                    </span>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#818CF8', animation: 'pulse 1.5s infinite' }} />
+                      In Progress
+                    </div>
                   )}
                 </div>
               </div>
@@ -617,47 +714,58 @@ const WelcomePage: React.FC = () => {
 
       {/* === SECTION 4: Drive Info === */}
       <div style={{
-        margin: '16px 16px 32px',
-        background: 'white',
-        borderRadius: 20,
-        padding: 20,
-        boxShadow: '0 2px 10px rgba(0,0,0,0.04)',
-        border: '1px solid #E2E8F0',
+        margin: '20px 20px 40px',
+        background: 'rgba(255,255,255,0.02)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: 24,
+        padding: 24,
+        border: '1px solid rgba(255,255,255,0.06)',
         display: 'flex',
-        justifyContent: 'space-around'
+        justifyContent: 'space-around',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
       }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Company</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginTop: 4 }}>{drive?.companyName}</div>
+        <div style={{ textAlign: 'center', flex: 1 }}>
+          <div style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Company</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'white', marginTop: 6 }}>{drive?.companyName}</div>
         </div>
-        <div style={{ width: 1, background: '#E2E8F0' }} />
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Role</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginTop: 4 }}>{drive?.jobRole}</div>
+        <div style={{ width: 1, background: 'rgba(255,255,255,0.1)' }} />
+        <div style={{ textAlign: 'center', flex: 1 }}>
+          <div style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Role</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'white', marginTop: 6 }}>{drive?.jobRole}</div>
         </div>
-        <div style={{ width: 1, background: '#E2E8F0' }} />
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Event Date</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', marginTop: 4 }}>
+        <div style={{ width: 1, background: 'rgba(255,255,255,0.1)' }} />
+        <div style={{ textAlign: 'center', flex: 1 }}>
+          <div style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Date</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'white', marginTop: 6 }}>
             {drive?.eventDate ? new Date(drive.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'TBD'}
           </div>
         </div>
       </div>
 
       {/* === BOTTOM MOBILE NAVIGATION === */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-200 z-50 p-2 flex items-center justify-around max-w-[480px] mx-auto shadow-[0_-4px_20px_rgba(0,0,0,0.05)] pb-4">
-        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex flex-col items-center p-2 text-brand-600 transition-transform active:scale-95">
-          <Home size={22} className="mb-1" />
-          <span className="text-[10px] font-bold">Home</span>
+      </div> {/* Closes the relative zIndex 1 container */}
+      
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        background: 'rgba(15, 23, 42, 0.8)',
+        backdropFilter: 'blur(20px)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        zIndex: 50, padding: '12px 16px 24px',
+        maxWidth: 480, margin: '0 auto',
+        display: 'flex', justifyContent: 'space-around', alignItems: 'center'
+      }}>
+        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex flex-col items-center p-2 text-indigo-400 transition-transform active:scale-95 outline-none">
+          <Home size={24} className="mb-1" strokeWidth={2.5} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Home</span>
         </button>
-        <button onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })} className="flex flex-col items-center p-2 text-slate-400 hover:text-slate-600 transition-all active:scale-95">
-          <Clock size={22} className="mb-1" />
-          <span className="text-[10px] font-bold">Timeline</span>
+        <button onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })} className="flex flex-col items-center p-2 text-slate-400 hover:text-indigo-300 transition-all active:scale-95 outline-none">
+          <Clock size={24} className="mb-1" strokeWidth={2} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">Roadmap</span>
         </button>
-        <button onClick={handleSOS} className="flex flex-col items-center p-2 text-panic-500 hover:text-panic-600 transition-all active:scale-95 relative">
-          <div className="absolute top-1 right-2 w-2 h-2 rounded-full bg-panic-500 animate-ping"></div>
-          <LifeBuoy size={22} className="mb-1" />
-          <span className="text-[10px] font-bold">SOS Help</span>
+        <button onClick={handleSOS} className="flex flex-col items-center p-2 text-rose-500 hover:text-rose-400 transition-all active:scale-95 relative outline-none">
+          <div className="absolute top-1 right-2 w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></div>
+          <LifeBuoy size={24} className="mb-1" strokeWidth={2.5} />
+          <span className="text-[10px] font-bold uppercase tracking-wider">SOS Help</span>
         </button>
       </div>
 

@@ -146,6 +146,12 @@ export default function InvigilatorPortal() {
     if (data?.driveDetails?._id) {
       socket.emit('join:drive', data.driveDetails._id);
       socket.on('drive:paused', (d: any) => setIsPaused(d.isPaused));
+      
+      // Initialize dynamic rubric if defined by the drive
+      if (data.driveDetails.scorecardTraits && data.driveDetails.scorecardTraits.length > 0) {
+        setRubric(data.driveDetails.scorecardTraits.map((t: string) => ({ trait: t, score: 5 })));
+      }
+      
       return () => {
         socket.off('drive:paused');
       };
@@ -194,24 +200,50 @@ export default function InvigilatorPortal() {
     }
     
     if (isRecording) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch (err) {}
       setIsRecording(false);
     } else {
       try {
         recognitionRef.current.start();
         setIsRecording(true);
         toast.success("Voice recognition started. Speak now.", { icon: '🎙️' });
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        console.error('Speech recognition error:', err);
+        if (err.name === 'NotAllowedError') {
+          toast.error('Microphone access denied. Please check permissions.');
+        } else if (err.name === 'InvalidStateError' || err.name === 'AbortError') {
+          // Browser thinks it's already recording or previous instance hasn't cleanly exited.
+          try { recognitionRef.current.stop(); } catch(e) {}
+          setTimeout(() => {
+            try { 
+              recognitionRef.current.start(); 
+              setIsRecording(true); 
+              toast.success("Voice recognition restarted.", { icon: '🎙️' });
+            } catch(e) {
+              toast.error('Operation failed. Please type manually.', { icon: '⌨️' });
+            }
+          }, 400); // Give it half a second to release the mic
+        } else {
+          toast.error('Operation failed. Please type manually.', { icon: '⌨️' });
+        }
+        setIsRecording(false);
       }
     }
   };
 
   const handleEvaluate = async (decision: 'Pass' | 'Fail', studentObj = selectedStudent) => {
     if (!studentObj) return;
+    // Client-side pause guard — mirrors backend 403
+    if (isPaused) {
+      toast.error('⛔ Drive is paused. Evaluations are disabled until admin resumes.');
+      return;
+    }
     if (decision !== 'Fail' && !evalName.trim()) { toast.error('Please enter your name as the evaluator'); return; }
     
     if (studentObj === selectedStudent && !confirm(`Are you sure you want to mark ${studentObj?.data?.name} as ${decision}? This cannot be undone.`)) return;
+
 
     setSubmitting(true);
     try {

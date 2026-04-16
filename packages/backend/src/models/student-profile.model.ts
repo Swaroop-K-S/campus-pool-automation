@@ -7,7 +7,24 @@ export interface IStudentProfile {
   phone?: string;
   branch?: string;
   collegeId?: mongoose.Types.ObjectId;
+  strikes?: number;
   lastSeen?: Date;
+  
+  // Academic Data (For Idea A: Match Engine)
+  cgpa?: number;
+  tenthPercentage?: number;
+  twelfthPercentage?: number;
+  diplomaCGPA?: number;
+  educationPath?: '12th Standard / PUC' | 'Diploma (Lateral Entry)' | 'Other';
+  
+  // Portfolio Data (For Idea D: Resume Builder)
+  skills?: string[];
+  certifications?: string[];
+  projects?: {
+    title: string;
+    description: string;
+    url?: string;
+  }[];
 }
 
 const studentProfileSchema = new Schema({
@@ -17,7 +34,24 @@ const studentProfileSchema = new Schema({
   phone: { type: String },
   branch: { type: String },
   collegeId: { type: Schema.Types.ObjectId, ref: 'College' },
-  lastSeen: { type: Date, default: Date.now }
+  strikes: { type: Number, default: 0 },
+  lastSeen: { type: Date, default: Date.now },
+
+  // Academic extensions
+  cgpa: { type: Number },
+  tenthPercentage: { type: Number },
+  twelfthPercentage: { type: Number },
+  diplomaCGPA: { type: Number },
+  educationPath: { type: String, enum: ['12th Standard / PUC', 'Diploma (Lateral Entry)', 'Other'] },
+
+  // Portfolio extensions
+  skills: [{ type: String }],
+  certifications: [{ type: String }],
+  projects: [{
+    title: { type: String, required: true },
+    description: { type: String, required: true },
+    url: { type: String }
+  }]
 }, {
   timestamps: true
 });

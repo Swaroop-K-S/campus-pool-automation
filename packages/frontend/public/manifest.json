@@ -1,21 +1,43 @@
 {
-  "name": "CampusPool Student Event App",
+  "name": "CampusPool — Campus Placement Automation",
   "short_name": "CampusPool",
-  "description": "Live Event Day Dashboard for Campus Placement",
+  "description": "Live Event Day Dashboard for Campus Placement Drives",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F8FAFC",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
   "theme_color": "#4F46E5",
+  "categories": ["education", "productivity"],
+  "lang": "en-IN",
+  "scope": "/",
   "icons": [
     {
       "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.svg",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     },
     {
       "src": "/favicon.svg",
       "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "My Status",
+      "short_name": "Status",
+      "url": "/passport",
+      "description": "Check your current placement status"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
 }

@@ -20,6 +20,12 @@ export const CollegeSchema = z.object({
   }).optional(),
   vapidPublicKey: z.string().optional(),
   vapidPrivateKey: z.string().optional(),
+  campusRooms: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    capacity: z.number(),
+    location: z.string().optional()
+  })).optional(),
   isActive: z.boolean().default(true),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional()

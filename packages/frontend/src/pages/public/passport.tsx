@@ -14,6 +14,7 @@ interface PassportProfile {
   name: string;
   email: string;
   branch?: string;
+  strikes?: number;
 }
 
 interface DriveHistoryItem {
@@ -68,9 +69,14 @@ const globalStyles = `
   .fadeup { animation: fadeup 0.5s ease both; }
   .fadeup-1 { animation-delay:0.05s; }
   .fadeup-2 { animation-delay:0.10s; }
-  .fadeup-3 { animation-delay:0.15s; }
-  .fadeup-4 { animation-delay:0.20s; }
   * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #printable-resume, #printable-resume * { visibility: visible; }
+    #printable-resume { position: absolute; left: 0; top: 0; width: 100%; color: black !important; background: white !important; }
+    .no-print { display: none !important; }
+  }
 `;
 
 // ════════════════════════════════════════════════════════════════
@@ -247,6 +253,11 @@ function ProfileDashboard({ token, onLogout }: { token: string; onLogout: () => 
   const [data, setData] = useState<PassportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Resume Builder state
+  const [showResumeBuilder, setShowResumeBuilder] = useState(false);
+  const [projects, setProjects] = useState<string>('');
+  const [certs, setCerts] = useState<string>('');
 
   useEffect(() => {
     (async () => {
@@ -365,10 +376,18 @@ function ProfileDashboard({ token, onLogout }: { token: string; onLogout: () => 
             </div>
             <div>
               <h1 style={{ fontSize: 24, fontWeight: 900, color: 'white', margin: '0 0 4px' }}>{profile.name}</h1>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: '#A5B4FC', fontFamily: 'monospace', fontWeight: 700, letterSpacing: 1 }}>{profile.usn}</span>
                 {profile.branch && <span style={{ fontSize: 12, color: '#64748B' }}>·</span>}
                 {profile.branch && <span style={{ fontSize: 13, color: '#94A3B8', fontWeight: 600 }}>{profile.branch}</span>}
+                {profile.strikes !== undefined && profile.strikes > 0 && (
+                  <>
+                    <span style={{ fontSize: 12, color: '#64748B' }}>·</span>
+                    <span style={{ fontSize: 11, color: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '2px 8px', borderRadius: '12px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4 }} title="Number of checked-in drives missed">
+                       <AlertCircle size={10} /> {profile.strikes} Strike{profile.strikes > 1 ? 's' : ''}
+                    </span>
+                  </>
+                )}
               </div>
               <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0', fontWeight: 500 }}>{profile.email}</p>
             </div>
@@ -506,8 +525,62 @@ function ProfileDashboard({ token, onLogout }: { token: string; onLogout: () => 
           )}
         </div>
 
+        {/* ── ATS Resume Generator ── */}
+        <div className="fadeup fadeup-3 no-print" style={{ marginTop: 24, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 18, padding: 24 }}>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+             <div>
+               <h3 style={{ fontSize: 16, fontWeight: 800, color: 'white', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 6 }}><LogOut size={16} /> Resume Generator</h3>
+               <p style={{ margin: 0, fontSize: 13, color: '#94A3B8' }}>Generate a 1-click ATS-friendly PDF Resume</p>
+             </div>
+             <button onClick={() => setShowResumeBuilder(!showResumeBuilder)} style={{ padding: '8px 16px', borderRadius: 10, background: '#6366F1', color: 'white', fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                {showResumeBuilder ? 'Close Builder' : 'Open Builder'}
+             </button>
+           </div>
+           
+           {showResumeBuilder && (
+             <div style={{ marginTop: 24, borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: 20 }}>
+               <div style={{ marginBottom: 16 }}>
+                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', marginBottom: 8 }}>Projects (Bullet Points)</label>
+                 <textarea value={projects} onChange={e => setProjects(e.target.value)} placeholder="- Built a placement automation system using Node.js" rows={3} style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: 12, color: 'white', fontSize: 14 }} />
+               </div>
+               <div style={{ marginBottom: 16 }}>
+                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', marginBottom: 8 }}>Certifications</label>
+                 <textarea value={certs} onChange={e => setCerts(e.target.value)} placeholder="- AWS Certified Solutions Architect" rows={3} style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: 12, color: 'white', fontSize: 14 }} />
+               </div>
+               <button onClick={() => window.print()} style={{ width: '100%', padding: '12px', borderRadius: 10, background: '#10B981', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer' }}>Generate PDF Resume</button>
+             </div>
+           )}
+        </div>
+
+        {/* Hidden Printable Resume */}
+        <div id="printable-resume" style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', zIndex: -100, background: 'white', padding: '40px', color: 'black', fontFamily: 'Arial, sans-serif' }}>
+           <h1 style={{ textAlign: 'center', fontSize: 24, fontWeight: 'bold', margin: '0 0 4px', color: 'black' }}>{profile.name}</h1>
+           <p style={{ textAlign: 'center', fontSize: 14, margin: '0 0 20px', color: '#444' }}>{profile.email} | {profile.usn} | {profile.branch || 'Student'}</p>
+           
+           <h2 style={{ fontSize: 14, fontWeight: 'bold', borderBottom: '1px solid #ccc', textTransform: 'uppercase', paddingBottom: 4, marginBottom: 10, color: 'black' }}>Education Options & Metrics</h2>
+           <ul style={{ fontSize: 12, margin: '0 0 20px', paddingLeft: 20 }}>
+             <li><strong>University Seat Number:</strong> {profile.usn}</li>
+             <li><strong>Branch:</strong> {profile.branch || 'Not Specified'}</li>
+             <li><strong>Extracurricular Strikes:</strong> {profile.strikes || 0}</li>
+           </ul>
+
+           {projects && (
+             <>
+               <h2 style={{ fontSize: 14, fontWeight: 'bold', borderBottom: '1px solid #ccc', textTransform: 'uppercase', paddingBottom: 4, marginBottom: 10, color: 'black' }}>Projects</h2>
+               <div style={{ fontSize: 12, margin: '0 0 20px', whiteSpace: 'pre-wrap' }}>{projects}</div>
+             </>
+           )}
+
+           {certs && (
+             <>
+               <h2 style={{ fontSize: 14, fontWeight: 'bold', borderBottom: '1px solid #ccc', textTransform: 'uppercase', paddingBottom: 4, marginBottom: 10, color: 'black' }}>Certifications</h2>
+               <div style={{ fontSize: 12, margin: '0 0 20px', whiteSpace: 'pre-wrap' }}>{certs}</div>
+             </>
+           )}
+        </div>
+
         {/* Footer */}
-        <div className="fadeup fadeup-4" style={{ textAlign: 'center', marginTop: 40 }}>
+        <div className="fadeup fadeup-4 no-print" style={{ textAlign: 'center', marginTop: 40 }}>
           <p style={{ color: '#1E293B', fontSize: 12, fontWeight: 600 }}>CampusPool Passport · Secured with JWT</p>
         </div>
       </div>

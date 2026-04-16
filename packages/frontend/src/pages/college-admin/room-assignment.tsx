@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 import toast from 'react-hot-toast';
 import { DndContext, useDraggable, useDroppable, DragOverlay } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
+import { Printer, Users, AlertTriangle, Database, Plus, Check } from 'lucide-react';
 
 interface StudentChip {
   _id: string;
@@ -14,6 +15,7 @@ interface StudentChip {
 interface AssignmentRoom {
   roomId: string;
   roomName: string;
+  capacity: number;
   studentIds: string[];
   students: StudentChip[];
   matchScore: number;
@@ -47,14 +49,22 @@ function DraggableStudent({ student, roomId, isOverlay = false }: { student: Stu
   );
 }
 
-function DroppableRoom({ room, confirmed }: any) {
+function DroppableRoom({ room, confirmed, driveId }: any) {
   const { isOver, setNodeRef } = useDroppable({ id: room.roomId });
-  const capacityPercent = Math.min(100, (room.studentIds.length / 30) * 100);
-  const isOverCapacity = room.studentIds.length > 30;
+  const cap = room.capacity || 30;
+  const filled = room.studentIds.length;
+  const capacityPercent = Math.min(100, (filled / cap) * 100);
+  const isOverCapacity = filled > cap;
+  const isFull = filled >= cap;
 
   return (
     <div ref={setNodeRef}
-      className={`bg-white rounded-[24px] p-6 border-2 transition-all flex flex-col ${isOver ? 'border-dashed border-indigo-400 bg-indigo-50/40 transform scale-[1.01]' : isOverCapacity ? 'border-red-200 shadow-sm' : 'border-slate-200/70 shadow-[0_4px_20px_-4px_rgba(6,81,237,0.03)]'}`}>
+      className={`bg-white rounded-[24px] p-6 border-2 transition-all flex flex-col ${
+        isFull && isOver ? 'border-red-400 bg-red-50/40' :
+        isOver ? 'border-dashed border-indigo-400 bg-indigo-50/40 scale-[1.01]' :
+        isOverCapacity ? 'border-red-200 shadow-sm' :
+        'border-slate-200/70 shadow-[0_4px_20px_-4px_rgba(6,81,237,0.03)]'
+      }`}>
       
       {/* Room Header & Empty Seats */}
       <div className="flex items-center justify-between mb-4">
@@ -72,19 +82,29 @@ function DroppableRoom({ room, confirmed }: any) {
             </button>
           )}
         </div>
-        <div className="flex flex-col items-end text-right">
+        <div className="flex flex-col items-end text-right gap-1">
           <div className="flex items-baseline gap-1">
-             <span className={`text-3xl font-black tabular-nums tracking-tighter ${isOverCapacity ? 'text-red-500' : 'text-slate-300'}`}>
-                {Math.max(0, 30 - room.studentIds.length)}
-             </span>
-             <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Seats</span>
+            <span className={`text-3xl font-black tabular-nums tracking-tighter ${
+              isOverCapacity ? 'text-red-500' : isFull ? 'text-amber-500' : 'text-slate-300'
+            }`}>
+              {Math.max(0, cap - filled)}
+            </span>
+            <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Seats</span>
           </div>
+          {isFull && !isOverCapacity && (
+            <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 uppercase tracking-wider">Full</span>
+          )}
+          {isOverCapacity && (
+            <span className="text-[9px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200 uppercase tracking-wider flex items-center gap-1"><AlertTriangle size={8}/>Over</span>
+          )}
         </div>
       </div>
 
       {/* Progress Bar */}
       <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4 overflow-hidden border border-slate-200/50">
-        <div className={`h-full transition-all duration-700 ease-out ${isOverCapacity ? 'bg-red-500' : 'bg-indigo-500'}`}
+        <div className={`h-full transition-all duration-700 ease-out ${
+          isOverCapacity ? 'bg-red-500' : isFull ? 'bg-amber-400' : capacityPercent >= 75 ? 'bg-indigo-400' : 'bg-indigo-500'
+        }`}
           style={{ width: `${Math.min(100, capacityPercent)}%` }} />
       </div>
 
@@ -98,7 +118,18 @@ function DroppableRoom({ room, confirmed }: any) {
       )}
 
       {/* Draggable Chips Container */}
-      <div className={`flex-1 rounded-xl p-3 border ${isOver ? 'bg-white border-indigo-100 inset-shadow-sm' : 'bg-slate-50/50 border-transparent'} overflow-y-auto max-h-[300px] custom-scrollbar transition-colors`}>
+      <div className={`flex-1 rounded-xl p-3 border ${
+        isFull && isOver ? 'bg-red-50/50 border-red-100' :
+        isOver ? 'bg-white border-indigo-100' : 'bg-slate-50/50 border-transparent'
+      } overflow-y-auto max-h-[300px] custom-scrollbar transition-colors relative`}>
+        {isFull && isOver && (
+          <div className="absolute inset-0 bg-red-50/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-xl">
+            <div className="text-red-600 font-black text-xs text-center">
+              <AlertTriangle size={20} className="mx-auto mb-1" />
+              Room is full!
+            </div>
+          </div>
+        )}
         <div className="flex flex-col gap-2">
           {room.students.map((s: any) => (
             <DraggableStudent key={s._id} student={s} roomId={room.roomId} />
@@ -109,6 +140,17 @@ function DroppableRoom({ room, confirmed }: any) {
             </div>
           )}
         </div>
+        {/* Print link shown when confirmed */}
+        {confirmed && (
+          <a
+            href={`/admin/drives/${driveId}/rooms/${room.roomId}/print`}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 flex items-center justify-center gap-1.5 w-full text-[10px] font-black text-indigo-500 hover:text-indigo-700 py-2 border-t border-slate-100 transition-colors"
+          >
+            <Printer size={11} /> Print Seating Manifest
+          </a>
+        )}
       </div>
     </div>
   );
@@ -155,6 +197,12 @@ export default function RoomAssignmentPage() {
   const [drive, setDrive] = useState<any>(null);
   const [loadedDrive, setLoadedDrive] = useState(false);
 
+  // Global campus rooms from Settings
+  const [campusRooms, setCampusRooms] = useState<{ id: string; name: string; capacity: number; location?: string }[]>([]);
+  const [showProvisionModal, setShowProvisionModal] = useState(false);
+  const [selectedGlobalRooms, setSelectedGlobalRooms] = useState<Set<string>>(new Set());
+  const [provisioning, setProvisioning] = useState(false);
+
   // Fetch initial allocations and unassigned pool
   const fetchState = useCallback(async () => {
     try {
@@ -180,11 +228,40 @@ export default function RoomAssignmentPage() {
         if (d.success) setDrive(d.data);
         setLoadedDrive(true);
       });
+      // Also load global campus rooms
+      api.get('/college/profile').then((d: any) => {
+        if (d.success && d.data?.campusRooms) {
+          setCampusRooms(d.data.campusRooms);
+        }
+      }).catch(() => {});
     }
     fetchState();
   }, [fetchState, loadedDrive, driveId]);
 
   const rounds = drive?.rounds || [];
+
+  // ─── Provision rooms from global DB ───────────────────────────────
+  const handleProvisionRooms = async () => {
+    if (selectedGlobalRooms.size === 0) return toast.error('Select at least one room');
+    setProvisioning(true);
+    try {
+      const roomsToCreate = campusRooms.filter(r => selectedGlobalRooms.has(r.id));
+      for (const room of roomsToCreate) {
+        await api.post(`/drives/${driveId}/rooms`, {
+          name: room.name,
+          capacity: room.capacity,
+          location: room.location,
+          round: roundType,
+          sourceRoomId: room.id,
+        });
+      }
+      toast.success(`${roomsToCreate.length} room${roomsToCreate.length > 1 ? 's' : ''} provisioned!`);
+      setShowProvisionModal(false);
+      setSelectedGlobalRooms(new Set());
+      fetchState();
+    } catch { toast.error('Failed to provision rooms'); }
+    setProvisioning(false);
+  };
 
   const handleAutoAssign = useCallback(async () => {
     setLoading('random');
@@ -350,12 +427,34 @@ export default function RoomAssignmentPage() {
       </div>
 
       {assignments.length === 0 && unassigned.length === 0 && !loading ? (
-        <div className="flex-1 bg-slate-50/50 border-2 border-dashed border-slate-200 rounded-[32px] flex items-center justify-center">
-            <div className="text-center max-w-sm">
-               <div className="text-6xl mb-6">🏫</div>
-               <h3 className="text-xl font-black text-slate-800 mb-2 tracking-tight">No Rooms Found</h3>
-               <p className="text-slate-500 text-sm font-medium">Ensure rooms are configured for this round. Hit Auto Fill to distribute {totalStudents} students.</p>
+        <div className="flex-1 flex flex-col gap-4">
+          {/* No Rooms — Provision from Global DB */}
+          <div className="flex-1 bg-slate-50/50 border-2 border-dashed border-slate-200 rounded-[32px] flex items-center justify-center">
+            <div className="text-center max-w-md px-4">
+              <div className="text-6xl mb-4">🏫</div>
+              <h3 className="text-xl font-black text-slate-800 mb-2 tracking-tight">No Rooms Assigned</h3>
+              <p className="text-slate-500 text-sm font-medium mb-6">
+                {campusRooms.length > 0
+                  ? `Select rooms from your Campus Infrastructure to provision for the ${roundType.replace('_', ' ')} round.`
+                  : 'No global rooms found. Go to Settings → Campus Infrastructure to add your college rooms first.'}
+              </p>
+
+              {campusRooms.length > 0 ? (
+                <button
+                  onClick={() => setShowProvisionModal(true)}
+                  className="flex items-center gap-2 mx-auto bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black px-6 py-3 rounded-xl text-sm transition-all shadow-md shadow-indigo-200"
+                >
+                  <Database size={16} /> Provision from Campus Rooms
+                </button>
+              ) : (
+                <a href="/admin/settings"
+                  className="flex items-center gap-2 mx-auto bg-slate-800 hover:bg-slate-700 text-white font-black px-6 py-3 rounded-xl text-sm transition-all w-fit"
+                >
+                  Go to Settings →
+                </a>
+              )}
             </div>
+          </div>
         </div>
       ) : (
         <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -367,9 +466,30 @@ export default function RoomAssignmentPage() {
             
             {/* Right Pane Grid */}
             <div className="flex-1 overflow-y-auto custom-scrollbar pb-10">
+               {/* Summary Stats */}
+               {assignments.length > 0 && (
+                 <div className="flex items-center gap-3 flex-wrap mb-5">
+                   {assignments.map(room => {
+                     const cap = room.capacity || 30;
+                     const filled = room.studentIds.length;
+                     const pct = Math.round((filled / cap) * 100);
+                     return (
+                       <div key={room.roomId} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[11px] font-bold ${
+                         filled > cap ? 'border-red-200 bg-red-50 text-red-700' :
+                         filled === cap ? 'border-amber-200 bg-amber-50 text-amber-700' :
+                         'border-slate-200 bg-slate-50 text-slate-600'
+                       }`}>
+                         <Users size={11} />
+                         {room.roomName}: {filled}/{cap}
+                         <span className="text-[9px] opacity-60">({pct}%)</span>
+                       </div>
+                     );
+                   })}
+                 </div>
+               )}
                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-max">
                  {assignments.map(room => (
-                   <DroppableRoom key={room.roomId} room={room} confirmed={confirmed} />
+                   <DroppableRoom key={room.roomId} room={room} confirmed={confirmed} driveId={driveId} />
                  ))}
                </div>
             </div>
@@ -381,6 +501,64 @@ export default function RoomAssignmentPage() {
             ) : null}
           </DragOverlay>
         </DndContext>
+      )}
+
+      {/* ─── Provision Modal ─── */}
+      {showProvisionModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowProvisionModal(false)}>
+          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-slate-100">
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">Provision Rooms</h2>
+              <p className="text-sm text-slate-500 mt-1">Select rooms to add to the <strong className="text-indigo-600">{roundType.replace('_', ' ')}</strong> round</p>
+            </div>
+            <div className="p-4 max-h-[50vh] overflow-y-auto custom-scrollbar space-y-2">
+              {campusRooms.map(room => {
+                const selected = selectedGlobalRooms.has(room.id);
+                return (
+                  <button
+                    key={room.id}
+                    onClick={() => {
+                      setSelectedGlobalRooms(prev => {
+                        const next = new Set(prev);
+                        if (next.has(room.id)) next.delete(room.id);
+                        else next.add(room.id);
+                        return next;
+                      });
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all text-left ${
+                      selected ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div>
+                      <span className="font-bold text-slate-800 text-sm">{room.name}</span>
+                      {room.location && <span className="ml-2 text-xs text-slate-400">{room.location}</span>}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">{room.capacity} seats</span>
+                      {selected && <Check size={16} className="text-indigo-600 flex-shrink-0" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="p-4 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-sm font-bold text-slate-500">{selectedGlobalRooms.size} selected</span>
+              <div className="flex gap-2">
+                <button onClick={() => setShowProvisionModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleProvisionRooms}
+                  disabled={provisioning || selectedGlobalRooms.size === 0}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black px-5 py-2 rounded-xl text-sm transition-all active:scale-95"
+                >
+                  {provisioning ? 'Adding…' : <><Plus size={14} /> Add {selectedGlobalRooms.size > 0 ? selectedGlobalRooms.size : ''} Room{selectedGlobalRooms.size !== 1 ? 's' : ''}</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

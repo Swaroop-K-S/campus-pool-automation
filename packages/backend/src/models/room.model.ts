@@ -6,7 +6,9 @@ const roomSchema = new Schema({
   collegeId: { type: Schema.Types.ObjectId, ref: 'College', required: true },
   round: { type: String, required: true },
   name: { type: String, required: true },
-  floor: { type: String, required: true },
+  floor: { type: String },                               // optional — kept for legacy
+  location: { type: String },                            // human-readable location info
+  sourceRoomId: { type: String },                        // ref to campusRooms[].id in College
   capacity: { type: Number, required: true },
   isLocked: { type: Boolean, default: false },           // Room lock — blocks new assignments
   allowedBranches: [{ type: String }],                   // [] = allow all

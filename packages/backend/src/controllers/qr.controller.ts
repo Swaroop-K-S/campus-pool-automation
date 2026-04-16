@@ -258,6 +258,12 @@ export const verifyStudent = async (req: Request, res: Response): Promise<void> 
         status: 'attended', 
         message: assignedRoomInfo ? `Assigned to ${assignedRoomInfo}` : undefined 
       });
+      // God View live checked-in counter (admin dashboard)
+      getIO().to(`drive:${driveId}:admin`).emit('drive:stats_updated', {
+        driveId,
+        checkedIn: attendedCount,
+        studentName
+      });
     } catch {}
 
     // 8. Generate session token (8h)
@@ -322,6 +328,27 @@ export const getWelcomeData = async (req: Request, res: Response): Promise<void>
       });
     }
 
+    // ── Estimated Wait Time (EWT) Engine ──────────────────────────────
+    // Only relevant when student is attended and has an active round + room
+    let queuePosition: number | null = null;
+    let estimatedWaitMinutes: number | null = null;
+
+    if (application.status === 'attended' && assignedRoom && activeRound) {
+      // Count students in the same room who checked in BEFORE this student
+      const studentsAheadInRoom = await ApplicationModel.countDocuments({
+        driveId,
+        status: 'attended',
+        attendedAt: { $lt: application.attendedAt || new Date() },
+        _id: { $in: (assignedRoom as any).assignedStudents || [] }
+      });
+
+      // Per-round processing time for IT interviews is typically 20-30 min
+      // Use avg from any completed rounds in drives history, or default to 20 min
+      const avgMinutesPerStudent = 20;
+      queuePosition = studentsAheadInRoom + 1; // 1-based
+      estimatedWaitMinutes = studentsAheadInRoom * avgMinutesPerStudent;
+    }
+
     res.json({
       success: true,
       data: {
@@ -343,7 +370,9 @@ export const getWelcomeData = async (req: Request, res: Response): Promise<void>
         },
         assignedRoom: assignedRoom ? { name: assignedRoom.name, floor: assignedRoom.floor } : null,
         activeRound: activeRound ? { type: activeRound.type, status: activeRound.status } : null,
-        isSelected: application.status === 'selected'
+        isSelected: application.status === 'selected',
+        queuePosition,           // NEW: 1-based position in assigned room queue
+        estimatedWaitMinutes,    // NEW: ~minutes until their turn
       }
     });
   } catch (error: any) {

@@ -40,6 +40,7 @@ export function CommandPalette() {
       const defaultActions = [
         { type: 'Navigation', title: 'Dashboard', icon: Folder, action: () => navigate('/admin/dashboard') },
         { type: 'Navigation', title: 'Analytics', icon: Folder, action: () => navigate('/admin/analytics') },
+        { type: 'Navigation', title: 'Student Watchlist', icon: Folder, action: () => navigate('/admin/students') },
         { type: 'Navigation', title: 'New Placement Drive', icon: Folder, action: () => navigate('/admin/drives/new') },
         { type: 'System', title: 'Settings', icon: Settings, action: () => navigate('/admin/settings') },
         { type: 'System', title: 'Sign Out', icon: LogOut, action: () => logout() }
@@ -54,6 +55,7 @@ export function CommandPalette() {
     let found = [
       { type: 'Navigation', title: 'Dashboard', icon: Folder, action: () => navigate('/admin/dashboard') },
       { type: 'Navigation', title: 'Analytics', icon: Folder, action: () => navigate('/admin/analytics') },
+      { type: 'Navigation', title: 'Student Watchlist', icon: Folder, action: () => navigate('/admin/students') },
       { type: 'Navigation', title: 'New Placement Drive', icon: Folder, action: () => navigate('/admin/drives/new') },
       { type: 'System', title: 'Settings', icon: Settings, action: () => navigate('/admin/settings') }
     ].filter(item => item.title.toLowerCase().includes(searchStr));

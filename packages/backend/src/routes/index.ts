@@ -10,6 +10,9 @@ import exportRoutes from './export.routes';
 import ssoRoutes from './sso.routes';
 import invigilatorRoutes from './invigilator.routes';
 import passportRoutes from './passport.routes';
+import hrRoutes from './hr.routes';
+import studentsRoutes from './students.routes';
+import collegeRoutes from './college.routes';
 
 const router = Router();
 
@@ -24,5 +27,8 @@ router.use('/drives', applicationRoutes);
 router.use('/sso', ssoRoutes);
 router.use('/invigilator', invigilatorRoutes);
 router.use('/passport', passportRoutes);
+router.use('/hr', hrRoutes);
+router.use('/students', studentsRoutes);
+router.use('/college', collegeRoutes);
 
 export default router;

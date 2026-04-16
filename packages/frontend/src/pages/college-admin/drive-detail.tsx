@@ -8,7 +8,7 @@ import {
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
   Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search, Eye,
   Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Play, QrCode, Menu, BarChart2,
-  AlertTriangle, ArrowLeft, RefreshCcw, Minus, CheckCircle, Monitor
+  AlertTriangle, ArrowLeft, RefreshCcw, Minus, CheckCircle, Monitor, AlertCircle
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
@@ -21,6 +21,9 @@ import { CSS } from '@dnd-kit/utilities';
 import DriveAuditLog from '../../components/admin/DriveAuditLog';
 import { EventDayRoadmap } from '../../components/admin/EventDayRoadmap';
 import RoomsTab from '../../components/admin/RoomsTab';
+import { GodViewTab } from '../../components/admin/GodViewTab';
+import { DrivePreflightModal } from '../../components/admin/DrivePreflightModal';
+import { MobileAdminBar } from '../../components/admin/MobileAdminBar';
 
 const FIELD_TYPES = [
   { type: 'text', label: 'Text Field', icon: AlignLeft },
@@ -213,6 +216,14 @@ export default function DriveDetailPage() {
   const [appLoading, setAppLoading] = useState(true);
   const [appStats, setAppStats] = useState({ total: 0, applied: 0, shortlisted: 0, attended: 0, selected: 0 });
   const [appSearchQuery, setAppSearchQuery] = useState('');
+  const [appSearchInput, setAppSearchInput] = useState('');
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setAppSearchQuery(appSearchInput);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [appSearchInput]);
   const [appPage, setAppPage] = useState(1);
   const [hasMoreApps, setHasMoreApps] = useState(false);
   const [selectedApp, setSelectedApp] = useState<any>(null);
@@ -242,6 +253,26 @@ export default function DriveDetailPage() {
   const [hallName, setHallName] = useState<string>('');
   const [capacity, setCapacity] = useState<number>(0);
   const [reportTime, setReportTime] = useState<string>('');
+  const [conflictWarning, setConflictWarning] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!eventDate || !driveId) return;
+    const fetchConflict = async () => {
+      try {
+        const res: any = await api.get(`/drives/schedule/check-conflict?date=${eventDate}&excludeDriveId=${driveId}`);
+        if (res.success && res.data.conflicts.length > 0) {
+          setConflictWarning(res.data.conflicts);
+        } else {
+          setConflictWarning([]);
+        }
+      } catch (err) {
+        console.error('Failed to check conflicts', err);
+      }
+    };
+    const t = setTimeout(fetchConflict, 500);
+    return () => clearTimeout(t);
+  }, [eventDate, driveId]);
+
   const [rooms, setRooms] = useState<any[]>([]);
   const [showAddRoom, setShowAddRoom] = useState<string | null>(null);
   const [resources, setResources] = useState<{ title: string; url: string }[]>([]);
@@ -330,6 +361,14 @@ export default function DriveDetailPage() {
   const [columnsInitialized, setColumnsInitialized] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState('all');
   const [downloadLoading, setDownloadLoading] = useState(false);
+
+  // Policy Rules Engine state
+  const [policyMinCgpa, setPolicyMinCgpa] = useState<number>(0);
+  const [policyBranches, setPolicyBranches] = useState<string[]>([]);
+  const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+  const [isPolicyExpanded, setIsPolicyExpanded] = useState(false);
+  const BRANCH_OPTIONS = ['CSE', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'AIML', 'DS', 'MCA', 'MBA'];
+
 
   const socket = useSocket();
 
@@ -424,6 +463,17 @@ export default function DriveDetailPage() {
     socket.on('latecomer:approved', () => {
       fetchMIAStudents();
     });
+    // ── Live drive state change hooks ─────────────────────────────────────────────
+    socket.on('drive:status_changed', ({ status }: any) => {
+      // Patch header badge without a full fetch
+      setDrive((prev: any) => prev ? { ...prev, status } : prev);
+      if (status === 'event_day') toast.success('🚀 Event Day is LIVE!');
+      if (status === 'completed') toast.success('🎉 Drive completed!');
+    });
+    socket.on('drive:shortlist_updated', () => {
+      // Auto-refresh shortlist tab data after upload
+      fetchShortlisted();
+    });
     return () => {
       socket.off('notify:progress');
       socket.off('round:status_changed');
@@ -431,6 +481,8 @@ export default function DriveDetailPage() {
       socket.off('event:stats');
       socket.off('student:latecomer');
       socket.off('latecomer:approved');
+      socket.off('drive:status_changed');
+      socket.off('drive:shortlist_updated');
     };
   }, [driveId]);
 
@@ -444,6 +496,11 @@ export default function DriveDetailPage() {
         if (d.formCloseDate) setFormCloseDate(new Date(d.formCloseDate).toISOString().slice(0, 16));
         setFormStatus(d.formStatus || 'not_configured');
         setFormExtensions(d.formExtensions || []);
+        // Sync policy engine state from loaded drive
+        if (d.eligibility) {
+          setPolicyMinCgpa(d.eligibility.minCGPA || 0);
+          setPolicyBranches(d.eligibility.branches || []);
+        }
       }
     } catch (err) {
       toast.error('Failed to fetch drive info');
@@ -814,9 +871,15 @@ export default function DriveDetailPage() {
   };
 
   const startEventDay = async () => {
+    // Show pre-flight checklist modal before actually starting
+    setShowPreflight(true);
+  };
+
+  const confirmStartEventDay = async () => {
     try {
       await api.patch(`/drives/${driveId}/start-event`);
       toast.success('Event Day started! QR system is now active');
+      setShowPreflight(false);
       fetchDriveDetails();
     } catch { toast.error('Failed to start event'); }
   };
@@ -830,6 +893,7 @@ export default function DriveDetailPage() {
   };
 
   const [archiveLoading, setArchiveLoading] = useState(false);
+  const [showPreflight, setShowPreflight] = useState(false);
   const handleArchiveDrive = async () => {
     if (!confirm('Are you sure you want to archive this drive and download the compliance report? Applications cannot be processed after archival.')) return;
     setArchiveLoading(true);
@@ -1002,6 +1066,17 @@ export default function DriveDetailPage() {
   return (
     <div className="flex flex-col h-full absolute inset-0 bg-slate-50">
       
+      {/* Pre-Flight Checklist Modal */}
+      {showPreflight && (
+        <DrivePreflightModal
+          driveId={driveId!}
+          drive={drive}
+          onConfirm={confirmStartEventDay}
+          onCancel={() => setShowPreflight(false)}
+          onNavigate={(tab) => setActiveTab(tab)}
+        />
+      )}
+
       {/* Compact Header */}
       <div className="bg-white border-b border-slate-200/80 px-6 py-3 shrink-0 relative z-20">
         <div className="relative z-10 max-w-7xl mx-auto">
@@ -1071,6 +1146,24 @@ export default function DriveDetailPage() {
                   <Play size={14} className="fill-current"/> Start Event Day
                 </button>
               )}
+              {/* God View shortcut (event_day only) */}
+              {drive.status === 'event_day' && (
+                <button
+                  onClick={() => setActiveTab('God View')}
+                  className="px-4 py-2 rounded-xl font-bold text-white bg-gradient-to-br from-violet-600 to-indigo-700 hover:from-violet-500 hover:to-indigo-600 active:scale-95 shadow-lg shadow-violet-600/20 transition-all flex items-center gap-1.5 text-sm"
+                >
+                  <Monitor size={14} /> God View
+                </button>
+              )}
+              {/* Command Center (event_day only) */}
+              {drive.status === 'event_day' && (
+                <Link
+                  to={`/admin/drives/${driveId}/command-center`}
+                  className="px-4 py-2 rounded-xl font-black text-white bg-gradient-to-br from-rose-600 to-orange-600 hover:from-rose-500 hover:to-orange-500 active:scale-95 shadow-lg shadow-rose-600/20 transition-all flex items-center gap-1.5 text-sm animate-pulse hover:animate-none"
+                >
+                  🚀 Command Center
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -1079,7 +1172,7 @@ export default function DriveDetailPage() {
       {/* Premium TABS */}
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 px-8 flex gap-8 shrink-0 relative z-10 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] overflow-x-auto hide-scrollbar">
         <div className="max-w-7xl mx-auto flex gap-6 w-full h-14">
-          {['Overview', 'Form Builder', 'Applications', 'Shortlist', 'Rooms', 'Event Day', 'Audit Log'].map(tab => (
+          {['Overview', 'Form Builder', 'Applications', 'Shortlist', 'Rooms', 'Event Day', 'God View', 'Audit Log'].map(tab => (
             <button 
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1103,6 +1196,16 @@ export default function DriveDetailPage() {
       <div className="flex-1 overflow-hidden relative">
         
         {activeTab === 'Rooms' && <RoomsTab drive={drive} driveId={driveId!} />}
+        
+        {activeTab === 'God View' && (
+          <GodViewTab drive={drive} driveId={driveId!} onUpdate={fetchDriveDetails} />
+        )}
+
+        {activeTab === 'Audit Log' && (
+          <div className="p-8 h-full overflow-y-auto bg-slate-50/50">
+            <DriveAuditLog driveId={driveId!} />
+          </div>
+        )}
         
         {activeTab === 'Overview' && (
           <div className="p-8 overflow-y-auto h-full flex flex-col gap-6 bg-slate-50/50">
@@ -1141,6 +1244,27 @@ export default function DriveDetailPage() {
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                 <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest mb-4"><Cpu size={16} className="inline mr-1 mb-0.5" /> Quick Operations</h3>
                 <div className="space-y-3">
+                  <button onClick={async () => {
+                        const toastId = toast.loading('Running AI matching engine...');
+                        try {
+                          const res = await api.get(`/drives/${driveId}/match`);
+                          if ((res as any).success) {
+                            const { matchedCandidates, alreadyApplied } = (res as any).data;
+                            if (matchedCandidates.length > 0) {
+                              toast.success(`Found ${matchedCandidates.length} eligible candidates! (${alreadyApplied} applied). Invitations dispatched!`, { id: toastId, duration: 5000 });
+                            } else {
+                              toast.success(`No new candidates matched your strict criteria.`, { id: toastId });
+                            }
+                          }
+                        } catch (err) {
+                          toast.error('Match engine failed', { id: toastId });
+                        }
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl transition-all font-bold text-sm group"
+                  >
+                     <span className="flex items-center gap-2"><UserCheck size={16} className="text-emerald-500 group-hover:text-emerald-700" /> Match Global Candidates</span>
+                     <ChevronRight size={16} className="text-emerald-300" />
+                  </button>
                   <button onClick={() => {
                         navigator.clipboard.writeText(`${window.location.origin}/apply/${drive.formToken}`);
                         toast.success('Public form link copied!');
@@ -1267,6 +1391,121 @@ export default function DriveDetailPage() {
               </div>
             </div>
 
+            {/* ── POLICY RULES ENGINE CARD ─────────────────────────────────────────── */}
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+              <button
+                onClick={() => setIsPolicyExpanded(p => !p)}
+                className="w-full flex items-center justify-between px-6 py-5 hover:bg-slate-50/80 transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600">
+                    <Lock size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-slate-800 text-sm">Eligibility Policy Engine</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {drive?.eligibility?.minCGPA > 0 || (drive?.eligibility?.branches || []).length > 0
+                        ? `Min CGPA: ${drive?.eligibility?.minCGPA || 'Any'} · Branches: ${(drive?.eligibility?.branches || []).join(', ') || 'All'}`
+                        : 'No eligibility filters configured — all applicants are eligible'}
+                    </p>
+                  </div>
+                </div>
+                <div className={`transition-transform ${isPolicyExpanded ? 'rotate-90' : ''} text-slate-400`}>
+                  <ChevronRight size={18} />
+                </div>
+              </button>
+
+              {isPolicyExpanded && (
+                <div className="border-t border-slate-100 px-6 pb-6 pt-5 space-y-5">
+                  {/* Min CGPA */}
+                  <div>
+                    <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-2">Minimum CGPA</label>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="range" min={0} max={10} step={0.1}
+                        value={policyMinCgpa}
+                        onChange={e => setPolicyMinCgpa(parseFloat(e.target.value))}
+                        className="flex-1 accent-violet-600"
+                      />
+                      <span className="text-lg font-black text-violet-700 w-16 text-right tabular-nums">
+                        {policyMinCgpa === 0 ? 'Any' : policyMinCgpa.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Branch Filter */}
+                  <div>
+                    <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-2">Allowed Branches</label>
+                    <div className="flex flex-wrap gap-2">
+                      {BRANCH_OPTIONS.map(b => (
+                        <button
+                          key={b}
+                          onClick={() => setPolicyBranches(prev =>
+                            prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]
+                          )}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                            policyBranches.includes(b)
+                              ? 'bg-violet-600 border-violet-700 text-white shadow-sm'
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-violet-300 hover:bg-violet-50'
+                          }`}
+                        >{b}</button>
+                      ))}
+                      {policyBranches.length > 0 && (
+                        <button onClick={() => setPolicyBranches([])}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold border border-dashed border-slate-300 text-slate-400 hover:text-red-500 hover:border-red-300 transition-all">
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    {policyBranches.length === 0 && (
+                      <p className="text-xs text-slate-400 mt-1.5">No branches selected = all branches allowed</p>
+                    )}
+                  </div>
+
+                  {/* Impact Preview Banner */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-3">
+                    <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                    <p className="text-xs text-amber-800 font-medium">
+                      Saving will update drive eligibility rules. Click <strong>"Run Sweep"</strong> afterwards to auto-reject non-eligible applicants from the Applications tab.
+                    </p>
+                  </div>
+
+                  {/* Action Row */}
+                  <div className="flex gap-3 pt-1">
+                    <button
+                      disabled={isSavingPolicy}
+                      onClick={async () => {
+                        setIsSavingPolicy(true);
+                        try {
+                          await api.put(`/drives/${driveId}`, {
+                            eligibility: {
+                              ...drive?.eligibility,
+                              minCGPA: policyMinCgpa,
+                              branches: policyBranches
+                            }
+                          });
+                          toast.success('Eligibility policy saved!');
+                          fetchDriveDetails();
+                        } catch { toast.error('Failed to save policy'); }
+                        finally { setIsSavingPolicy(false); }
+                      }}
+                      className="flex-1 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm"
+                    >
+                      {isSavingPolicy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                      Save Policy
+                    </button>
+                    <button
+                      onClick={() => setShowSweepConfirmModal(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-xl font-bold text-sm transition-all"
+                    >
+                      <RefreshCcw size={16} />
+                      Run Sweep
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Archive Feature */}
             {drive.status === 'completed' && (
               <div className="mt-2 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl p-6 lg:p-8 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
@@ -1381,9 +1620,33 @@ export default function DriveDetailPage() {
                   </div>
                 </div>
 
-                <button onClick={scheduleForm} className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-sm mb-4 transition-colors">
-                  Set Schedule
-                </button>
+                <div className="flex gap-2 mb-4">
+                  <button onClick={scheduleForm} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-sm transition-colors">
+                    Set Schedule
+                  </button>
+                  {formStatus !== 'open' && (
+                    <button 
+                      onClick={async () => {
+                        const loadingToast = toast.loading('Opening form instantly...');
+                        try {
+                          await api.post(`/drives/${driveId}/form/schedule`, { 
+                            formOpenDate: new Date().toISOString(),
+                            formCloseDate: formCloseDate || undefined 
+                          });
+                          toast.dismiss(loadingToast);
+                          toast.success('Form is now OPEN and accepting applications!');
+                          fetchDriveDetails();
+                        } catch {
+                           toast.dismiss(loadingToast);
+                           toast.error('Failed to open form');
+                        }
+                      }} 
+                      className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm transition-colors shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle size={16} /> Start Accepting Applications
+                    </button>
+                  )}
+                </div>
 
                 {(formStatus === 'open' || formStatus === 'extended') && (
                   <div className="space-y-4">
@@ -1962,17 +2225,19 @@ export default function DriveDetailPage() {
 
             {/* Filter Chips */}
             <div className="flex gap-2 mb-4">
-              {['all', 'applied', 'shortlisted', 'attended', 'selected'].map(status => (
+              {['all', 'applied', 'shortlisted', 'attended', 'selected', 'exceptions'].map(status => (
                 <button
                   key={status}
                   onClick={() => setAppStatusFilter(status)}
                   className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all capitalize ${
                     appStatusFilter === status
                       ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-300'
+                      : status === 'exceptions' 
+                        ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 hover:border-amber-300'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-300'
                   }`}
                 >
-                  {status === 'all' ? `All (${appTotal})` : status}
+                  {status === 'all' ? `All (${appTotal})` : status === 'exceptions' ? 'Exceptions ⚠️' : status}
                 </button>
               ))}
             </div>
@@ -1981,8 +2246,8 @@ export default function DriveDetailPage() {
             <div className="relative mb-4">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
               <input
-                value={appSearchQuery}
-                onChange={e => setAppSearchQuery(e.target.value)}
+                value={appSearchInput}
+                onChange={e => setAppSearchInput(e.target.value)}
                 placeholder="Search by name, USN, email..."
                 className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 bg-white focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"/>
             </div>
@@ -2065,7 +2330,15 @@ export default function DriveDetailPage() {
                               ) : null}
                               <div className={`w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 text-sm font-bold flex items-center justify-center flex-shrink-0 ${app.hasPhoto ? 'hidden' : ''}`}>{initials}</div>
                               <div>
-                                <div className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors">{fullName}</div>
+                                <div className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors flex items-center gap-2">
+                                  {fullName}
+                                  {app.data?.isExceptionFlagged && (
+                                    <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full flex items-center shadow-sm" title="Flagged as Exception (Relaxed Criteria)">⚠️ Flagged</span>
+                                  )}
+                                  {app.studentProfileId?.strikes > 0 && (
+                                    <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full flex items-center gap-1" title={`${app.studentProfileId.strikes} No-Show Strike(s) - Consider un-shortlisting if unreliable`}><AlertCircle size={10}/> {app.studentProfileId.strikes}</span>
+                                  )}
+                                </div>
                                 {app.driveStudentId ? (
                                   <div className="text-xs font-mono text-indigo-500 font-semibold">{app.driveStudentId}</div>
                                 ) : (
@@ -2155,7 +2428,7 @@ export default function DriveDetailPage() {
               const dataFields = formFields.filter((f: any) => f.type !== 'file_pdf' && f.type !== 'file_image');
 
               return (
-                <>
+                <div id="drawer-root" className="print-clean">
                   <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={() => { setShowDetailDrawer(false); setSelectedApp(null); }}/>
                   <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white z-50 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
                     {/* Premium Profile Header */}
@@ -2172,18 +2445,40 @@ export default function DriveDetailPage() {
                         </div>
                         <div className="flex items-center gap-1.5">
                           {!isEditingApp ? (
-                            <button onClick={() => { setIsEditingApp(true); setEditedAppData(app.data); }}
-                              className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors" title="Edit Application">
-                              <Edit2 size={15}/>
-                            </button>
+                            <>
+                              <button onClick={() => {
+                                document.body.classList.add('print-drawer-only');
+                                window.print();
+                                document.body.classList.remove('print-drawer-only');
+                              }}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors print:hidden" title="Export PDF">
+                                <Download size={15}/>
+                              </button>
+                              {app.status === 'selected' && (
+                                <button
+                                  onClick={() => {
+                                    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+                                    window.open(`${apiBase}/drives/${driveId}/noc/${app._id}`, '_blank');
+                                  }}
+                                  className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 transition-colors print:hidden text-xs font-bold"
+                                  title="Generate NOC for placed student"
+                                >
+                                  <FileText size={13}/> NOC
+                                </button>
+                              )}
+                              <button onClick={() => { setIsEditingApp(true); setEditedAppData(app.data); }}
+                                className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors print:hidden" title="Edit Application">
+                                <Edit2 size={15}/>
+                              </button>
+                            </>
                           ) : (
                             <button onClick={() => setIsEditingApp(false)}
-                              className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-red-500/30 text-white/80 transition-colors" title="Cancel Edit">
+                              className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-red-500/30 text-white/80 transition-colors print:hidden" title="Cancel Edit">
                               <X size={15}/>
                             </button>
                           )}
                           <button onClick={() => { setShowDetailDrawer(false); setSelectedApp(null); setIsEditingApp(false); }}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors">
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors print:hidden">
                             <X size={18}/>
                           </button>
                         </div>
@@ -2205,7 +2500,14 @@ export default function DriveDetailPage() {
                           }`}/>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h2 className="text-xl font-black text-slate-800 truncate">{drawerName}</h2>
+                          <h2 className="text-xl font-black text-slate-800 flex items-center gap-2 flex-wrap">
+                            <span className="truncate">{drawerName}</span>
+                            {app.studentProfileId?.strikes > 0 && (
+                              <span className="text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1" title="This student has missed previous drives they checked into">
+                                <AlertCircle size={12} strokeWidth={3} /> {app.studentProfileId.strikes} Strike{app.studentProfileId.strikes > 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </h2>
                           {app.driveStudentId && (
                             <div className="flex items-center gap-1.5 mt-1">
                               <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">{app.driveStudentId}</span>
@@ -2219,6 +2521,51 @@ export default function DriveDetailPage() {
 
                     {/* Scrollable Content */}
                     <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-5">
+                      {/* Exceptions Alert Card */}
+                      {app.data?.isExceptionFlagged && (
+                        <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 animate-in slide-in-from-top-2 duration-300">
+                          <div className="flex items-start gap-3">
+                            <AlertTriangle className="text-amber-600 mt-0.5 shrink-0" size={20} />
+                            <div className="flex-1">
+                              <h3 className="text-amber-800 font-bold text-sm tracking-tight mb-1">Guardian Exception Flagged</h3>
+                              <p className="text-amber-700/80 text-xs font-medium leading-relaxed mb-3">
+                                This candidate did not meet the requirement but applied under the <b>Relaxed</b> eligibility rule. Reason(s): 
+                                {app.data.exceptionReasons?.map((r: string) => <span key={r} className="ml-1 inline-flex bg-amber-100/50 px-1.5 rounded border border-amber-200">{r}</span>)}
+                              </p>
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={async () => {
+                                    try {
+                                      await api.put(`/drives/${driveId}/applications/${app._id}/status`, { status: 'shortlisted' });
+                                      const updatedApp = { ...app, status: 'shortlisted', data: { ...app.data, isExceptionFlagged: false } };
+                                      setSelectedApp(updatedApp);
+                                      setApplications(prev => prev.map(a => a._id === app._id ? updatedApp : a));
+                                      toast.success('Exception approved! Candidate Shortlisted.');
+                                    } catch { toast.error('Failed to approve'); }
+                                  }}
+                                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition-colors shadow-sm"
+                                >
+                                  Approve Exception
+                                </button>
+                                <button 
+                                  onClick={async () => {
+                                    try {
+                                      await api.put(`/drives/${driveId}/applications/${app._id}/status`, { status: 'rejected' });
+                                      const updatedApp = { ...app, status: 'rejected' };
+                                      setSelectedApp(updatedApp);
+                                      setApplications(prev => prev.map(a => a._id === app._id ? updatedApp : a));
+                                      toast.success('Application Rejected');
+                                    } catch { toast.error('Failed to reject'); }
+                                  }}
+                                  className="px-3 py-1.5 bg-white border border-amber-200 text-amber-700 hover:bg-amber-100 rounded-lg text-xs font-bold transition-colors"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       {/* Documents - Resume & Photo Cards */}
                       <div>
                         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Documents</h3>
@@ -2324,8 +2671,15 @@ export default function DriveDetailPage() {
                                       <span className={`font-bold ${parseFloat(val) >= 8 ? 'text-green-600' : parseFloat(val) >= 6 ? 'text-amber-600' : 'text-red-500'}`}>{val} / 10</span>
                                     ) : field.type === 'email' ? (
                                       <a href={`mailto:${val}`} className="text-indigo-600 hover:underline">{val}</a>
-                                    ) : field.type === 'phone' ? (
-                                      <a href={`tel:${val}`} className="text-indigo-600 hover:underline">{val}</a>
+                                    ) : field.type === 'phone' || field.label.toLowerCase().includes('phone') || field.label.toLowerCase().includes('whatsapp') ? (
+                                      <div className="flex items-center gap-2">
+                                        <a href={`tel:${val}`} className="text-indigo-600 hover:underline">{val}</a>
+                                        <a href={`https://wa.me/${String(val).replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(drawerName)},%20regarding%20your%20campus%20placement%20application`} 
+                                           target="_blank" rel="noreferrer" title="Chat on WhatsApp"
+                                           className="text-emerald-500 hover:scale-110 transition-transform">
+                                          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+                                        </a>
+                                      </div>
                                     ) : Array.isArray(val) ? (
                                       <div className="flex flex-wrap gap-1">{val.map((v: string) => <span key={v} className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full">{v}</span>)}</div>
                                     ) : String(val)}
@@ -2349,6 +2703,15 @@ export default function DriveDetailPage() {
                                       onChange={(e) => setEditedAppData({...editedAppData, [key]: e.target.value})}
                                       className="w-full border border-slate-300 rounded px-3 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-white"
                                     />
+                                  ) : key.toLowerCase().includes('phone') || key.toLowerCase().includes('whatsapp') ? (
+                                    <div className="flex items-center gap-2">
+                                      <a href={`tel:${value}`} className="text-indigo-600 hover:underline">{String(value)}</a>
+                                      <a href={`https://wa.me/${String(value).replace(/\D/g, '')}?text=Hi%20${encodeURIComponent(drawerName)},%20regarding%20your%20campus%20placement%20application`} 
+                                         target="_blank" rel="noreferrer" title="Chat on WhatsApp"
+                                         className="text-emerald-500 hover:scale-110 transition-transform">
+                                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>
+                                      </a>
+                                    </div>
                                   ) : (
                                     safeStr(value)
                                   )}
@@ -2404,7 +2767,7 @@ export default function DriveDetailPage() {
                       )}
                     </div>
                   </div>
-                </>
+                </div>
               );
             })()}
           </div>
@@ -2480,6 +2843,7 @@ export default function DriveDetailPage() {
                           // Use currentRound to determine if a student passed a specific round
                           const targetRoundIdx = drive.rounds.findIndex((r: any) => r.type === roundName);
                           targets = shortlistedStudents.filter((s:any) => {
+                            if (s.status === 'rejected') return false; // Prevent rejected students from being targeted
                             if (s.status === 'selected' || s.currentRound === 'completed') return true;
                             const studentRoundIdx = drive.rounds.findIndex((r: any) => r.type === s.currentRound);
                             return studentRoundIdx > targetRoundIdx;
@@ -2554,7 +2918,12 @@ export default function DriveDetailPage() {
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 text-sm font-bold flex items-center justify-center flex-shrink-0">{initials}</div>
                               <div>
-                                <div className="text-sm font-semibold text-slate-800">{studentName}</div>
+                                <div className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                  {studentName}
+                                  {student.studentProfileId?.strikes > 0 && (
+                                    <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full flex items-center gap-1" title={`${student.studentProfileId.strikes} No-Show Strike(s)`}><AlertCircle size={10}/> {student.studentProfileId.strikes}</span>
+                                  )}
+                                </div>
                                 <div className="text-xs text-slate-400">{email || 'No email'}</div>
                               </div>
                             </div>
@@ -2755,6 +3124,20 @@ export default function DriveDetailPage() {
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800" />
                 </div>
               </div>
+              
+              {conflictWarning && conflictWarning.length > 0 && (
+                <div className="mb-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 animate-in fade-in slide-in-from-top-2">
+                  <span className="text-amber-500 mt-0.5">⚠️</span>
+                  <div>
+                    <h4 className="text-sm font-bold text-amber-800">Schedule Overlap Detected!</h4>
+                    <p className="text-xs text-amber-700 mt-0.5">There {conflictWarning.length === 1 ? 'is' : 'are'} already {conflictWarning.length} drive(s) scheduled on this date:</p>
+                    <ul className="text-xs text-amber-900 font-medium list-disc list-inside mt-1.5 space-y-0.5">
+                      {conflictWarning.map((d, i) => <li key={i}>{d.companyName} ({d.jobRole})</li>)}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
               <button onClick={saveVenueDetails}
                 className="w-full mt-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition-colors">
                 Save Venue Details
@@ -3749,6 +4132,13 @@ export default function DriveDetailPage() {
           </div>
          );
       })()} 
+
+      <MobileAdminBar
+        driveId={driveId!}
+        isPaused={drive?.isPaused}
+        isEventDay={drive?.status === 'event_day'}
+        onPauseToggled={(paused) => setDrive((d: any) => ({ ...d, isPaused: paused }))}
+      />
 
     </div>
   );

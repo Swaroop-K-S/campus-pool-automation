@@ -45,7 +45,7 @@ export function LiveRoundsTab({ driveId, rounds, onUpdate }: { driveId: string, 
   const handleExport = async () => {
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/rounds/${selectedRound}/export`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
+        credentials: 'include'
       });
       if (!res.ok) throw new Error();
       const blob = await res.blob();
@@ -68,7 +68,7 @@ export function LiveRoundsTab({ driveId, rounds, onUpdate }: { driveId: string, 
       
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/rounds/${selectedRound}/results`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` },
+        credentials: 'include',
         body: formData
       });
       const data = await res.json();
@@ -98,7 +98,7 @@ export function LiveRoundsTab({ driveId, rounds, onUpdate }: { driveId: string, 
       
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/drives/${driveId}/final-selection`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` },
+        credentials: 'include',
         body: formData
       });
       const data = await res.json();

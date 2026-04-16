@@ -67,6 +67,11 @@ export const uploadShortlist = async (req: Request, res: Response): Promise<void
         }
     }
 
+    // Emit live shortlist count update to dashboard and drive detail
+    try {
+      getIO().to(`drive:${driveId}`).emit('drive:shortlist_updated', { driveId, count: matched });
+    } catch {}
+
     res.json({ success: true, data: { matched, notFound, errors } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -308,6 +313,8 @@ export const bulkNotifyWithTemplate = async (req: Request, res: Response): Promi
         io.to(`drive:${driveId}`).emit('notify:progress', {
           sent, total, failed, percent: 100, done: true
         });
+        // Also broadcast completion event for audit log refresh
+        io.to(`drive:${driveId}`).emit('drive:notify_complete', { driveId, sent, failed });
       } catch (e) {
         console.error('Background bulk notification failed:', e);
       }

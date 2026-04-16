@@ -76,6 +76,7 @@ export const getPublicFormConfig = async (req: Request, res: Response) => {
       formOpenDate: drive.formOpenDate,
       formCloseDate: drive.formCloseDate,
       formStatus: drive.formStatus,
+      eligibility: drive.eligibility,
       fields: formConfig?.fields || []
     }});
   } catch (error: unknown) {
@@ -140,6 +141,38 @@ export const submitApplication = async (req: Request, res: Response) => {
       }
     }
 
+    // THE GUARDIAN - Eligibility check
+    const cgpaVal = parsedData['field_cgpa'] || parsedData['CGPA'] || parsedData['cgpa'] || 0;
+    if (drive.eligibility?.cgpa?.ruleType === 'strict') {
+      if (parseFloat(cgpaVal) < drive.eligibility.cgpa.minimum) {
+        return res.status(406).json({ success: false, error: `You do not meet the strict Graduation CGPA requirement of ${drive.eligibility.cgpa.minimum}.` });
+      }
+    }
+    
+    const tenthVal = parsedData['field_tenth'] || parsedData['10th Percentage'] || 0;
+    if (drive.eligibility?.tenth?.required && drive.eligibility?.tenth?.ruleType === 'strict') {
+      if (parseFloat(tenthVal) < drive.eligibility.tenth.minPercentage) {
+        return res.status(406).json({ success: false, error: `You do not meet the strict 10th standard requirement of ${drive.eligibility.tenth.minPercentage}%.` });
+      }
+    }
+
+    const educationPath = parsedData['field_education_path'] || parsedData['10+2 Education Path'];
+    if (educationPath === '12th Standard / PUC') {
+      const twelfthVal = parsedData['field_twelfth'] || parsedData['12th Percentage'] || 0;
+      if (drive.eligibility?.twelfth?.required && drive.eligibility?.twelfth?.ruleType === 'strict') {
+        if (parseFloat(twelfthVal) < drive.eligibility.twelfth.minPercentage) {
+          return res.status(406).json({ success: false, error: `You do not meet the strict 12th standard requirement of ${drive.eligibility.twelfth.minPercentage}%.` });
+        }
+      }
+    } else if (educationPath === 'Diploma (Lateral Entry)') {
+      const diplomaVal = parsedData['field_diploma'] || parsedData['Diploma CGPA'] || 0;
+      if (drive.eligibility?.diploma?.required && drive.eligibility?.diploma?.ruleType === 'strict') {
+        if (parseFloat(diplomaVal) < drive.eligibility.diploma.minCGPA) {
+          return res.status(406).json({ success: false, error: `You do not meet the strict Diploma CGPA requirement of ${drive.eligibility.diploma.minCGPA}.` });
+        }
+      }
+    }
+
     const currentYear = new Date().getFullYear();
     const randomNum = Math.floor(10000 + Math.random() * 90000); 
     const referenceNumber = `CP-${currentYear}-${randomNum}`;
@@ -170,7 +203,27 @@ export const submitApplication = async (req: Request, res: Response) => {
     const { resumeUrl, photoUrl } = req.body;
 
     const isWalkIn = drive.walkInEnabled === true;
-    const initialStatus = isWalkIn ? 'shortlisted' : 'applied';
+    let initialStatus = isWalkIn ? 'shortlisted' : 'applied';
+
+    // Relaxed exception logic -> mark them as 'needs_review' or 'flagged' (for now let's use 'exception' or just 'applied' with a flag)
+    // To support exception flagging, we add an exception array
+    const exceptions = [];
+    if (drive.eligibility?.cgpa?.ruleType === 'relaxed' && parseFloat(cgpaVal) < drive.eligibility.cgpa.minimum) exceptions.push('CGPA');
+    if (drive.eligibility?.tenth?.required && drive.eligibility?.tenth?.ruleType === 'relaxed' && parseFloat(tenthVal) < drive.eligibility.tenth.minPercentage) exceptions.push('10th');
+    if (educationPath === '12th Standard / PUC' && drive.eligibility?.twelfth?.required && drive.eligibility?.twelfth?.ruleType === 'relaxed') {
+       const twelfthVal = parsedData['field_twelfth'] || parsedData['12th Percentage'] || 0;
+       if (parseFloat(twelfthVal) < drive.eligibility.twelfth.minPercentage) exceptions.push('12th');
+    }
+    if (educationPath === 'Diploma (Lateral Entry)' && drive.eligibility?.diploma?.required && drive.eligibility?.diploma?.ruleType === 'relaxed') {
+       const diplomaVal = parsedData['field_diploma'] || parsedData['Diploma CGPA'] || 0;
+       if (parseFloat(diplomaVal) < drive.eligibility.diploma.minCGPA) exceptions.push('Diploma');
+    }
+
+    if (exceptions.length > 0) {
+      appData.isExceptionFlagged = true;
+      appData.exceptionReasons = exceptions;
+    }
+
     const firstRound = (isWalkIn && drive.rounds && drive.rounds.length > 0) ? drive.rounds[0].type : undefined;
 
     const application = await ApplicationModel.create({

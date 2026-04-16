@@ -36,11 +36,17 @@ export default function LoginPage() {
           userId: user.userId,
           collegeId: user.collegeId,
           name: user.name,
-          email: user.email
+          email: user.email,
+          role: user.role,
         });
         
         toast.success("Login successful");
-        navigate('/admin/dashboard');
+        // Route HR users to their dedicated portal
+        if (user.role === 'company_hr') {
+          navigate('/hr');
+        } else {
+          navigate('/admin/dashboard');
+        }
       }
     } catch (err: unknown) {
       const ae = err as { error?: string };

@@ -7,6 +7,7 @@ export interface AuthPayload {
   collegeId: string;
   email: string;
   role: string;
+  driveId?: string; // Set for company_hr users scoped to a single drive
 }
 
 declare global {

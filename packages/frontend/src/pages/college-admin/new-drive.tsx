@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -24,7 +24,9 @@ const AVAILABLE_ROUNDS = [
 const DriveSchema = z.object({
   companyName: z.string().min(1, 'Company Name is required'),
   jobRole: z.string().min(1, 'Job Role/Position is required'),
-  ctc: z.string().min(1, 'CTC Package is required')
+  ctc: z.string().min(1, 'CTC Package is required'),
+  formOpenDate: z.string().optional(),
+  formCloseDate: z.string().optional(),
 });
 
 interface SelectedRound {
@@ -65,11 +67,11 @@ export default function NewDriveWizard() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');  
   const [eligibility, setEligibility] = useState({
-    cgpa: 6.5,
+    cgpa: { minimum: 6.5, ruleType: 'strict' },
     branches: [...BRANCH_OPTIONS],
-    tenth: { required: false, minPercentage: 60 },
-    twelfth: { required: false, minPercentage: 60 },
-    diploma: { required: false, minCGPA: 6.0 }
+    tenth: { required: false, minPercentage: 60, ruleType: 'strict' },
+    twelfth: { required: false, minPercentage: 60, ruleType: 'strict' },
+    diploma: { required: false, minCGPA: 6.0, ruleType: 'strict' }
   });
 
   const [customBranchInput, setCustomBranchInput] = useState('');
@@ -81,15 +83,32 @@ export default function NewDriveWizard() {
   const [eventSetup, setEventSetup] = useState({
     eventDate: '',
     reportTime: '',
-    hallName: '',
-    capacity: 100
+    roundRooms: {} as Record<string, {name: string, capacity: number}[]>
   });
+
+  const [conflictWarning, setConflictWarning] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    if (eventSetup.eventDate && step === 4) {
+      api.get(`/drives/schedule/check-conflict?date=${eventSetup.eventDate}`)
+        .then((res: any) => {
+          if (res.data?.data?.hasConflict) {
+            setConflictWarning(res.data.data.conflictingDrives);
+          } else {
+            setConflictWarning(null);
+          }
+        })
+        .catch(console.error);
+    } else {
+      setConflictWarning(null);
+    }
+  }, [eventSetup.eventDate, step]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const { register, formState: { errors }, trigger, getValues } = useForm({
     resolver: zodResolver(DriveSchema),
-    defaultValues: { companyName: '', jobRole: '', ctc: '' }
+    defaultValues: { companyName: '', jobRole: '', ctc: '', formOpenDate: '', formCloseDate: '' }
   });
 
   /* ── Navigation ── */
@@ -198,6 +217,30 @@ export default function NewDriveWizard() {
     setCustomBranches(prev => prev.filter(b => b !== branch));
   };
 
+  /* ── Room Mapping Helpers ── */
+  const addRoomToRound = (roundId: string) => {
+    setEventSetup(prev => ({
+      ...prev,
+      roundRooms: { ...prev.roundRooms, [roundId]: [...(prev.roundRooms[roundId] || []), { name: '', capacity: 60 }] }
+    }));
+  };
+
+  const updateRoom = (roundId: string, index: number, field: string, value: any) => {
+    setEventSetup(prev => {
+      const rooms = [...(prev.roundRooms[roundId] || [])];
+      rooms[index] = { ...rooms[index], [field]: value };
+      return { ...prev, roundRooms: { ...prev.roundRooms, [roundId]: rooms } };
+    });
+  };
+
+  const removeRoom = (roundId: string, index: number) => {
+    setEventSetup(prev => {
+      const rooms = [...(prev.roundRooms[roundId] || [])];
+      rooms.splice(index, 1);
+      return { ...prev, roundRooms: { ...prev.roundRooms, [roundId]: rooms } };
+    });
+  };
+
   /* ── Submit ── */
   const submitDrive = async () => {
     try {
@@ -210,7 +253,7 @@ export default function NewDriveWizard() {
         locations: locations.join(', '),
         description: 'New CampusPool Drive',
         eligibilityCriteria: {
-          minCgpa: eligibility.cgpa,
+          cgpa: eligibility.cgpa,
           allowedBranches: allBranches,
           tenth: eligibility.tenth,
           twelfth: eligibility.twelfth,
@@ -226,16 +269,17 @@ export default function NewDriveWizard() {
         tags,
         eventDate: eventSetup.eventDate || null,
         reportTime: eventSetup.reportTime || null,
-        venueDetails: eventSetup.hallName ? {
-          hallName: eventSetup.hallName,
-          capacity: eventSetup.capacity
-        } : null
+        mappedRooms: eventSetup.roundRooms,
+        formOpenDate: getValues('formOpenDate') || null,
+        formCloseDate: getValues('formCloseDate') || null
       };
       const res = await api.post('/drives', payload);
       toast.dismiss(loadingToast);
       if ((res as any).success) {
-        toast.success('Drive created successfully!');
-        navigate('/admin/dashboard');
+        const newDriveId = (res as any).data._id;
+        toast.success('Drive created! Now set up your application form.');
+        // Deep-link directly to the Form Builder tab so admin doesn't have to navigate
+        navigate(`/admin/drives/${newDriveId}?tab=Form%20Builder`);
       }
     } catch (err) {
       toast.error('Failed to create drive. Please try again.');
@@ -342,6 +386,18 @@ export default function NewDriveWizard() {
                   />
                 </div>
               </div>
+
+              {/* Form Validity Period */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Registration Open Date</label>
+                  <input type="datetime-local" {...register('formOpenDate')} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Registration Close Date</label>
+                  <input type="datetime-local" {...register('formCloseDate')} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"/>
+                </div>
+              </div>
             </div>
           </form>
         )}
@@ -361,10 +417,17 @@ export default function NewDriveWizard() {
               </div>
               <div className="flex items-center gap-4">
                 <span className="text-slate-500 text-sm w-8">5.0</span>
-                <input type="range" min="5" max="10" step="0.1" value={eligibility.cgpa} onChange={e => setEligibility({...eligibility, cgpa: parseFloat(e.target.value)})} className="flex-1 accent-indigo-600 h-2 cursor-pointer"/>
+                <input type="range" min="5" max="10" step="0.1" value={eligibility.cgpa.minimum} onChange={e => setEligibility({...eligibility, cgpa: { ...eligibility.cgpa, minimum: parseFloat(e.target.value)}})} className="flex-1 accent-indigo-600 h-2 cursor-pointer"/>
                 <span className="text-slate-500 text-sm w-8">10.0</span>
               </div>
-              <div className="text-center mt-2"><span className="text-2xl font-bold text-indigo-600">{eligibility.cgpa.toFixed(1)}</span><span className="text-slate-400 text-sm"> / 10.0 minimum</span></div>
+              <div className="flex items-center justify-between mt-3">
+                <div className="text-left"><span className="text-2xl font-bold text-indigo-600">{eligibility.cgpa.minimum.toFixed(1)}</span><span className="text-slate-400 text-sm"> / 10.0 minimum</span></div>
+                <select value={eligibility.cgpa.ruleType} onChange={e => setEligibility({...eligibility, cgpa: { ...eligibility.cgpa, ruleType: e.target.value}})} className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-indigo-400">
+                  <option value="strict">Strict (Block submission)</option>
+                  <option value="relaxed">Relaxed (Flag internally)</option>
+                  <option value="info">Info Only (No minimum)</option>
+                </select>
+              </div>
             </div>
 
             {/* 10th Standard */}
@@ -385,7 +448,14 @@ export default function NewDriveWizard() {
                     <input type="range" min="0" max="100" step="1" value={eligibility.tenth.minPercentage} onChange={e => setEligibility({...eligibility, tenth: {...eligibility.tenth, minPercentage: parseInt(e.target.value)}})} className="flex-1 accent-blue-600 h-2 cursor-pointer"/>
                     <span className="text-slate-500 text-sm w-10">100%</span>
                   </div>
-                  <div className="text-center mt-2"><span className="text-2xl font-bold text-blue-600">{eligibility.tenth.minPercentage}%</span><span className="text-slate-400 text-sm"> minimum</span></div>
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="text-left"><span className="text-2xl font-bold text-blue-600">{eligibility.tenth.minPercentage}%</span><span className="text-slate-400 text-sm"> minimum</span></div>
+                    <select value={eligibility.tenth.ruleType} onChange={e => setEligibility({...eligibility, tenth: { ...eligibility.tenth, ruleType: e.target.value}})} className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-blue-400">
+                      <option value="strict">Strict Check</option>
+                      <option value="relaxed">Relaxed Check</option>
+                      <option value="info">Info Only</option>
+                    </select>
+                  </div>
                   <div className="mt-3 flex items-center gap-3"><div className="flex-1 h-px bg-slate-200"/><span className="text-xs text-slate-400">or type directly</span><div className="flex-1 h-px bg-slate-200"/></div>
                   <div className="mt-3 relative">
                     <input type="number" min="0" max="100" value={eligibility.tenth.minPercentage} onChange={e => setEligibility({...eligibility, tenth: {...eligibility.tenth, minPercentage: Math.min(100, Math.max(0, parseInt(e.target.value) || 0))}})} className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50"/>
@@ -413,7 +483,14 @@ export default function NewDriveWizard() {
                     <input type="range" min="0" max="100" step="1" value={eligibility.twelfth.minPercentage} onChange={e => setEligibility({...eligibility, twelfth: {...eligibility.twelfth, minPercentage: parseInt(e.target.value)}})} className="flex-1 accent-purple-600 h-2 cursor-pointer"/>
                     <span className="text-slate-500 text-sm w-10">100%</span>
                   </div>
-                  <div className="text-center mt-2"><span className="text-2xl font-bold text-purple-600">{eligibility.twelfth.minPercentage}%</span><span className="text-slate-400 text-sm"> minimum</span></div>
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="text-left"><span className="text-2xl font-bold text-purple-600">{eligibility.twelfth.minPercentage}%</span><span className="text-slate-400 text-sm"> minimum</span></div>
+                    <select value={eligibility.twelfth.ruleType} onChange={e => setEligibility({...eligibility, twelfth: { ...eligibility.twelfth, ruleType: e.target.value}})} className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-purple-400">
+                      <option value="strict">Strict Check</option>
+                      <option value="relaxed">Relaxed Check</option>
+                      <option value="info">Info Only</option>
+                    </select>
+                  </div>
                   <div className="mt-3 flex items-center gap-3"><div className="flex-1 h-px bg-slate-200"/><span className="text-xs text-slate-400">or type directly</span><div className="flex-1 h-px bg-slate-200"/></div>
                   <div className="mt-3 relative">
                     <input type="number" min="0" max="100" value={eligibility.twelfth.minPercentage} onChange={e => setEligibility({...eligibility, twelfth: {...eligibility.twelfth, minPercentage: Math.min(100, Math.max(0, parseInt(e.target.value) || 0))}})} className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-50"/>
@@ -441,7 +518,14 @@ export default function NewDriveWizard() {
                     <input type="range" min="0" max="10" step="0.1" value={eligibility.diploma.minCGPA} onChange={e => setEligibility({...eligibility, diploma: {...eligibility.diploma, minCGPA: parseFloat(e.target.value)}})} className="flex-1 accent-amber-500 h-2 cursor-pointer"/>
                     <span className="text-slate-500 text-sm w-8">10.0</span>
                   </div>
-                  <div className="text-center mt-2"><span className="text-2xl font-bold text-amber-600">{eligibility.diploma.minCGPA.toFixed(1)}</span><span className="text-slate-400 text-sm"> / 10.0 minimum</span></div>
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="text-left"><span className="text-2xl font-bold text-amber-600">{eligibility.diploma.minCGPA.toFixed(1)}</span><span className="text-slate-400 text-sm"> / 10.0 minimum</span></div>
+                    <select value={eligibility.diploma.ruleType} onChange={e => setEligibility({...eligibility, diploma: { ...eligibility.diploma, ruleType: e.target.value}})} className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-amber-400">
+                      <option value="strict">Strict Check</option>
+                      <option value="relaxed">Relaxed Check</option>
+                      <option value="info">Info Only</option>
+                    </select>
+                  </div>
                   <div className="mt-3 flex items-center gap-3"><div className="flex-1 h-px bg-slate-200"/><span className="text-xs text-slate-400">or type directly</span><div className="flex-1 h-px bg-slate-200"/></div>
                   <div className="mt-3 relative">
                     <input type="number" min="0" max="10" step="0.1" value={eligibility.diploma.minCGPA} onChange={e => setEligibility({...eligibility, diploma: {...eligibility.diploma, minCGPA: Math.min(10, Math.max(0, parseFloat(e.target.value) || 0))}})} className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-16 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50"/>
@@ -450,6 +534,20 @@ export default function NewDriveWizard() {
                 </div>
               )}
             </div>
+
+            {/* 12th OR Diploma Information Banner */}
+            {(eligibility.twelfth.required || eligibility.diploma.required) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 mb-6 items-start">
+                <span className="text-amber-500 mt-0.5">ℹ️</span>
+                <div>
+                  <h4 className="text-sm font-bold text-amber-800">12th OR Diploma (Lateral Entry) Rule</h4>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    On the student registration form, candidates will be asked if they completed 12th Standard <b>OR</b> a Diploma. 
+                    They only need to satisfy one of the two criteria requirements based on their educational background.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Eligible Branches */}
             <div>
@@ -582,6 +680,18 @@ export default function NewDriveWizard() {
                     <input type="date" value={eventSetup.eventDate} onChange={e => setEventSetup({...eventSetup, eventDate: e.target.value})} className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50" />
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   </div>
+                  {conflictWarning && conflictWarning.length > 0 && (
+                    <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 animate-in fade-in slide-in-from-top-2">
+                       <span className="text-amber-500 mt-0.5">⚠️</span>
+                       <div>
+                         <h4 className="text-sm font-bold text-amber-800">Schedule Overlap Detected!</h4>
+                         <p className="text-xs text-amber-700 mt-0.5">There is already {conflictWarning.length} drive(s) scheduled on this date:</p>
+                         <ul className="text-xs text-amber-900 font-medium list-disc list-inside mt-1">
+                           {conflictWarning.map((d, i) => <li key={i}>{d.companyName} ({d.jobRole})</li>)}
+                         </ul>
+                       </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Reporting Time (Optional)</label>
@@ -592,17 +702,48 @@ export default function NewDriveWizard() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Primary Hall Name (Optional)</label>
-                <div className="relative">
-                  <input type="text" placeholder="e.g. Main Auditorium" value={eventSetup.hallName} onChange={e => setEventSetup({...eventSetup, hallName: e.target.value})} className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50" />
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Hall Seating Capacity</label>
-                <input type="number" min="10" placeholder="e.g. 500" value={eventSetup.capacity || ''} onChange={e => setEventSetup({...eventSetup, capacity: parseInt(e.target.value) || 0})} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50" />
+              <div className="pt-6 border-t border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="block text-sm font-bold text-slate-700">Infrastructure Mapping</h3>
+                    <p className="text-xs text-slate-500">Pre-create the rooms / labs for your selected rounds.</p>
+                  </div>
+                </div>
+
+                {selectedRounds.length === 0 && <p className="text-sm text-slate-400 italic">Go back to step 3 and select rounds first.</p>}
+                
+                <div className="space-y-6">
+                  {selectedRounds.map(round => {
+                    const rooms = eventSetup.roundRooms[round.id] || [];
+                    return (
+                      <div key={round.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2">
+                          <span className="font-bold text-slate-800 flex items-center gap-2">{round.icon} {round.label} Rooms</span>
+                          <button onClick={() => addRoomToRound(round.id)} className="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"><Plus size={14}/> Add Room (e.g. Lab 1)</button>
+                        </div>
+                        {rooms.length === 0 ? (
+                          <div className="text-center py-3 text-xs text-slate-400 italic">No specific rooms configured for this round. You can allocate them on event day.</div>
+                        ) : (
+                          <div className="space-y-3">
+                            {rooms.map((room, idx) => (
+                              <div key={idx} className="flex items-center gap-3 bg-white p-2 border border-slate-200 rounded-lg">
+                                <div className="flex-1 relative">
+                                  <input type="text" placeholder="Room Name (e.g. Lab A)" value={room.name} onChange={e => updateRoom(round.id, idx, 'name', e.target.value)} className="w-full border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-400"/>
+                                  <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                                </div>
+                                <div className="w-32 relative">
+                                  <input type="number" min="1" placeholder="Capacity" value={room.capacity || ''} onChange={e => updateRoom(round.id, idx, 'capacity', parseInt(e.target.value) || 0)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"/>
+                                </div>
+                                <button type="button" onClick={() => removeRoom(round.id, idx)} className="w-8 h-8 flex items-center justify-center rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors"><X size={14}/></button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           </div>
@@ -638,10 +779,10 @@ export default function NewDriveWizard() {
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                 <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Eligibility</h3>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm"><span className="text-slate-500">Min CGPA</span><span className="font-medium text-slate-800">{eligibility.cgpa.toFixed(1)} / 10.0</span></div>
-                  {eligibility.tenth.required && <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>10th Percentage</span><span className="font-medium text-slate-800">≥ {eligibility.tenth.minPercentage}%</span></div>}
-                  {eligibility.twelfth.required && <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>12th Percentage</span><span className="font-medium text-slate-800">≥ {eligibility.twelfth.minPercentage}%</span></div>}
-                  {eligibility.diploma.required && <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>Diploma CGPA</span><span className="font-medium text-slate-800">≥ {eligibility.diploma.minCGPA.toFixed(1)}</span></div>}
+                  <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>Min CGPA</span><span className="font-medium text-slate-800">{eligibility.cgpa.minimum.toFixed(1)} / 10.0 <span className="text-xs text-slate-400 capitalize">({eligibility.cgpa.ruleType})</span></span></div>
+                  {eligibility.tenth.required && <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>10th Percentage</span><span className="font-medium text-slate-800">{eligibility.tenth.ruleType === 'info' ? 'Info Only' : `≥ ${eligibility.tenth.minPercentage}%`} <span className="text-xs text-slate-400 capitalize">({eligibility.tenth.ruleType})</span></span></div>}
+                  {eligibility.twelfth.required && <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>12th Percentage</span><span className="font-medium text-slate-800">{eligibility.twelfth.ruleType === 'info' ? 'Info Only' : `≥ ${eligibility.twelfth.minPercentage}%`} <span className="text-xs text-slate-400 capitalize">({eligibility.twelfth.ruleType})</span></span></div>}
+                  {eligibility.diploma.required && <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>Diploma CGPA</span><span className="font-medium text-slate-800">{eligibility.diploma.ruleType === 'info' ? 'Info Only' : `≥ ${eligibility.diploma.minCGPA.toFixed(1)}`} <span className="text-xs text-slate-400 capitalize">({eligibility.diploma.ruleType})</span></span></div>}
                   {!eligibility.tenth.required && !eligibility.twelfth.required && !eligibility.diploma.required && <div className="text-xs text-slate-400 italic">No 10th/12th/Diploma requirement set</div>}
                   <div className="mt-3 pt-3 border-t border-slate-200">
                     <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">Branches</span>

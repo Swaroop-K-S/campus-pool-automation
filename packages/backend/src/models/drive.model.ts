@@ -16,19 +16,25 @@ const driveSchema = new Schema({
   ctc: { type: String, required: true },
   locations: [{ type: String }],
   eligibility: {
-    minCGPA: { type: Number },
+    cgpa: {
+      minimum: { type: Number, default: 0 },
+      ruleType: { type: String, enum: ['strict', 'relaxed', 'info'], default: 'strict' }
+    },
     branches: [{ type: String }],
     tenth: {
       required: { type: Boolean, default: false },
-      minPercentage: { type: Number, default: 0 }
+      minPercentage: { type: Number, default: 0 },
+      ruleType: { type: String, enum: ['strict', 'relaxed', 'info'], default: 'strict' }
     },
     twelfth: {
       required: { type: Boolean, default: false },
-      minPercentage: { type: Number, default: 0 }
+      minPercentage: { type: Number, default: 0 },
+      ruleType: { type: String, enum: ['strict', 'relaxed', 'info'], default: 'strict' }
     },
     diploma: {
       required: { type: Boolean, default: false },
-      minCGPA: { type: Number, default: 0 }
+      minCGPA: { type: Number, default: 0 },
+      ruleType: { type: String, enum: ['strict', 'relaxed', 'info'], default: 'strict' }
     }
   },
   rounds: [roundSchema],
@@ -59,6 +65,7 @@ const driveSchema = new Schema({
     reason: String,
     extendedAt: Date
   }],
+  scorecardTraits: [{ type: String }],
   enableQueueTracking: { type: Boolean, default: false },
   isPaused: { type: Boolean, default: false },
   walkInEnabled: { type: Boolean, default: false },
