@@ -8,7 +8,7 @@ import {
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
   Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search, Eye,
   Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Play, QrCode, Menu, BarChart2,
-  AlertTriangle, ArrowLeft, RefreshCcw, Minus, CheckCircle, Monitor, AlertCircle
+  AlertTriangle, ArrowLeft, RefreshCcw, Minus, CheckCircle, Monitor, AlertCircle, BookOpen
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
@@ -24,6 +24,7 @@ import RoomsTab from '../../components/admin/RoomsTab';
 import { GodViewTab } from '../../components/admin/GodViewTab';
 import { DrivePreflightModal } from '../../components/admin/DrivePreflightModal';
 import { MobileAdminBar } from '../../components/admin/MobileAdminBar';
+import { DriveTemplateManager } from '../../components/admin/DriveTemplateManager';
 
 const FIELD_TYPES = [
   { type: 'text', label: 'Text Field', icon: AlignLeft },
@@ -1291,6 +1292,17 @@ export default function DriveDetailPage() {
                         <div className={`bg-white w-3 h-3 rounded-full shadow-sm transition-transform ${drive.walkInEnabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
                      </div>
                   </button>                 
+                  {/* Save as Template */}
+                  <DriveTemplateManager
+                    mode="manage"
+                    currentDrive={drive}
+                    trigger={
+                      <button className="w-full flex items-center justify-between px-4 py-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl transition-all font-bold text-sm group">
+                        <span className="flex items-center gap-2"><BookOpen size={16} className="text-indigo-400 group-hover:text-indigo-600" /> Save as Template</span>
+                        <ChevronRight size={16} className="text-indigo-300" />
+                      </button>
+                    }
+                  />
                   {drive.status !== 'completed' && (
                     <button onClick={() => setShowCloseConfirm(true)}
                         className="w-full flex items-center justify-between px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl transition-all font-bold text-sm"

@@ -9,6 +9,7 @@ import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } 
 import { CSS } from '@dnd-kit/utilities';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
+import { DriveTemplateManager } from '../../components/admin/DriveTemplateManager';
 
 const BRANCH_OPTIONS = ['CSE', 'ISE', 'ECE', 'ME', 'CV', 'EEE', 'MBA', 'MCA'];
 
@@ -106,10 +107,32 @@ export default function NewDriveWizard() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const { register, formState: { errors }, trigger, getValues } = useForm({
+  const { register, formState: { errors }, trigger, getValues, setValue } = useForm({
     resolver: zodResolver(DriveSchema),
     defaultValues: { companyName: '', jobRole: '', ctc: '', formOpenDate: '', formCloseDate: '' }
   });
+
+  /* ── Apply Template ── */
+  const applyTemplate = (t: any) => {
+    if (t.companyName) setValue('companyName', t.companyName);
+    if (t.jobRole) setValue('jobRole', t.jobRole);
+    if (t.ctc) setValue('ctc', t.ctc);
+    if (t.locations?.length) setLocations(Array.isArray(t.locations) ? t.locations : t.locations.split(',').map((l: string) => l.trim()));
+    if (t.eligibility) setEligibility(prev => ({ ...prev, ...t.eligibility }));
+    if (t.rounds?.length) {
+      const roundMap: Record<string, { icon: string; label: string }> = {};
+      AVAILABLE_ROUNDS.forEach(r => { roundMap[r.type] = { icon: r.icon, label: r.label }; });
+      setSelectedRounds(t.rounds.map((r: any, i: number) => ({
+        id: `${r.type}-tmpl-${i}`,
+        type: r.type,
+        label: r.label || roundMap[r.type]?.label || r.type,
+        icon: roundMap[r.type]?.icon || '⭐',
+        order: i + 1,
+        status: 'pending',
+        isCustom: r.isCustom || false,
+      })));
+    }
+  };
 
   /* ── Navigation ── */
   const handleNext = async () => {
@@ -296,7 +319,13 @@ export default function NewDriveWizard() {
       <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[120px] translate-x-1/3 translate-y-1/3 pointer-events-none -z-10"></div>
 
       {/* Header */}
-      <h1 className="text-3xl font-black text-slate-900 mb-10 text-center tracking-tight">Create Placement Drive</h1>
+      <div className="flex items-center justify-center gap-4 mb-10 text-center">
+        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Create Placement Drive</h1>
+        <DriveTemplateManager
+          mode="pick"
+          onApply={applyTemplate}
+        />
+      </div>
 
       {/* Visual Progress Stepper */}
       <div className="flex items-center justify-between mb-12 max-w-3xl mx-auto relative px-4 md:px-8">

@@ -24,6 +24,19 @@ const collegeSchema = new Schema({
     capacity: { type: Number, required: true },
     location: { type: String }
   }],
+  driveTemplates: [{
+    id: { type: String, required: true },
+    name: { type: String, required: true },
+    companyName: { type: String },
+    jobRole: { type: String },
+    ctc: { type: String },
+    locations: [{ type: String }],
+    eligibility: { type: Schema.Types.Mixed },
+    rounds: [{ type: Schema.Types.Mixed }],
+    scorecardTraits: [{ type: String }],
+    resources: [{ type: Schema.Types.Mixed }],
+    createdAt: { type: Date, default: Date.now }
+  }],
   isActive: { type: Boolean, default: true }
 }, {
   timestamps: true
