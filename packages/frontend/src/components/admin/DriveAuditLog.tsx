@@ -51,9 +51,9 @@ export default function DriveAuditLog({ driveId }: DriveAuditLogProps) {
   };
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-slate-50 w-full max-w-6xl mx-auto space-y-6 pb-32">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full max-h-[85vh]">
-        <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-0 h-full overflow-y-auto bg-white flex flex-col">
+      <div className="flex flex-col h-full flex-1">
+        <div className="p-4 border-b border-slate-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-700">
               <Shield size={24} />
@@ -89,7 +89,7 @@ export default function DriveAuditLog({ driveId }: DriveAuditLogProps) {
              <p className="text-slate-400 text-sm mt-1">Try adjusting your search terms or perform an administrative action to generate a log.</p>
           </div>
         ) : (
-          <div className="overflow-y-auto flex-1 custom-scrollbar">
+          <div className="overflow-auto flex-1 custom-scrollbar relative">
             <table className="w-full text-left border-collapse">
               <thead className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 shadow-sm">
                 <tr>

@@ -155,3 +155,142 @@ export const generateNOC = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, error: message });
   }
 };
+
+// GET /api/v1/drives/:driveId/offer/:appId
+// Streams a formatted HTML document suitable for printing as an Offer/Selection Letter PDF
+export const generateOfferLetter = async (req: Request, res: Response) => {
+  try {
+    const { driveId, appId } = req.params;
+    const collegeId = (req as any).user?.collegeId;
+
+    const [app, drive] = await Promise.all([
+      ApplicationModel.findOne({ _id: appId, driveId, collegeId }).lean(),
+      DriveModel.findOne({ _id: driveId, collegeId }).lean()
+    ]);
+
+    if (!app || !drive) {
+      return res.status(404).json({ success: false, error: 'Application or Drive not found' });
+    }
+
+    if ((app as any).status !== 'selected') {
+      return res.status(400).json({ success: false, error: 'Offer Letter can only be generated for selected candidates' });
+    }
+
+    const data = (app as any).data || {};
+    const studentName = data.field_name || data.name || data.Name || 'N/A';
+    const usn = data.field_usn || data.usn || data.USN || 'N/A';
+    const branch = data.field_branch || data.branch || data.Branch || 'N/A';
+    const driveStudentId = (app as any).driveStudentId || '—';
+
+    const eventDate = (drive as any).eventDate
+      ? new Date((drive as any).eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+      : 'N/A';
+    const todayDate = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    await logAuditEvent({
+      userId: (req as any).user.userId,
+      action: 'GENERATE_OFFER',
+      resourceType: 'Application',
+      resourceId: appId,
+      details: `Offer Letter generated for ${studentName} (${usn}) — ${(drive as any).companyName} — Drive ${driveId}`,
+      ipAddress: req.ip || req.socket.remoteAddress
+    });
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offer Letter — ${studentName}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Times New Roman', Times, serif; font-size: 15px; color: #111; background: #fff; }
+    .page { max-width: 800px; margin: 0 auto; padding: 60px 70px; min-height: 100vh; position: relative; }
+    .header { text-align: center; margin-bottom: 40px; }
+    .company-name { font-size: 32px; font-weight: bold; color: #0f172a; letter-spacing: 1px; text-transform: uppercase; }
+    .company-sub { font-size: 14px; color: #444; margin-top: 8px; }
+    .hr-line { border-bottom: 2px solid #0f172a; margin: 20px 0 40px 0; }
+    .date-row { text-align: right; margin-bottom: 30px; font-weight: bold; }
+    .salutation { margin-bottom: 20px; font-size: 16px; }
+    .body-block p { margin-bottom: 18px; line-height: 1.8; text-align: justify; }
+    .highlight { font-weight: bold; color: #000; }
+    .details-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 20px; margin: 30px 0; border-radius: 8px; }
+    .details-box table { width: 100%; border-collapse: collapse; }
+    .details-box td { padding: 8px 0; vertical-align: top; }
+    .details-box td:first-child { font-weight: bold; width: 40%; color: #334155; }
+    .signature-block { margin-top: 80px; }
+    .sig-line { width: 200px; border-top: 1px solid #333; margin-bottom: 8px; }
+    .sig-title { font-weight: bold; color: #333; }
+    .sig-sub { font-size: 13px; color: #555; }
+    .footer { position: absolute; bottom: 40px; left: 70px; right: 70px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 12px; }
+    @media print { body { -webkit-print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div class="company-name">\${(drive as any).companyName}</div>
+      <div class="company-sub">Human Resources Department &nbsp;|&nbsp; Campus Selection Program</div>
+    </div>
+    <div class="hr-line"></div>
+
+    <div class="date-row">Date: \${todayDate}</div>
+
+    <div class="salutation">Dear <strong>\${studentName}</strong>,</div>
+
+    <div class="body-block">
+      <p>
+        Congratulations! Following your recent participation in the campus recruitment drive held on <span class="highlight">${eventDate}</span> at CampusPool University, we are delighted to inform you that you have successfully cleared all our selection rounds.
+      </p>
+      <p>
+        We are extremely pleased with your profile and it is our pleasure to offer you a position with <span class="highlight">${(drive as any).companyName}</span>. 
+      </p>
+
+      <div class="details-box">
+        <table>
+          <tbody>
+            <tr><td>Candidate Name:</td><td>${studentName}</td></tr>
+            <tr><td>USN / Roll No:</td><td>${usn}</td></tr>
+            <tr><td>University:</td><td>CampusPool University</td></tr>
+            <tr><td>Offered Designation:</td><td>${(drive as any).jobRole || 'Trainee / Associate'}</td></tr>
+            <tr><td>CTC Offered:</td><td>${(drive as any).ctc || 'As per industry standards'}</td></tr>
+            <tr><td>Campus Reference ID:</td><td>CP/${driveStudentId}</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        A formal Letter of Appointment outlining your compensation, benefits, terms of employment, and date of joining will be issued to you shortly before your onboarding date. Please note that this offer is contingent upon your successful graduation and completion of all academic requirements with no active backlogs.
+      </p>
+      <p>
+        We are excited about the prospect of you joining our team and look forward to a mutually rewarding association.
+      </p>
+      <p>
+        Welcome aboard!
+      </p>
+    </div>
+
+    <div class="signature-block">
+      <div class="sig-line"></div>
+      <div class="sig-title">Authorized Signatory</div>
+      <div class="sig-sub">Talent Acquisition Team</div>
+      <div class="sig-sub">${(drive as any).companyName}</div>
+    </div>
+
+    <div class="footer">
+      This is an electronically generated selection letter for CampusPool placement tracking purposes.
+    </div>
+  </div>
+  <script>window.print();</script>
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="Offer_${studentName.replace(/\s+/g, '_')}.html"`);
+    return res.send(html);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ success: false, error: message });
+  }
+};
+

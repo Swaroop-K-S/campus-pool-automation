@@ -31,7 +31,6 @@ export const getApplications = async (req: Request, res: Response) => {
       .sort({ submittedAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
-      .populate('studentProfileId', 'strikes')
       .lean();
 
     // Add hasResume and hasPhoto flags (supports both Cloudinary URLs and legacy GridFS)
@@ -62,6 +61,7 @@ export const getApplications = async (req: Request, res: Response) => {
       }
     });
   } catch (error: unknown) {
+    console.error('getApplications Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ success: false, error: message });
   }

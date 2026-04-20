@@ -45,10 +45,10 @@ export default function RoomsTab({ driveId }: { drive: any, driveId: string }) {
   }, [socket]);
 
   return (
-    <div className="p-8 overflow-y-auto h-full flex flex-col gap-6 bg-slate-50/50">
+    <div className="p-4 lg:p-6 overflow-y-auto h-full flex flex-col gap-4 bg-slate-50/50 custom-scrollbar">
       
       {/* Mode Switcher Header */}
-      <div className="flex items-center justify-between bg-white px-6 py-4 rounded-2xl shadow-sm border border-slate-200">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white px-5 py-4 rounded-2xl shadow-sm border border-slate-200">
         <div>
           <h2 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2">
             <Navigation size={20} className="text-indigo-600" /> Room Logistics Engine
@@ -56,7 +56,7 @@ export default function RoomsTab({ driveId }: { drive: any, driveId: string }) {
           <p className="text-xs text-slate-500 mt-1">Manage physical rooms, panelist routing, and student logistics.</p>
         </div>
         
-        <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200/60 shadow-inner">
+        <div className="flex flex-wrap items-center p-1 w-full xl:w-auto bg-slate-100 rounded-xl border border-slate-200/60 shadow-inner">
           <button 
             onClick={() => setMode('setup')}
             className={`px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-all ${mode === 'setup' ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
@@ -128,16 +128,16 @@ function RoomSetupMode({ driveId, rooms, onRefresh }: { driveId: string, rooms: 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
       <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest mb-4">Add New Room</h3>
-      <div className="flex items-end gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-end gap-4 mb-6">
         <div className="flex-1">
           <label className="block text-xs font-bold text-slate-500 mb-1">Room Name</label>
           <input value={newRoomName} onChange={e => setNewRoomName(e.target.value)} placeholder="e.g. Lab 1" className="w-full px-4 py-2 border rounded-xl" />
         </div>
-        <div className="w-32">
+        <div className="w-full sm:w-32">
           <label className="block text-xs font-bold text-slate-500 mb-1">Capacity</label>
           <input type="number" value={newCapacity} onChange={e => setNewCapacity(Number(e.target.value))} className="w-full px-4 py-2 border rounded-xl" />
         </div>
-        <div className="w-48">
+        <div className="w-full sm:w-48">
           <label className="block text-xs font-bold text-slate-500 mb-1">Assigned Round</label>
           <select value={newRound} onChange={e => setNewRound(e.target.value)} className="w-full px-4 py-2 bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
              <option value="aptitude">Aptitude</option>
@@ -145,10 +145,10 @@ function RoomSetupMode({ driveId, rooms, onRefresh }: { driveId: string, rooms: 
              <option value="hr_interview">HR</option>
           </select>
         </div>
-        <button onClick={handleAddRoom} disabled={isAdding} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">Add</button>
+        <button onClick={handleAddRoom} disabled={isAdding} className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700">Add</button>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {rooms.map(r => (
           <div key={r._id} className="border border-slate-200 rounded-xl p-4 flex justify-between items-start">
              <div>
@@ -217,7 +217,7 @@ function RoomAssignMode({ driveId }: { driveId: string, rooms: any[] }) {
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto">
-             <div className="grid grid-cols-3 gap-6">
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                  {loading ? <div>Loading...</div> : assignments.map(a => (
                      <div key={a.roomId} className="bg-white rounded-xl shadow-sm border p-4">
                          <h4 className="font-black text-slate-800 mb-2">{a.roomName}</h4>
@@ -252,7 +252,7 @@ function RoomLiveMode({ driveId, rooms, onRefresh }: { driveId: string, rooms: a
   };
 
   return (
-    <div className="grid grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {rooms.map(r => (
         <div key={r._id} className={`border p-6 rounded-2xl shadow-sm transition-all ${r.isLocked ? 'bg-slate-50 border-slate-300 opacity-80' : 'bg-white border-slate-200'}`}>
            <div className="flex justify-between items-start mb-4">

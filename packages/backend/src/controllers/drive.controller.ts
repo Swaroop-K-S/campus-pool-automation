@@ -783,3 +783,40 @@ export const matchCandidates = asyncHandler(async (req: Request, res: Response) 
   });
 });
 
+// GET /api/v1/drives/:driveId/funnel
+export const getDriveFunnel = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  const drive = await DriveModel.findOne({ _id: driveId, collegeId }).lean();
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  const cacheKey = generateCacheKey('drive-funnel', { driveId });
+  const cachedData = await AppCache.get(cacheKey);
+  if (cachedData) {
+     return res.status(200).json({ success: true, data: cachedData, cached: true });
+  }
+
+  const counts = await ApplicationModel.aggregate([
+    { $match: { driveId: new mongoose.Types.ObjectId(driveId) } },
+    { $group: { _id: '$status', count: { $sum: 1 } } }
+  ]);
+
+  const funnel = { applied: 0, shortlisted: 0, invited: 0, attended: 0, test_passed: 0, interview_passed: 0, selected: 0, rejected: 0, total: 0 };
+  
+  counts.forEach(({ _id, count }: any) => {
+    funnel.total += count;
+    if (funnel.hasOwnProperty(_id)) {
+      (funnel as any)[_id] = count;
+    } else if (_id.includes('passed')) {
+       if (_id.includes('test')) funnel.test_passed += count;
+       else funnel.interview_passed += count;
+    } else if (_id.includes('failed')) {
+       funnel.rejected += count;
+    }
+  });
+
+  await AppCache.set(cacheKey, funnel, 60); // cache for 60s
+  res.status(200).json({ success: true, data: funnel, cached: false });
+});
+

@@ -8,7 +8,7 @@ import {
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
   Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search, Eye,
   Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Play, QrCode, Menu, BarChart2,
-  AlertTriangle, ArrowLeft, RefreshCcw, Minus, CheckCircle, Monitor, AlertCircle, BookOpen
+  AlertTriangle, ArrowLeft, RefreshCcw, Minus, CheckCircle, Monitor, AlertCircle, BookOpen, Save, ShieldAlert
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
@@ -189,6 +189,7 @@ export default function DriveDetailPage() {
   const { driveId } = useParams();
   const { user } = useAuthStore();
   const [drive, setDrive] = useState<any>(null);
+  const [activeHub, setActiveHub] = useState('Pipeline');
   const [activeTab, setActiveTab] = useState('Overview');
   const [loading, setLoading] = useState(true);
   
@@ -215,7 +216,7 @@ export default function DriveDetailPage() {
   const [formFields, setFormFields] = useState<any[]>([]);
   const [appTotal, setAppTotal] = useState(0);
   const [appLoading, setAppLoading] = useState(true);
-  const [appStats, setAppStats] = useState({ total: 0, applied: 0, shortlisted: 0, attended: 0, selected: 0 });
+  const [appStats, setAppStats] = useState({ total: 0, applied: 0, shortlisted: 0, attended: 0, test_passed: 0, interview_passed: 0, selected: 0, rejected: 0 });
   const [appSearchQuery, setAppSearchQuery] = useState('');
   const [appSearchInput, setAppSearchInput] = useState('');
 
@@ -421,7 +422,7 @@ export default function DriveDetailPage() {
 
   useEffect(() => {
     if (activeTab === 'Overview') {
-      api.get(`/drives/${driveId}/applications/stats`).then((res: any) => {
+      api.get(`/drives/${driveId}/funnel`).then((res: any) => {
         if (res.success) setAppStats(res.data);
       }).catch(console.error);
     }
@@ -595,7 +596,7 @@ export default function DriveDetailPage() {
       if ((res as any).success) {
         toast.success(`Eligibility sweep complete! ${(res as any).data.rejectedCount} applications rejected.`);
         fetchApplications(1, false); // Refresh list
-        api.get(`/drives/${driveId}/applications/stats`).then((res: any) => {
+        api.get(`/drives/${driveId}/funnel`).then((res: any) => {
           if (res.success) setAppStats(res.data);
         }).catch(console.error);
         setShowSweepConfirmModal(false);
@@ -1150,7 +1151,7 @@ export default function DriveDetailPage() {
               {/* God View shortcut (event_day only) */}
               {drive.status === 'event_day' && (
                 <button
-                  onClick={() => setActiveTab('God View')}
+                  onClick={() => { setActiveHub('CommandCenter');}}
                   className="px-4 py-2 rounded-xl font-bold text-white bg-gradient-to-br from-violet-600 to-indigo-700 hover:from-violet-500 hover:to-indigo-600 active:scale-95 shadow-lg shadow-violet-600/20 transition-all flex items-center gap-1.5 text-sm"
                 >
                   <Monitor size={14} /> God View
@@ -1173,66 +1174,52 @@ export default function DriveDetailPage() {
       {/* Premium TABS */}
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 px-8 flex gap-8 shrink-0 relative z-10 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] overflow-x-auto hide-scrollbar">
         <div className="max-w-7xl mx-auto flex gap-6 w-full h-14">
-          {['Overview', 'Form Builder', 'Applications', 'Shortlist', 'Rooms', 'Event Day', 'God View', 'Audit Log'].map(tab => (
+          
+          {[{ id: 'Config', label: 'Engine Setup' }, { id: 'Pipeline', label: 'The Pipeline' }, { id: 'CommandCenter', label: 'Command Center' }].map(hub => (
             <button 
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`relative px-2 py-4 font-bold text-sm transition-colors whitespace-nowrap group ${
-                activeTab === tab ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'
-              }`}
+              key={hub.id}
+              onClick={() => { setActiveHub(hub.id); if(hub.id === 'Config') setActiveTab('Form Builder'); else if(hub.id === 'Pipeline') setActiveTab('Overview'); }}
+              className={`relative px-4 py-4 font-bold text-sm transition-colors whitespace-nowrap group ${activeHub === hub.id ? "text-indigo-600" : "text-slate-500 hover:text-slate-800"}`}
             >
-              {tab}
-              {activeTab === tab && (
+              {hub.label}
+              {activeHub === hub.id && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full shadow-[0_-2px_8px_rgba(79,70,229,0.5)]"></div>
               )}
-              {activeTab !== tab && (
+              {activeHub !== hub.id && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-200 rounded-t-full scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
               )}
             </button>
           ))}
+
         </div>
       </div>
 
       {/* CONTENT AREA */}
-      <div className="flex-1 overflow-hidden relative">
-        
-        {activeTab === 'Rooms' && <RoomsTab drive={drive} driveId={driveId!} />}
-        
-        {activeTab === 'God View' && (
-          <GodViewTab drive={drive} driveId={driveId!} onUpdate={fetchDriveDetails} />
-        )}
 
-        {activeTab === 'Audit Log' && (
-          <div className="p-8 h-full overflow-y-auto bg-slate-50/50">
-            <DriveAuditLog driveId={driveId!} />
-          </div>
-        )}
-        
-        {activeTab === 'Overview' && (
-          <div className="p-8 overflow-y-auto h-full flex flex-col gap-6 bg-slate-50/50">
-            
-            {/* TOP ROW: Funnel & Quick Ops */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Funnel Graph */}
-              <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between relative overflow-hidden">
+      {/* HUB SUB-NAVIGATION & FUNNEL PIPELINE */}
+      {activeHub === 'Pipeline' && (
+        <div className="px-8 pt-8 pb-3 bg-slate-50 border-b border-slate-200/80 shrink-0 z-20 relative shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
+            <div className="max-w-5xl mx-auto w-full">
+              {/* Funnel Graph - Re-positioned to Top */}
+              <div className="w-full bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between relative overflow-hidden mb-6">
                 <div className="flex items-center gap-2 mb-6 absolute top-0 right-0 bg-indigo-50 px-4 py-2 rounded-bl-2xl border-b border-l border-indigo-100">
-                  <div className={`w-2.5 h-2.5 rounded-full ${drive.status === 'active' || drive.status === 'event_day' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                  <span className="text-xs font-black uppercase text-indigo-800 tracking-wider flex items-center gap-1">{drive.status?.replace('_', ' ')}</span>
+                  <div className={"w-2.5 h-2.5 rounded-full " + (drive?.status === 'active' || drive?.status === 'event_day' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400')} />
+                  <span className="text-xs font-black uppercase text-indigo-800 tracking-wider flex items-center gap-1">{drive?.status?.replace('_', ' ')}</span>
                 </div>
                 
-                <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest mb-2"><AlignLeft size={16} className="inline mr-1 mb-0.5" /> Pipeline Funnel</h3>
+                <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest mb-2">Pipeline Funnel</h3>
                 
                 <div className="flex items-center border border-slate-100 rounded-2xl justify-between w-full mt-4 h-32 px-6 bg-slate-50 relative">
                   <div className="absolute top-1/2 left-10 right-10 h-1 bg-slate-200 -translate-y-1/2 rounded-full" />
                   {[
-                    { label: 'Applied', count: appStats.total, color: 'text-blue-600', bg: 'bg-blue-100', border: 'border-blue-200' },
-                    { label: 'Shortlisted', count: appStats.shortlisted, color: 'text-purple-600', bg: 'bg-purple-100', border: 'border-purple-200' },
-                    { label: 'Attended', count: appStats.attended, color: 'text-amber-600', bg: 'bg-amber-100', border: 'border-amber-200' },
-                    { label: 'Selected', count: appStats.selected, color: 'text-emerald-600', bg: 'bg-emerald-100', border: 'border-emerald-200' }
+                    { label: 'Applied', count: appStats?.total || 0, color: 'text-blue-600', bg: 'bg-blue-100', border: 'border-blue-200' },
+                    { label: 'Shortlisted', count: appStats?.shortlisted || 0, color: 'text-purple-600', bg: 'bg-purple-100', border: 'border-purple-200' },
+                    { label: 'Test Passed', count: appStats?.test_passed || 0, color: 'text-indigo-600', bg: 'bg-indigo-100', border: 'border-indigo-200' },
+                    { label: 'Interviewed', count: appStats?.interview_passed || 0, color: 'text-pink-600', bg: 'bg-pink-100', border: 'border-pink-200' },
+                    { label: 'Selected', count: appStats?.selected || 0, color: 'text-emerald-600', bg: 'bg-emerald-100', border: 'border-emerald-200' }
                   ].map((step, idx) => (
                     <div key={idx} className="flex flex-col items-center flex-1 relative z-10 hover:-translate-y-1 transition-transform cursor-default">
-                      <div className={`w-16 h-16 rounded-2xl ${step.bg} ${step.color} flex items-center justify-center font-black text-2xl shadow-sm border ${step.border} ring-4 ring-slate-50 z-10`}>
+                      <div className={"w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl shadow-sm border ring-4 ring-slate-50 z-10 " + step.bg + " " + step.color + " " + step.border}>
                         {step.count}
                       </div>
                       <span className="text-xs font-bold text-slate-600 mt-3 uppercase tracking-wider bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-sm">{step.label}</span>
@@ -1241,149 +1228,226 @@ export default function DriveDetailPage() {
                 </div>
               </div>
 
-              {/* Quick Ops */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
-                <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest mb-4"><Cpu size={16} className="inline mr-1 mb-0.5" /> Quick Operations</h3>
-                <div className="space-y-3">
-                  <button onClick={async () => {
-                        const toastId = toast.loading('Running AI matching engine...');
-                        try {
-                          const res = await api.get(`/drives/${driveId}/match`);
-                          if ((res as any).success) {
-                            const { matchedCandidates, alreadyApplied } = (res as any).data;
-                            if (matchedCandidates.length > 0) {
-                              toast.success(`Found ${matchedCandidates.length} eligible candidates! (${alreadyApplied} applied). Invitations dispatched!`, { id: toastId, duration: 5000 });
-                            } else {
-                              toast.success(`No new candidates matched your strict criteria.`, { id: toastId });
+              {/* Sub-tab Navigation */}
+              <div className="flex justify-start">
+                  <div className="flex bg-slate-200/60 p-1.5 rounded-xl shadow-inner border border-slate-200/80">
+                      <button onClick={() => setActiveTab('Overview')} className={"px-8 py-2 text-sm font-black rounded-lg transition-all tracking-wide " + (activeTab === 'Overview' ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-900/5' : 'text-slate-500 hover:text-slate-800')}>Quick Ops</button>
+                      <button onClick={() => setActiveTab('Applications')} className={"px-8 py-2 text-sm font-black rounded-lg transition-all tracking-wide " + (activeTab === 'Applications' ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-900/5' : 'text-slate-500 hover:text-slate-800')}>Master List</button>
+                      <button onClick={() => setActiveTab('Shortlist')} className={"px-8 py-2 text-sm font-black rounded-lg transition-all tracking-wide " + (activeTab === 'Shortlist' ? 'bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-900/10' : 'text-slate-500 hover:text-slate-800')}>Shortlist Grid</button>
+                  </div>
+              </div>
+            </div>
+        </div>
+      )}
+
+      {activeHub === 'Config' && (
+        <div className="px-8 py-3 bg-white border-b border-slate-200/60 shrink-0 z-10 relative flex justify-center shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]">
+            <div className="flex bg-slate-100/80 p-1 rounded-xl shadow-inner border border-slate-200/50">
+                <button onClick={() => setActiveTab('Form Builder')} className={"px-8 py-2 text-sm font-black rounded-lg transition-all tracking-wide " + (activeTab === 'Form Builder' ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-900/5' : 'text-slate-500 hover:text-slate-800')}>Form Builder Builder</button>
+                <button onClick={() => setActiveTab('Event Day')} className={"px-8 py-2 text-sm font-black rounded-lg transition-all tracking-wide " + (activeTab === 'Event Day' ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-900/5' : 'text-slate-500 hover:text-slate-800')}>Event Rules</button>
+            </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-hidden relative">
+        
+        {activeHub === 'CommandCenter' && (
+          <div className="flex h-full w-full overflow-hidden bg-slate-100 flex-col xl:flex-row">
+             {/* Left Pane - Rooms */}
+             <div className="w-full xl:w-[350px] shrink-0 border-b xl:border-b-0 xl:border-r border-slate-200 bg-white flex flex-col h-[50vh] xl:h-full relative z-10 shadow-sm overflow-hidden">
+                <RoomsTab drive={drive} driveId={driveId!} />
+             </div>
+             
+             {/* Center Pane - God View */}
+             <div className="flex-1 overflow-hidden relative shadow-inner min-h-[50vh] xl:min-h-0 bg-slate-50">
+                <GodViewTab drive={drive} driveId={driveId!} onUpdate={fetchDriveDetails} />
+             </div>
+             
+             {/* Right Pane - Audit Log */}
+             <div className="w-full xl:w-[370px] shrink-0 border-t xl:border-t-0 xl:border-l border-slate-200 bg-white flex flex-col h-[40vh] xl:h-full overflow-hidden relative z-10 custom-scrollbar">
+                <DriveAuditLog driveId={driveId!} />
+             </div>
+          </div>
+        )}
+
+        {activeHub === 'Pipeline' && activeTab === 'Overview' && (
+          <div className="p-8 overflow-y-auto custom-scrollbar h-full flex flex-col gap-8 bg-[#F8FAFC]">
+            
+            {/* QUICK OPS NAVIGATOR (Hero Row) */}
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 relative overflow-hidden shrink-0">
+               {/* Decorative background element */}
+               <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50 -mr-20 -mt-20 pointer-events-none"></div>
+               
+               <div className="flex items-center justify-between mb-8 relative z-10">
+                 <div>
+                   <h3 className="text-xl font-black text-slate-800 tracking-tight flex items-center gap-2"><Cpu className="text-indigo-500"/> Pipeline Operations Center</h3>
+                   <p className="text-sm font-semibold text-slate-500 mt-1">Accelerate drive execution with one-click global actions</p>
+                 </div>
+               </div>
+               
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 relative z-10">
+                 {/* Match Engine */}
+                 <button onClick={async () => {
+                          const toastId = toast.loading('Running AI matching engine...');
+                          try {
+                            const res = await api.get(`/drives/${driveId}/match`);
+                            if ((res as any).success) {
+                              const { matchedCandidates, alreadyApplied } = (res as any).data;
+                              if (matchedCandidates.length > 0) {
+                                toast.success(`Found ${matchedCandidates.length} eligible candidates! (${alreadyApplied} applied). Invitations dispatched!`, { id: toastId, duration: 5000 });
+                              } else {
+                                toast.success(`No new candidates matched your strict criteria.`, { id: toastId });
+                              }
                             }
+                          } catch (err) {
+                            toast.error('Match engine failed', { id: toastId });
                           }
-                        } catch (err) {
-                          toast.error('Match engine failed', { id: toastId });
-                        }
-                      }}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl transition-all font-bold text-sm group"
-                  >
-                     <span className="flex items-center gap-2"><UserCheck size={16} className="text-emerald-500 group-hover:text-emerald-700" /> Match Global Candidates</span>
-                     <ChevronRight size={16} className="text-emerald-300" />
-                  </button>
-                  <button onClick={() => {
-                        navigator.clipboard.writeText(`${window.location.origin}/apply/${drive.formToken}`);
-                        toast.success('Public form link copied!');
-                      }}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-slate-700 rounded-xl transition-all font-bold text-sm group"
-                  >
-                     <span className="flex items-center gap-2"><Copy size={16} className="text-slate-400 group-hover:text-indigo-500" /> Copy Form Link</span>
-                     <ChevronRight size={16} className="text-slate-300" />
-                  </button>
-                  <button onClick={() => setActiveTab('Form Builder')}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl transition-all font-bold text-sm group"
-                  >
-                     <span className="flex items-center gap-2"><AlignJustify size={16} className="text-slate-400 group-hover:text-slate-600" /> Modify Registration</span>
-                     <ChevronRight size={16} className="text-slate-300" />
-                  </button>
-                  <button onClick={toggleWalkIn}
-                      className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl transition-all font-bold text-sm ${drive.walkInEnabled ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'}`}
-                  >
-                     <span className="flex items-center gap-2">
-                       <UserPlus size={16} className={drive.walkInEnabled ? 'text-amber-600' : 'text-slate-400'} /> Walk-In Fast Track 
-                       {drive.walkInEnabled ? <span className="text-[10px] bg-amber-200/50 text-amber-800 px-1.5 py-0.5 rounded font-black uppercase">Active</span> : null}
-                     </span>
-                     <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${drive.walkInEnabled ? 'bg-amber-500' : 'bg-slate-300'}`}>
-                        <div className={`bg-white w-3 h-3 rounded-full shadow-sm transition-transform ${drive.walkInEnabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
-                     </div>
-                  </button>                 
-                  {/* Save as Template */}
-                  <DriveTemplateManager
+                        }}
+                        className="flex flex-col items-start p-5 bg-gradient-to-br from-emerald-50/80 to-white hover:from-emerald-50 hover:to-emerald-100 border border-emerald-100 hover:border-emerald-300 hover:shadow-md rounded-2xl transition-all group text-left relative overflow-hidden"
+                 >
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-emerald-500 group-hover:text-white transition-all shadow-sm"><UserCheck size={22}/></div>
+                    <span className="font-bold text-slate-800 text-base mb-1">Match Global Candidates</span>
+                    <span className="text-xs font-semibold text-slate-500">Run AI engine to dispatch invitations</span>
+                    <div className="absolute top-4 right-4 text-emerald-300 group-hover:text-emerald-500 transition-colors"><ChevronRight size={20}/></div>
+                 </button>
+
+                 {/* Copy Form Link */}
+                 <button onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/apply/${drive.formToken}`);
+                          toast.success('Public form link copied!');
+                        }}
+                        className="flex flex-col items-start p-5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-md rounded-2xl transition-all group text-left relative"
+                 >
+                    <div className="w-12 h-12 rounded-2xl bg-slate-200 text-slate-600 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-all shadow-sm"><Copy size={22}/></div>
+                    <span className="font-bold text-slate-800 text-base mb-1">Copy Form Link</span>
+                    <span className="text-xs font-semibold text-slate-500">Copy public registration link to clipboard</span>
+                    <div className="absolute top-4 right-4 text-slate-300 group-hover:text-indigo-400 transition-colors"><ChevronRight size={20}/></div>
+                 </button>
+
+                 {/* Modify Registration */}
+                 <button onClick={() => { setActiveHub('Config'); setActiveTab('Form Builder'); }}
+                        className="flex flex-col items-start p-5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-md rounded-2xl transition-all group text-left relative"
+                 >
+                    <div className="w-12 h-12 rounded-2xl bg-slate-200 text-slate-600 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-all shadow-sm"><AlignJustify size={22}/></div>
+                    <span className="font-bold text-slate-800 text-base mb-1">Modify Registration</span>
+                    <span className="text-xs font-semibold text-slate-500">Edit form structure and dependencies</span>
+                    <div className="absolute top-4 right-4 text-slate-300 group-hover:text-indigo-400 transition-colors"><ChevronRight size={20}/></div>
+                 </button>
+
+                 {/* Walk In Fast Track */}
+                 <button onClick={toggleWalkIn}
+                        className={`flex flex-col items-start p-5 border hover:shadow-md rounded-2xl transition-all group text-left relative ${drive.walkInEnabled ? 'bg-amber-50 border-amber-200 hover:bg-amber-100 hover:border-amber-300' : 'bg-slate-50 hover:bg-white border-slate-200 hover:border-amber-300'}`}
+                 >
+                    <div className="flex items-center justify-between w-full mb-4">
+                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-all group-hover:scale-110 ${drive.walkInEnabled ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-600 group-hover:bg-amber-100 group-hover:text-amber-600'}`}><UserPlus size={22}/></div>
+                       <div className={`w-10 h-5 rounded-full p-0.5 transition-colors ${drive.walkInEnabled ? 'bg-amber-500' : 'bg-slate-300 group-hover:bg-slate-400'}`}>
+                          <div className={`bg-white w-4 h-4 rounded-full shadow-sm transition-transform ${drive.walkInEnabled ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                       </div>
+                    </div>
+                    <span className="font-bold flex items-center gap-2 text-base mb-1 text-slate-800">
+                      Walk-In Fast Track
+                      {drive.walkInEnabled ? <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">Active</span> : null}
+                    </span>
+                    <span className={`text-xs font-semibold ${drive.walkInEnabled ? 'text-amber-700/80' : 'text-slate-500'}`}>Enable instant panel generation</span>
+                 </button>
+
+                 {/* Save as Template */}
+                 <DriveTemplateManager
                     mode="manage"
                     currentDrive={drive}
                     trigger={
-                      <button className="w-full flex items-center justify-between px-4 py-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl transition-all font-bold text-sm group">
-                        <span className="flex items-center gap-2"><BookOpen size={16} className="text-indigo-400 group-hover:text-indigo-600" /> Save as Template</span>
-                        <ChevronRight size={16} className="text-indigo-300" />
+                      <button className="flex flex-col items-start w-full p-5 bg-gradient-to-br from-violet-50/50 to-white hover:from-white hover:to-violet-50 border border-violet-100 hover:border-violet-300 hover:shadow-md rounded-2xl transition-all group text-left relative h-full">
+                         <div className="w-12 h-12 rounded-2xl bg-violet-100 text-violet-600 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-violet-500 group-hover:text-white transition-all shadow-sm"><BookOpen size={22}/></div>
+                         <span className="font-bold text-slate-800 text-base mb-1">Save as Template</span>
+                         <span className="text-xs font-semibold text-slate-500">Persist execution rules and forms</span>
+                         <div className="absolute top-4 right-4 text-violet-300 group-hover:text-violet-500 transition-colors"><ChevronRight size={20}/></div>
                       </button>
                     }
-                  />
-                  {drive.status !== 'completed' && (
+                 />
+
+                 {/* Halt Registrations */}
+                 {drive.status !== 'completed' && (
                     <button onClick={() => setShowCloseConfirm(true)}
-                        className="w-full flex items-center justify-between px-4 py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl transition-all font-bold text-sm"
+                        className="flex flex-col items-start p-5 bg-red-50 hover:bg-white border border-red-100 hover:border-red-300 hover:shadow-md rounded-2xl transition-all group text-left relative"
                     >
-                       <span className="flex items-center gap-2"><Lock size={16} /> Halt Registrations</span>
+                       <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-all shadow-sm group-hover:bg-red-500 group-hover:text-white"><Lock size={22}/></div>
+                       <span className="font-bold text-red-900 text-base mb-1">Halt Registrations</span>
+                       <span className="text-xs font-semibold text-red-700/70">Instantly block new applicants</span>
                     </button>
-                  )}
-                </div>
-              </div>
+                 )}
+               </div>
             </div>
 
-            {/* BOTTOM ROW: Key Metrics & Drive Rounds Checklist */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Key Metrics */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col relative overflow-hidden">
-                 <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest mb-6"><BarChart2 size={16} className="inline mr-1 mb-0.5" /> Event Parameters</h3>
-                 
+            {/* EVENT PARAMETERS & EXECUTIONS GRID ROW */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 shrink-0">
+               
+               {/* Col 1: Event Parameters */}
+               <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex flex-col relative overflow-hidden h-full">
+                 <h3 className="font-black text-slate-800 text-lg flex items-center gap-2 mb-6"><BarChart2 className="text-blue-500" size={20} /> Event Parameters</h3>
+                  
                  {/* Big Numbers */}
-                 <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 p-4 rounded-xl shadow-inner">
-                      <p className="text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">Total Applied</p>
-                      <p className="text-3xl font-black text-indigo-700">{appStats.total}</p>
+                 <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className="bg-slate-50 border border-slate-100 p-5 rounded-2xl border-b-4 border-b-slate-200">
+                      <p className="text-slate-500 text-xs font-black uppercase tracking-wider mb-2">Total Applied</p>
+                      <p className="text-4xl font-black text-slate-800">{appStats.total}</p>
                     </div>
-                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 p-4 rounded-xl shadow-inner">
-                      <p className="text-emerald-500 text-xs font-bold uppercase tracking-wider mb-1">Pending Review</p>
-                      <p className="text-3xl font-black text-emerald-700">{Math.max(0, appStats.total - appStats.shortlisted)}</p>
+                    <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-2xl border-b-4 border-b-emerald-200">
+                      <p className="text-emerald-600 text-xs font-black uppercase tracking-wider mb-2">Pending</p>
+                      <p className="text-4xl font-black text-emerald-700">{Math.max(0, appStats.total - appStats.shortlisted)}</p>
                     </div>
                  </div>
 
                  {/* Countdown timer */}
                  {drive.formCloseDate && drive.formStatus === 'open' && (
-                   <div className="mb-6">
+                   <div className="mb-8">
                      <CountdownTimer closeDate={drive.formCloseDate} />
                    </div>
                  )}
 
                  {/* Info List */}
-                 <div className="space-y-4 flex-1">
-                   <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                 <div className="space-y-4 flex-1 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                   <div className="flex justify-between items-center border-b border-white pb-4">
                      <span className="text-slate-500 font-bold text-sm">Role Profile</span>
-                     <span className="font-black text-slate-800 text-sm bg-slate-100 border border-slate-200 px-3 py-1 rounded-lg">{drive.jobRole}</span>
+                     <span className="font-black text-slate-800 text-sm bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">{drive.jobRole}</span>
                    </div>
-                   <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                   <div className="flex justify-between items-center border-b border-white pb-4">
                      <span className="text-slate-500 font-bold text-sm">Target Offer</span>
-                     <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500 text-lg">{drive.ctc}</span>
+                     <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500 text-xl">{drive.ctc}</span>
                    </div>
-                   <div className="flex justify-between items-center pb-1">
-                     <span className="text-slate-500 font-bold text-sm">Min CGPA</span>
-                     <span className="font-black text-slate-700 text-sm">{drive.eligibility?.minCGPA || 'None'}</span>
+                   <div className="flex justify-between items-center">
+                     <span className="text-slate-500 font-bold text-sm">Engine Status</span>
+                     <span className="font-black text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 shadow-sm text-sm">Active</span>
                    </div>
                  </div>
-              </div>
+               </div>
 
-              {/* Drive Rounds (Actionable Checklists) */}
-              <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-                 <div className="flex items-center justify-between mb-6">
-                   <h3 className="font-bold text-sm text-slate-500 uppercase tracking-widest"><CheckSquare size={16} className="inline mr-1 mb-0.5" /> Execution Modules</h3>
-                   <button onClick={() => setActiveTab('Event Day')} className="text-indigo-600 text-sm font-bold hover:text-indigo-700 flex items-center gap-1 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 transition-colors">Launch Event Console <ChevronRight size={16}/></button>
+               {/* Col 2 & 3: Execution Modules */}
+               <div className="xl:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex flex-col h-full">
+                 <div className="flex items-center justify-between mb-8">
+                   <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><CheckSquare className="text-indigo-500" size={20} /> Execution Strategy</h3>
+                   <button onClick={() => { setActiveHub('Config'); setActiveTab('Event Day'); }} className="text-indigo-600 text-sm font-bold hover:text-indigo-700 hover:bg-indigo-100 flex items-center gap-1 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 transition-colors shadow-sm">Launch Event Console <ChevronRight size={16}/></button>
                  </div>
                  
-                 <div className="space-y-3 flex-1 overflow-y-auto pr-2">
+                 <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
                    {drive.rounds?.map((r: any, idx: number) => {
                      const isDone = r.status === 'completed';
                      const isActive = r.status === 'active';
                      return (
-                       <div key={idx} className={`flex items-center justify-between p-4 rounded-xl border transition-all ${isActive ? 'bg-indigo-50 border-indigo-200 shadow-sm filter drop-shadow-sm' : isDone ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
-                         <div className="flex items-center gap-5">
-                           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-lg ${isDone ? 'bg-emerald-100 text-emerald-600' : isActive ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-slate-100 text-slate-400'}`}>
-                             {isDone ? <Check size={20} /> : (r.order || idx + 1)}
+                       <div key={idx} className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${isActive ? 'bg-indigo-50 border-indigo-200 shadow-sm filter drop-shadow-sm' : isDone ? 'bg-slate-50 border-slate-200 opacity-80' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                         <div className="flex items-center gap-6">
+                           <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl ${isDone ? 'bg-emerald-100 text-emerald-600 shadow-inner' : isActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-100 text-slate-400'}`}>
+                             {isDone ? <Check size={28} /> : (r.order || idx + 1)}
                            </div>
                            <div>
-                             <h4 className={`font-bold text-sm ${isActive ? 'text-indigo-900' : 'text-slate-800'}`}>{r.label || r.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</h4>
-                             <p className="text-xs font-bold mt-1 tracking-wide flex items-center gap-1">
-                               {isDone ? <span className="text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-md">Module Completed</span> : isActive ? <span className="text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse"/> Executing</span> : <span className="text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">Pending Configuration</span>}
-                             </p>
+                             <h4 className={`font-black text-base md:text-lg tracking-tight ${isActive ? 'text-indigo-900' : 'text-slate-800'}`}>{r.label || r.type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</h4>
+                             <div className="text-xs font-bold mt-2 tracking-wide flex flex-wrap items-center gap-2">
+                               {isDone ? <span className="text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md shadow-sm">Module Completed</span> : isActive ? <span className="text-indigo-700 bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-md shadow-sm flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"/> Executing Live</span> : <span className="text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md shadow-sm">Pending Configuration</span>}
+                             </div>
                            </div>
                          </div>
                          <div className="flex items-center gap-3">
                            {!isDone && (
-                             <button onClick={() => setActiveTab('Event Day')} className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-transform hover:scale-105 active:scale-95 ${isActive ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700 shadow-indigo-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+                             <button onClick={() => { setActiveHub('Config'); setActiveTab('Event Day'); }} className={`px-5 py-3 rounded-xl text-sm font-black transition-transform hover:-translate-y-0.5 active:translate-y-0 ${isActive ? 'bg-indigo-600 text-white shadow-lg border border-indigo-500 hover:bg-indigo-700 shadow-indigo-200/50' : 'bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50 shadow-sm'}`}>
                                Manage
                              </button>
                            )}
@@ -1393,97 +1457,102 @@ export default function DriveDetailPage() {
                    })}
                    
                    {(!drive.rounds || drive.rounds.length === 0) && (
-                     <div className="flex flex-col items-center justify-center py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                       <div className="w-16 h-16 bg-white shadow-sm rounded-full flex items-center justify-center text-slate-400 mb-4"><AlignJustify size={32} /></div>
-                       <p className="text-slate-600 font-bold">No execution modules found.</p>
-                       <p className="text-slate-400 text-sm mt-1">Configure your drive to set up automatic rounds.</p>
+                     <div className="flex flex-col items-center justify-center py-16 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                       <div className="w-20 h-20 bg-white shadow-sm rounded-full flex items-center justify-center text-slate-400 mb-5"><List size={32} /></div>
+                       <p className="text-slate-600 font-bold text-lg">No execution modules found.</p>
+                       <p className="text-slate-400 text-sm mt-2 max-w-sm">Configure your drive rules to set up automatic test and interview rounds.</p>
                      </div>
                    )}
                  </div>
-              </div>
+               </div>
             </div>
 
-            {/* ── POLICY RULES ENGINE CARD ─────────────────────────────────────────── */}
-            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+            {/* POLICY RULES ENGINE CARD */}
+            <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden shrink-0">
               <button
                 onClick={() => setIsPolicyExpanded(p => !p)}
-                className="w-full flex items-center justify-between px-6 py-5 hover:bg-slate-50/80 transition-colors group"
+                className="w-full flex items-center justify-between px-8 py-6 hover:bg-slate-50/80 transition-colors group"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600">
-                    <Lock size={18} />
+                <div className="flex items-center gap-5">
+                  <div className="w-14 h-14 rounded-2xl bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600 group-hover:scale-105 group-hover:bg-violet-100 shadow-sm transition-all">
+                    <Lock size={24} />
                   </div>
                   <div className="text-left">
-                    <p className="font-bold text-slate-800 text-sm">Eligibility Policy Engine</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="font-black text-slate-800 text-lg tracking-tight">Eligibility Policy Engine</p>
+                    <p className="text-sm font-semibold text-slate-500 mt-1 flex items-center gap-2">
+                       <Shield size={14}/>
                       {drive?.eligibility?.minCGPA > 0 || (drive?.eligibility?.branches || []).length > 0
                         ? `Min CGPA: ${drive?.eligibility?.minCGPA || 'Any'} · Branches: ${(drive?.eligibility?.branches || []).join(', ') || 'All'}`
                         : 'No eligibility filters configured — all applicants are eligible'}
                     </p>
                   </div>
                 </div>
-                <div className={`transition-transform ${isPolicyExpanded ? 'rotate-90' : ''} text-slate-400`}>
-                  <ChevronRight size={18} />
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-slate-50 border border-slate-100 transition-transform ${isPolicyExpanded ? 'rotate-90 bg-violet-50 text-violet-600 border-violet-100' : 'text-slate-400 group-hover:bg-white line-shadow'}`}>
+                  <ChevronRight size={20} />
                 </div>
               </button>
 
               {isPolicyExpanded && (
-                <div className="border-t border-slate-100 px-6 pb-6 pt-5 space-y-5">
+                <div className="border-t border-slate-100 px-8 pb-8 pt-6 space-y-6 bg-slate-50/30">
                   {/* Min CGPA */}
-                  <div>
-                    <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-2">Minimum CGPA</label>
-                    <div className="flex items-center gap-4">
+                  <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm">
+                    <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-4 flex items-center gap-2"><BarChart2 size={16}/> Minimum CGPA Strict Filter</label>
+                    <div className="flex items-center gap-6">
                       <input
                         type="range" min={0} max={10} step={0.1}
                         value={policyMinCgpa}
                         onChange={e => setPolicyMinCgpa(parseFloat(e.target.value))}
-                        className="flex-1 accent-violet-600"
+                        className="flex-1 accent-violet-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                       />
-                      <span className="text-lg font-black text-violet-700 w-16 text-right tabular-nums">
+                      <span className="text-2xl font-black text-violet-700 w-20 text-right tabular-nums bg-violet-50 py-2 px-3 rounded-xl border border-violet-100">
                         {policyMinCgpa === 0 ? 'Any' : policyMinCgpa.toFixed(1)}
                       </span>
                     </div>
                   </div>
 
                   {/* Branch Filter */}
-                  <div>
-                    <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-2">Allowed Branches</label>
-                    <div className="flex flex-wrap gap-2">
+                  <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm">
+                    <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-4 flex items-center gap-2"><List size={16}/> Allowed Branches Restriction</label>
+                    <div className="flex flex-wrap gap-3">
                       {BRANCH_OPTIONS.map(b => (
                         <button
                           key={b}
                           onClick={() => setPolicyBranches(prev =>
                             prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b]
                           )}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                          className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${
                             policyBranches.includes(b)
-                              ? 'bg-violet-600 border-violet-700 text-white shadow-sm'
-                              : 'bg-white border-slate-200 text-slate-600 hover:border-violet-300 hover:bg-violet-50'
+                              ? 'bg-violet-600 border-violet-700 text-white shadow-md shadow-violet-200'
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-violet-300 hover:bg-violet-50 shadow-sm'
                           }`}
                         >{b}</button>
                       ))}
                       {policyBranches.length > 0 && (
                         <button onClick={() => setPolicyBranches([])}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold border border-dashed border-slate-300 text-slate-400 hover:text-red-500 hover:border-red-300 transition-all">
-                          Clear
+                          className="px-4 py-2.5 rounded-xl text-sm font-bold border-2 border-dashed border-red-300 bg-red-50 text-red-600 hover:text-red-700 hover:bg-red-100 hover:border-red-400 transition-all ml-2">
+                          Clear Selected
                         </button>
                       )}
                     </div>
                     {policyBranches.length === 0 && (
-                      <p className="text-xs text-slate-400 mt-1.5">No branches selected = all branches allowed</p>
+                      <p className="text-sm font-semibold text-slate-400 mt-4 bg-slate-50 py-2 px-4 rounded-lg inline-flex items-center gap-2 border border-slate-100">
+                        <Lock size={14}/> No branches selected = all branches strictly allowed
+                      </p>
                     )}
                   </div>
 
                   {/* Impact Preview Banner */}
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-3">
-                    <AlertTriangle size={16} className="text-amber-600 shrink-0" />
-                    <p className="text-xs text-amber-800 font-medium">
-                      Saving will update drive eligibility rules. Click <strong>"Run Sweep"</strong> afterwards to auto-reject non-eligible applicants from the Applications tab.
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4 shadow-sm">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                      <AlertTriangle size={20} />
+                    </div>
+                    <p className="text-sm text-amber-800 font-semibold leading-relaxed">
+                      Saving will fundamentally update drive eligibility rules globally. Click <strong className="text-amber-900 bg-amber-200/50 px-2.5 py-0.5 rounded ml-1 mr-1">"Run Sweep"</strong> immediately afterwards to auto-reject non-eligible applicants from the entire database.
                     </p>
                   </div>
 
                   {/* Action Row */}
-                  <div className="flex gap-3 pt-1">
+                  <div className="flex gap-4 pt-2">
                     <button
                       disabled={isSavingPolicy}
                       onClick={async () => {
@@ -1501,17 +1570,17 @@ export default function DriveDetailPage() {
                         } catch { toast.error('Failed to save policy'); }
                         finally { setIsSavingPolicy(false); }
                       }}
-                      className="flex-1 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm"
+                      className="px-8 py-3.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-200 hover:-translate-y-0.5"
                     >
-                      {isSavingPolicy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                      Save Policy
+                      {isSavingPolicy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                      Deploy Policy Globally
                     </button>
                     <button
                       onClick={() => setShowSweepConfirmModal(true)}
-                      className="flex items-center gap-2 px-4 py-2.5 border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-xl font-bold text-sm transition-all"
+                      className="flex items-center gap-2 px-8 py-3.5 border-2 border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl font-black text-sm transition-all hover:-translate-y-0.5 hover:shadow-md hover:shadow-amber-100"
                     >
-                      <RefreshCcw size={16} />
-                      Run Sweep
+                      <RefreshCcw size={18} />
+                      Run Candidate Sweep
                     </button>
                   </div>
                 </div>
@@ -1520,25 +1589,28 @@ export default function DriveDetailPage() {
 
             {/* Archive Feature */}
             {drive.status === 'completed' && (
-              <div className="mt-2 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl p-6 lg:p-8 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
-                <div className="absolute right-0 top-0 opacity-10 blur-2xl text-indigo-500">
-                   <Cpu size={200} />
+              <div className="mt-2 bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-3xl p-8 shadow-xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden shrink-0">
+                <div className="absolute right-0 top-0 opacity-10 blur-3xl text-indigo-500 scale-150 transform transition-transform group-hover:scale-110">
+                   <Cpu size={300} />
                 </div>
-                <div className="relative z-10">
-                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                    <Download className="text-indigo-400" size={24} /> Generate Compliance Archive
-                  </h3>
-                  <p className="text-slate-400 mt-2 max-w-xl text-sm leading-relaxed">
-                    Download a secure, master Excel file containing all applications, shortlist decisions, and communication audit logs for external sharing.
-                  </p>
+                <div className="relative z-10 flex items-center gap-6">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                    <Download size={32} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-white tracking-tight">Generate Compliance Archive</h3>
+                    <p className="text-slate-400 mt-2 max-w-xl text-sm font-medium leading-relaxed">
+                      Download a secure, master Excel file containing all applications, shortlist decisions, and communication audit logs for external sharing and record-keeping.
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={handleArchiveDrive}
                   disabled={archiveLoading}
-                  className="shrink-0 relative z-10 px-6 py-3 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-800 disabled:text-indigo-400 text-white rounded-xl font-bold transition-all shadow-md flex items-center gap-2"
+                  className="shrink-0 relative z-10 px-8 py-4 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-800 disabled:text-indigo-400 text-white rounded-2xl font-black transition-all shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] flex items-center gap-3 hover:-translate-y-1 active:translate-y-0 text-lg"
                 >
-                  {archiveLoading ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} 
-                  {archiveLoading ? 'Archiving...' : 'Download Master Sheet'}
+                  {archiveLoading ? <Loader2 className="animate-spin" size={24} /> : <Check size={24} />} 
+                  {archiveLoading ? 'Archiving Event Data...' : 'Download Master Registry'}
                 </button>
               </div>
             )}
@@ -1546,7 +1618,7 @@ export default function DriveDetailPage() {
           </div>
         )}
 
-        {activeTab === 'Form Builder' && (
+        {activeHub === 'Config' && activeTab === 'Form Builder' && (
           <div className="flex h-full w-full bg-slate-50 overflow-hidden" style={{ maxHeight: 'calc(100vh - 120px)' }}>
             {/* LEFT PANEL */}
             <div className="w-64 bg-white border-r border-slate-200 p-4 overflow-y-auto shrink-0 z-10">
@@ -1766,155 +1838,16 @@ export default function DriveDetailPage() {
                  </div>
               </div>
             </div>
-
-            {/* RIGHT PANEL & SAVE BTN */}
-            <div className="w-80 bg-white border-l border-slate-200 flex flex-col shrink-0 z-10 relative">
-              <div className="p-4 border-b border-slate-200 bg-slate-50">
-                <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest">Field Settings</h3>
-              </div>
-              <div className="p-5 flex-1 overflow-y-auto">
-                {!activeField ? (
-                  <p className="text-slate-400 font-medium text-sm text-center mt-10">Click a field on the canvas to edit its properties.</p>
-                ) : (
-                  <div className="space-y-5">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Field Label *</label>
-                      <input 
-                        type="text" value={activeField.label}
-                        onChange={e => updateActiveField({ label: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800 disabled:opacity-50"
-                      />
-                    </div>
-                    
-                    {!['file_pdf', 'file_image', 'checkbox', 'radio', 'dropdown', 'page_break'].includes(activeField.type) && (
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Placeholder</label>
-                        <input 
-                          type="text" value={activeField.placeholder || ''}
-                          onChange={e => updateActiveField({ placeholder: e.target.value })}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800 disabled:opacity-50"
-                        />
-                      </div>
-                    )}
-
-                    {activeField.type !== 'page_break' && (
-                      <div className="flex items-center gap-2">
-                         <input 
-                           type="checkbox" id="req" checked={activeField.required} disabled={activeField.locked}
-                           onChange={e => updateActiveField({ required: e.target.checked })}
-                           className="w-4 h-4 text-indigo-600 rounded cursor-pointer disabled:opacity-50"
-                         />
-                         <label htmlFor="req" className="text-sm font-bold text-slate-700 cursor-pointer">Required Field</label>
-                      </div>
-                    )}
-
-                    {['text', 'email', 'phone'].includes(activeField.type) && (
-                      <div className="pt-4 border-t border-slate-200">
-                        <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Validation Rule (Regex)</label>
-                        <select 
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800 mb-2 disabled:opacity-50"
-                          disabled={activeField.locked}
-                          value={
-                            !activeField.validation?.pattern ? '' :
-                            activeField.validation.pattern === '^\\d{10}$' ? 'phone' :
-                            activeField.validation.pattern === '^[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}$' ? 'usn' :
-                            activeField.validation.pattern === '^https?:\\/\\/(www\\.)?linkedin\\.com\\/.*$' ? 'linkedin' :
-                            activeField.validation.pattern === '^https?:\\/\\/(www\\.)?github\\.com\\/.*$' ? 'github' :
-                            'custom'
-                          }
-                          onChange={e => {
-                            const val = e.target.value;
-                            let pattern = ''; let msg = 'Invalid format';
-                            if (val === 'phone') { pattern = '^\\d{10}$'; msg = 'Must be exactly 10 digits'; }
-                            else if (val === 'usn') { pattern = '^[A-Za-z0-9]{5,20}$'; msg = 'Must be a valid alphanumeric USN/Roll No'; }
-                            else if (val === 'linkedin') { pattern = '^https?:\\/\\/(www\\.)?linkedin\\.com\\/.*$'; msg = 'Must be a valid LinkedIn URL'; }
-                            else if (val === 'github') { pattern = '^https?:\\/\\/(www\\.)?github\\.com\\/.*$'; msg = 'Must be a valid GitHub URL'; }
-                            
-                            updateActiveField({ 
-                              validation: val ? { ...activeField.validation, pattern, customErrorMessage: msg } : { ...activeField.validation, pattern: undefined, customErrorMessage: undefined } 
-                            });
-                          }}
-                        >
-                          <option value="">None</option>
-                          <option value="phone">Phone Number (10 digits)</option>
-                          <option value="usn">USN Format</option>
-                          <option value="linkedin">LinkedIn URL</option>
-                          <option value="github">GitHub URL</option>
-                          <option value="custom">Custom Regex...</option>
-                        </select>
-                        {(activeField.validation?.pattern && !['^\\d{10}$', '^[1-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3}$', '^https?:\\/\\/(www\\.)?linkedin\\.com\\/.*$', '^https?:\\/\\/(www\\.)?github\\.com\\/.*$'].includes(activeField.validation.pattern)) && (
-                          <input 
-                            type="text" 
-                            placeholder="e.g. ^[0-9]+$" 
-                            value={activeField.validation.pattern || ''}
-                            onChange={e => updateActiveField({ validation: { ...activeField.validation, pattern: e.target.value } })}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800 font-mono mb-2"
-                          />
-                        )}
-                        {(activeField.validation?.pattern) && (
-                          <input 
-                            type="text" 
-                            placeholder="Custom error message" 
-                            value={activeField.validation.customErrorMessage || ''}
-                            onChange={e => updateActiveField({ validation: { ...activeField.validation, customErrorMessage: e.target.value } })}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800"
-                          />
-                        )}
-                      </div>
-                    )}
-
-                    {['dropdown', 'radio', 'checkbox'].includes(activeField.type) && (
-                      <div className="pt-4 border-t border-slate-200">
-                        <label className="block text-xs font-bold text-slate-600 uppercase mb-3">Options</label>
-                        <div className="space-y-2 mb-3">
-                          {activeField.options?.map((opt: string, i: number) => (
-                            <div key={i} className="flex items-center gap-2">
-                              <input 
-                                value={opt} 
-                                onChange={e => {
-                                  const newOpts = [...(activeField.options || [])];
-                                  newOpts[i] = e.target.value;
-                                  updateActiveField({ options: newOpts });
-                                }}
-                                className="flex-1 px-3 py-1.5 border border-slate-300 rounded-md text-sm font-medium focus:ring-1 focus:ring-indigo-500 outline-none"
-                              />
-                              <button onClick={() => {
-                                const newOpts = [...(activeField.options || [])];
-                                newOpts.splice(i, 1);
-                                updateActiveField({ options: newOpts });
-                              }} className="p-1.5 text-slate-400 hover:text-red-500 bg-slate-50 hover:bg-red-50 rounded">
-                                <X size={14} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                        <button onClick={() => {
-                          updateActiveField({ options: [...(activeField.options || []), `Option ${(activeField.options?.length||0)+1}`] })
-                        }} className="text-indigo-600 font-bold text-xs flex items-center gap-1 hover:underline">
-                          <Plus size={14} /> Add Option
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* SAVE BUTTON */}
-              <div className="p-4 border-t border-slate-200 bg-slate-50">
-                 <button 
-                   onClick={saveForm}
-                   disabled={savingForm}
-                   className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-sm transition-colors text-sm"
-                 >
-                   {savingForm ? 'Saving...' : 'Save Form Changes'}
-                 </button>
-              </div>
-
-            </div>
+             {/* FLOATING SAVE BUTTON */}
+             <div className="absolute bottom-6 right-6 z-20">
+                <button onClick={saveForm} disabled={savingForm} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-[0_8px_20px_-8px_rgba(79,70,229,0.6)] flex items-center gap-2 hover:-translate-y-0.5 transition-all outline-none">
+                  <Save size={18} /> {savingForm ? 'Saving Engine...' : 'Publish Form Engine'}
+                </button>
+             </div>
           </div>
         )}
 
-        {activeTab === 'Applications' && (() => {
+        {activeHub === 'Pipeline' && activeTab === 'Applications' && (() => {
           const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
           // Build dynamic table columns from formFields (or fallback from raw data keys)
@@ -2265,13 +2198,26 @@ export default function DriveDetailPage() {
             </div>
 
             {/* Dynamic Table */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide w-8">#</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide min-w-[12rem]">Candidate</th>
+            {/* Dynamic Table */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[65vh] relative">
+              
+              {/* Empty State Overlay */}
+              {displayApps.length === 0 && (
+                <div className="absolute inset-0 z-20 bg-white/70 backdrop-blur-[2px] flex flex-col items-center justify-center p-8 text-center m-4 rounded-xl border-dashed border-2 border-slate-200">
+                  <div className="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mb-4 shadow-inner">
+                    <Users size={32} />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-700 mb-1">No Candidates Here</h3>
+                  <p className="text-sm text-slate-500 font-medium max-w-sm">When candidates apply, their detailed profiles and form responses will populate this master list.</p>
+                </div>
+              )}
+
+              <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
+                <table className="w-full relative">
+                  <thead className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur-md shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-widest w-8">#</th>
+                      <th className="text-left px-4 py-3 text-xs font-bold text-slate-600 uppercase tracking-widest min-w-[12rem]">Candidate</th>
                       {tableFields.map((field: any) => (
                         <th key={field.id} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{field.label}</th>
                       ))}
@@ -2467,16 +2413,28 @@ export default function DriveDetailPage() {
                                 <Download size={15}/>
                               </button>
                               {app.status === 'selected' && (
-                                <button
-                                  onClick={() => {
-                                    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
-                                    window.open(`${apiBase}/drives/${driveId}/noc/${app._id}`, '_blank');
-                                  }}
-                                  className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 transition-colors print:hidden text-xs font-bold"
-                                  title="Generate NOC for placed student"
-                                >
-                                  <FileText size={13}/> NOC
-                                </button>
+                                <div className="flex gap-1.5 leading-none">
+                                  <button
+                                    onClick={() => {
+                                      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+                                      window.open(`${apiBase}/drives/${driveId}/offer/${app._id}`, '_blank');
+                                    }}
+                                    className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 transition-colors print:hidden text-xs font-bold leading-none"
+                                    title="Generate Offer Letter for placed student"
+                                  >
+                                    <FileText size={13}/> Offer
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+                                      window.open(`${apiBase}/drives/${driveId}/noc/${app._id}`, '_blank');
+                                    }}
+                                    className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 transition-colors print:hidden text-xs font-bold leading-none"
+                                    title="Generate NOC for placed student"
+                                  >
+                                    <FileText size={13}/> NOC
+                                  </button>
+                                </div>
                               )}
                               <button onClick={() => { setIsEditingApp(true); setEditedAppData(app.data); }}
                                 className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/80 transition-colors print:hidden" title="Edit Application">
@@ -2786,10 +2744,10 @@ export default function DriveDetailPage() {
           );
         })()}
 
-        {activeTab === 'Shortlist' && (
-          <div className="p-8 h-full overflow-y-auto w-full max-w-5xl mx-auto">
+        {activeHub === 'Pipeline' && activeTab === 'Shortlist' && (
+          <div className="flex flex-col h-full bg-slate-50 overflow-hidden relative">
             {/* SECTION 1: Upload Shortlist */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8 shadow-sm">
+            <div className="bg-white px-6 py-4 border-b border-slate-200 shadow-sm z-20 shrink-0">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-slate-800">Upload Shortlist</h3>
                 <button onClick={() => setShowAddCandidateModal(true)} className="flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors">
@@ -2825,11 +2783,10 @@ export default function DriveDetailPage() {
                 </div>
               )}
             </div>
-
             {/* SECTION 2: Shortlisted Students + Messaging */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex flex-col flex-1 overflow-hidden">
               {/* Header */}
-              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
+              <div className="flex justify-between items-center px-6 py-3 border-b border-slate-200 bg-white">
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-semibold text-slate-800">Shortlisted Students</h3>
                   <span className="bg-indigo-100 text-indigo-700 text-sm px-2.5 py-0.5 rounded-full font-semibold">{shortlistedStudents.length}</span>
@@ -2884,12 +2841,11 @@ export default function DriveDetailPage() {
                   </button>
                 </div>
               </div>
-
               {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-100">
+              <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar bg-white relative">
+                <table className="w-full text-left relative border-collapse">
+                  <thead className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur-md shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                    <tr className="border-b border-slate-200">
                       <th className="w-10 px-4 py-3">
                         <div onClick={() => {
                           if (selectAllShortlist) { setSelectedStudentIds(new Set()); } else { setSelectedStudentIds(new Set(shortlistedStudents.map((s: any) => s._id))); }
@@ -2908,10 +2864,10 @@ export default function DriveDetailPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {shortlistedStudents.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center py-16">
-                        <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100"><Users size={28}/></div>
-                        <h3 className="text-lg font-bold text-slate-700 mb-1">No Shortlist Uploaded</h3>
-                        <p className="text-slate-500 text-sm">Upload an Excel/CSV file above to shortlist students.</p>
+                      <tr><td colSpan={7} className="text-center py-24 bg-white">
+                        <div className="w-20 h-20 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-6 border border-slate-100 shadow-inner"><Users size={32}/></div>
+                        <h3 className="text-xl font-black text-slate-800 tracking-tight mb-2">No Candidates Shortlisted</h3>
+                        <p className="text-slate-500 text-sm font-medium">Use the Dropzone above to import candidates via secure CSV/XLSX routing.</p>
                       </td></tr>
                     ) : shortlistedStudents.map((student: any) => {
                       const studentName = getStudentName(student);
@@ -3106,7 +3062,7 @@ export default function DriveDetailPage() {
           </div>
         )}
 
-        {activeTab === 'Event Day' && (
+        {activeHub === 'Config' && activeTab === 'Event Day' && (
           <div className="p-8 h-full overflow-y-auto w-full max-w-5xl mx-auto space-y-6 pb-32">
 
             {/* ═══ SECTION 1: Venue Setup ═══ */}
@@ -4155,3 +4111,12 @@ export default function DriveDetailPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
