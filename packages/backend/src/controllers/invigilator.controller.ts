@@ -9,13 +9,21 @@ import { getIO } from '../socket';
 export const generateMagicLink = async (req: Request, res: Response): Promise<void> => {
   try {
     const { roomId } = req.params;
+    const { panelistEmail } = req.body;
+    
+    if (!panelistEmail) { res.status(400).json({ success: false, error: 'panelistEmail is required' }); return; }
+
     const room = await RoomModel.findById(roomId);
     if (!room) { res.status(404).json({ success: false, error: 'Room not found' }); return; }
+
+    const isPanelist = room.panelists?.some(p => p.email === panelistEmail);
+    if (!isPanelist) { res.status(400).json({ success: false, error: 'Email is not assigned to this room panel' }); return; }
 
     const payload = {
       roomId: room._id,
       driveId: room.driveId,
       round: room.round,
+      email: panelistEmail,
       role: 'invigilator'
     };
 
@@ -31,23 +39,15 @@ export const generateMagicLink = async (req: Request, res: Response): Promise<vo
   }
 };
 
-// Middleware-esque helper to extract token payload
-const getInvigilatorPayload = (req: Request) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) throw new Error('No token provided');
-  const token = authHeader.replace('Bearer ', '');
-  return jwt.verify(token, env.JWT_ACCESS_SECRET) as any;
-};
-
 // 2. GET DASHBOARD (Invigilator)
 export const getDashboard = async (req: Request, res: Response): Promise<void> => {
   try {
-    const payload = getInvigilatorPayload(req);
+    const payload = (req as any).invigilatorPayload;
     
     const room = await RoomModel.findById(payload.roomId).lean();
     if (!room) { res.status(404).json({ success: false, error: 'Room not found' }); return; }
 
-    const drive = await DriveModel.findById(payload.driveId).select('companyName jobRole rounds isPaused').lean();
+    const drive = await DriveModel.findById(payload.driveId).select('companyName jobRole rounds isPaused rubricSchema').lean();
 
     // Find all applications currently assigned to this room and physically in this round
     const applications = await ApplicationModel.find({
@@ -93,7 +93,7 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
 // 3. EVALUATE STUDENT (Invigilator)
 export const evaluateStudent = async (req: Request, res: Response): Promise<void> => {
   try {
-    const payload = getInvigilatorPayload(req);
+    const payload = (req as any).invigilatorPayload;
     const { appId } = req.params;
     const { scores, comments, decision, evaluatorName } = req.body;
 

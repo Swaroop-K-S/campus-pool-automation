@@ -1,5 +1,7 @@
 import nodemailer from 'nodemailer';
 import { CollegeModel, ApplicationModel } from '../models';
+import { Queue, Worker, Job } from 'bullmq';
+import { redisClient } from '../config/redis';
 
 export async function getTransporter(collegeId: string) {
   const college = await CollegeModel.findById(collegeId).select('smtpConfig');
@@ -151,3 +153,42 @@ export async function sendDriveIdEmail(
     </div>`
   });
 }
+
+// ============================================
+// MASS EMAIL QUEUE & WORKER (BULLMQ)
+// ============================================
+
+export const massEmailQueue = new Queue('massEmailQueue', { connection: redisClient });
+
+export const massEmailWorker = new Worker('massEmailQueue', async (job: Job) => {
+  const { applicationIds, type, collegeId, companyName, role, driveDate } = job.data;
+  console.log(`[Worker] Started mass email job ${job.id} for ${applicationIds.length} apps (${type})`);
+  
+  const result = await sendMassEmails(
+    applicationIds,
+    type,
+    collegeId,
+    companyName,
+    role,
+    driveDate ? new Date(driveDate) : new Date(),
+    (sent) => job.updateProgress(Math.floor((sent / applicationIds.length) * 100))
+  );
+  
+  console.log(`[Worker] Finished mass email job ${job.id}: ${result.sent} sent, ${result.failed} failed.`);
+  return result;
+}, { connection: redisClient });
+
+export async function enqueueMassEmail(payload: {
+  applicationIds: string[],
+  type: 'shortlist' | 'offer',
+  collegeId: string,
+  companyName: string,
+  role: string,
+  driveDate?: Date
+}) {
+  return await massEmailQueue.add('dispatch-emails', payload, {
+    removeOnComplete: true,
+    removeOnFail: false
+  });
+}
+

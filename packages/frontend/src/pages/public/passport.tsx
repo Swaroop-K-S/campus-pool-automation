@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   Shield, LogIn, LogOut, Clock, CheckCircle,
   XCircle, Trophy, Star, Briefcase, Calendar,
-  AlertCircle, Loader2, BookOpen, TrendingUp, Award
+  AlertCircle, Loader2, BookOpen, TrendingUp, Award,
+  Sparkles, Target, Zap
 } from 'lucide-react';
 
 const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
@@ -14,7 +15,15 @@ interface PassportProfile {
   name: string;
   email: string;
   branch?: string;
+  branch?: string;
   strikes?: number;
+  improvementPlan?: {
+    strengths: string[];
+    criticalWeakness: string;
+    actionableNextSteps: string[];
+    generatedAt: string;
+    driveId?: string;
+  };
 }
 
 interface DriveHistoryItem {
@@ -78,6 +87,71 @@ const globalStyles = `
     .no-print { display: none !important; }
   }
 `;
+
+// ════════════════════════════════════════════════════════════════
+// AI MENTOR FEEDBACK COMPONENT
+// ════════════════════════════════════════════════════════════════
+function AIMentorFeedback({ plan }: { plan: PassportProfile['improvementPlan'] }) {
+  if (!plan) return null;
+
+  return (
+    <div className="fadeup fadeup-1" style={{
+      marginBottom: 24,
+      background: 'linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 100%)',
+      border: '1px solid rgba(139,92,246,0.2)',
+      borderRadius: 24, padding: 24,
+      position: 'relative', overflow: 'hidden'
+    }}>
+      <div style={{ position: 'absolute', top: -40, right: -40, opacity: 0.1, pointerEvents: 'none' }}>
+        <Sparkles size={160} color="#8B5CF6" />
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 10, background: 'rgba(139,92,246,0.2)', color: '#C4B5FD' }}>
+          <Sparkles size={18} />
+        </div>
+        <h3 style={{ fontSize: 18, fontWeight: 800, color: '#E2E8F0', margin: 0 }}>AI Mentor Insights</h3>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+        {/* Strengths */}
+        <div style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.1)', borderRadius: 16, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Award size={16} color="#34D399" />
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#6EE7B7' }}>Observed Strengths</span>
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 20, color: '#94A3B8', fontSize: 14, lineHeight: 1.6 }}>
+            {plan.strengths.map((str, idx) => <li key={idx}><strong>{str}</strong></li>)}
+          </ul>
+        </div>
+
+        {/* Critical Weakness (Reframed positively) */}
+        <div style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.1)', borderRadius: 16, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Target size={16} color="#FBBF24" />
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#FCD34D' }}>Area of Focus</span>
+          </div>
+          <p style={{ margin: 0, color: '#94A3B8', fontSize: 14, lineHeight: 1.6 }}>{plan.criticalWeakness}</p>
+        </div>
+
+        {/* Actionable Steps */}
+        <div style={{ background: 'rgba(56,189,248,0.05)', border: '1px solid rgba(56,189,248,0.1)', borderRadius: 16, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Zap size={16} color="#38BDF8" />
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#7DD3FC' }}>Actionable Next Steps</span>
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 20, color: '#94A3B8', fontSize: 14, lineHeight: 1.6 }}>
+            {plan.actionableNextSteps.map((step, idx) => <li key={idx}>{step}</li>)}
+          </ul>
+        </div>
+      </div>
+      
+      <div style={{ marginTop: 16, textAlign: 'right', fontSize: 11, color: '#64748B', fontWeight: 600 }}>
+        Generated dynamically directly from Interviewer feedback
+      </div>
+    </div>
+  );
+}
 
 // ════════════════════════════════════════════════════════════════
 // LOGIN SCREEN
@@ -416,6 +490,9 @@ function ProfileDashboard({ token, onLogout }: { token: string; onLogout: () => 
             </div>
           ))}
         </div>
+
+        {/* ── AI Mentor ── */}
+        <AIMentorFeedback plan={profile.improvementPlan} />
 
         {/* ── Drive History ── */}
         <div className="fadeup fadeup-2">

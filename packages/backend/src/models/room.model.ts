@@ -14,6 +14,7 @@ const roomSchema = new Schema({
   allowedBranches: [{ type: String }],                   // [] = allow all
   panelists: [{
     name: { type: String, required: true },
+    email: { type: String, required: true },
     expertise: [{ type: String }]
   }],
   assignedStudents: [{ type: Schema.Types.ObjectId, ref: 'Application' }],

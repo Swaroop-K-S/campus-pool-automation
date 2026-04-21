@@ -5,7 +5,8 @@
   "workspaces": [
     "packages/shared",
     "packages/backend",
-    "packages/frontend"
+    "packages/frontend",
+    "packages/e2e-tests"
   ],
   "scripts": {
     "dev:backend": "npm run dev --workspace=packages/backend",

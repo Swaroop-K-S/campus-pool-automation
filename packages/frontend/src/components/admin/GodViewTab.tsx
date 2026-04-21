@@ -307,11 +307,10 @@ export function GodViewTab({ drive, driveId, onUpdate }: Props) {
         <button
           onClick={handlePanic}
           disabled={pauseLoading}
-          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-black text-sm shadow-lg transition-all active:scale-95 disabled:opacity-70 ${
-            isPaused
+          className={`flex items-center gap-2 px-5 py-3 rounded-xl font-black text-sm shadow-lg transition-all active:scale-95 disabled:opacity-70 ${isPaused
               ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-emerald-500/30'
               : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30'
-          }`}
+            }`}
         >
           {pauseLoading ? <Loader2 size={16} className="animate-spin" /> : isPaused ? <ArrowRight size={16} /> : <ShieldOff size={16} />}
           {isPaused ? '▶ Resume Drive' : '⛔ Pause All Operations'}
@@ -428,9 +427,8 @@ export function GodViewTab({ drive, driveId, onUpdate }: Props) {
                 const isSelected = selectedRound === r.type;
                 return (
                   <button key={r.type} onClick={() => setSelectedRound(r.type)}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-                      isSelected ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
-                    }`}>
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${isSelected ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                      }`}>
                     <div className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${r.status === 'completed' ? 'bg-emerald-500' : r.status === 'active' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
                       <span className={`font-bold text-sm capitalize ${isSelected ? 'text-indigo-800' : 'text-slate-700'}`}>{r.label || r.type.replace('_', ' ')}</span>

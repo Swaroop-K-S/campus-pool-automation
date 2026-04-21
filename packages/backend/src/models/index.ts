@@ -8,3 +8,4 @@ export * from './qr-session.model';
 export * from './push-subscription.model';
 export * from './notification.model';
 export * from './student-profile.model';
+export * from './evaluation.model';

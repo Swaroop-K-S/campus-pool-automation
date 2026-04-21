@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive, archiveDrive, scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted, updateSettings, toggleDrivePause, purgeNoShows, getAuditLogs, checkConflict, matchCandidates, getDriveFunnel } from '../controllers/drive.controller';
+import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive, archiveDrive, scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted, finalizeDrive, updateSettings, toggleDrivePause, purgeNoShows, getAuditLogs, checkConflict, matchCandidates, getDriveFunnel } from '../controllers/drive.controller';
 import { generateNOC, generateOfferLetter } from '../controllers/noc.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { authorizeRoles } from '../middleware/rbac.middleware';
@@ -27,6 +27,7 @@ router.post('/:driveId/clone', authorizeRoles('admin', 'superadmin'), cloneDrive
 router.get('/:driveId/archive', authorizeRoles('admin', 'superadmin'), archiveDrive); // Added this line
 router.patch('/:driveId/start-event', authorizeRoles('admin', 'superadmin'), startEventDay);
 router.patch('/:driveId/complete', authorizeRoles('admin', 'superadmin'), markCompleted);
+router.post('/:driveId/finalize', authorizeRoles('admin', 'superadmin'), finalizeDrive);
 router.patch('/:driveId/settings', authorizeRoles('admin', 'superadmin'), updateSettings);
 router.patch('/:driveId/pause', authorizeRoles('admin', 'superadmin'), toggleDrivePause);
 router.post('/:driveId/purge-noshows', authorizeRoles('admin', 'superadmin'), purgeNoShows);

@@ -1,10 +1,12 @@
 import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { router } from './router';
+import { GlobalOfflineBanner } from './components/GlobalOfflineBanner';
 
 export default function App() {
   return (
     <>
+      <GlobalOfflineBanner />
       <RouterProvider router={router} />
       <Toaster 
         position="top-right"

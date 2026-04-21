@@ -1,21 +1,66 @@
 version: '3.8'
+
 services:
   mongodb:
     image: mongo:latest
+    container_name: campuspool-mongodb
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+    networks:
+      - campuspool_net
     restart: unless-stopped
 
   redis:
     image: redis:alpine
+    container_name: campuspool-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - campuspool_net
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: campuspool-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - MONGODB_URI=mongodb://mongodb:27017/campuspool
+      - REDIS_URL=redis://redis:6379
+      # Map additional missing ENVs dynamically as needed during deploy
+      - JWT_ACCESS_SECRET=docker-compose-secret-key
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - campuspool_net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: campuspool-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - campuspool_net
     restart: unless-stopped
 
 volumes:
   mongodb_data:
   redis_data:
+
+networks:
+  campuspool_net:
+    driver: bridge

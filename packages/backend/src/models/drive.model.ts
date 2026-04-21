@@ -51,6 +51,13 @@ const driveSchema = new Schema({
     startTime: String,
     duration: Number
   }],
+  rubricSchema: [{
+    id: String,
+    label: String,
+    type: { type: String, enum: ['slider', 'radio', 'text'] },
+    options: [String],
+    maxScore: Number
+  }],
   formOpenDate: { type: Date, default: null },
   formCloseDate: { type: Date, default: null },
   formStatus: { 

@@ -25,6 +25,15 @@ export interface IStudentProfile {
     description: string;
     url?: string;
   }[];
+
+  // AI Mentor
+  improvementPlan?: {
+    strengths: string[];
+    criticalWeakness: string;
+    actionableNextSteps: string[];
+    generatedAt: Date;
+    driveId?: mongoose.Types.ObjectId;
+  };
 }
 
 const studentProfileSchema = new Schema({
@@ -51,7 +60,16 @@ const studentProfileSchema = new Schema({
     title: { type: String, required: true },
     description: { type: String, required: true },
     url: { type: String }
-  }]
+  }],
+
+  // AI Mentor extensions
+  improvementPlan: {
+    strengths: [{ type: String }],
+    criticalWeakness: { type: String },
+    actionableNextSteps: [{ type: String }],
+    generatedAt: { type: Date },
+    driveId: { type: Schema.Types.ObjectId, ref: 'Drive' }
+  }
 }, {
   timestamps: true
 });

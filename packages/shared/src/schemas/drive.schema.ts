@@ -61,6 +61,13 @@ export const DriveSchema = z.object({
     startTime: z.string(),
     duration: z.number()
   })).optional(),
+  rubricSchema: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    type: z.enum(['slider', 'radio', 'text']),
+    options: z.array(z.string()).optional(),
+    maxScore: z.number().optional()
+  })).optional(),
   tags: z.array(z.string()).optional(),
   walkInEnabled: z.boolean().default(false),
   resources: z.array(z.object({

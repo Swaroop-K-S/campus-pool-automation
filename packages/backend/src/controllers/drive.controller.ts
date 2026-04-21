@@ -4,6 +4,9 @@ import mongoose from 'mongoose';
 import exceljs from 'exceljs';
 import { asyncHandler } from '../utils/async-handler';
 import { DriveStatusEnum } from '@campuspool/shared';
+import { generateFinalCSV } from '../services/export.service';
+import { enqueueMassEmail } from '../services/email.service';
+import { enqueueAIMentorJob } from '../services/ai-mentor.service';
 import { AppCache, generateCacheKey } from '../utils/cache';
 import { logAuditEvent } from '../services/audit.service';
 import { getIO } from '../socket';
@@ -404,6 +407,84 @@ export const markCompleted = asyncHandler(async (req: Request, res: Response) =>
   } catch {}
 
   res.status(200).json({ success: true, data: drive });
+});
+
+// POST /api/v1/drives/:driveId/finalize
+export const finalizeDrive = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = req.params.driveId;
+  const collegeId = (req as any).user.collegeId;
+
+  // 1. Update Drive document status to completed
+  const drive = await DriveModel.findOneAndUpdate(
+    { _id: driveId, collegeId },
+    { status: 'completed' },
+    { new: true }
+  );
+
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  // 2. Generate CSV & save to GridFS
+  let csvUrl = '';
+  try {
+    csvUrl = await generateFinalCSV(driveId, collegeId);
+    
+    // Add to drive resources if applicable, or keep in metadata
+    if (!(drive as any).resources) {
+      (drive as any).resources = [];
+    }
+    (drive as any).resources.push({
+      title: 'ERP Selected Candidates CSV',
+      url: csvUrl,
+      addedAt: new Date()
+    });
+    await drive.save();
+
+  } catch (err: any) {
+    console.error('Failed to generate final CSV:', err);
+    // Proceed anyways
+  }
+
+  // 3. Collect applicationIds of selected students
+  const selectedApps = await ApplicationModel.find({ driveId, status: 'selected' }).select('_id').lean();
+  const applicationIds = selectedApps.map(app => app._id.toString());
+
+  // 4. Fire-and-forget: enqueueMassEmail
+  if (applicationIds.length > 0) {
+    try {
+      await enqueueMassEmail({
+        applicationIds,
+        type: 'offer',
+        collegeId,
+        companyName: drive.companyName,
+        role: drive.jobRole || 'Role',
+        driveDate: new Date(drive.eventDate || new Date())
+      });
+    } catch (err) {
+      console.error('Failed to enqueue mass email job:', err);
+    }
+  }
+
+  // 5. Fire-and-forget: AI Mentor Plan Compilation
+  try {
+    await enqueueAIMentorJob(driveId, collegeId);
+  } catch (err) {
+    console.error('Failed to enqueue AI Mentor job:', err);
+  }
+
+  // Cache invalidation and Socket IO notification
+  try { await AppCache.del(generateCacheKey('drive-by-id', { driveId, collegeId })); } catch {}
+  try {
+    getIO().to(`drive:${driveId}`).emit('drive:status_changed', { driveId, status: 'completed', companyName: drive.companyName });
+  } catch {}
+
+  res.status(200).json({ 
+    success: true, 
+    data: { 
+      drive,
+      csvUrl,
+      emailsQueued: applicationIds.length
+    } 
+  });
 });
 
 // GET /api/v1/drives/:driveId/archive

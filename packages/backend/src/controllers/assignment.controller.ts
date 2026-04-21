@@ -30,15 +30,15 @@ export const autoAssign = async (req: Request, res: Response): Promise<void> => 
     // Since we need exact control, let's refine the filter explicitly in memory if needed
     let eligibleStudents = students;
     if (isFirstRound) {
-       eligibleStudents = students.filter(s => s.status === 'shortlisted' || s.status === 'invited');
+      eligibleStudents = students.filter(s => s.status === 'shortlisted' || s.status === 'invited');
     } else {
-       // Only allow those who possess the 'attended' marker or uniquely passed this round via XLSX upload
-       eligibleStudents = students.filter(s => s.status === 'attended' || s.status === `${roundType}_passed`);
+      // Only allow those who possess the 'attended' marker or uniquely passed this round via XLSX upload
+      eligibleStudents = students.filter(s => s.status === 'attended' || s.status === `${roundType}_passed`);
     }
 
     // Fallback if empty (e.g. testing)
     if (eligibleStudents.length === 0) {
-       eligibleStudents = students;
+      eligibleStudents = students;
     }
 
     const rooms = await RoomModel.find({ driveId, round: roundType }).lean();
@@ -83,7 +83,7 @@ export const autoAssign = async (req: Request, res: Response): Promise<void> => 
         if (boys[i]) splitIds.push(boys[i]._id.toString());
         if (others[i]) splitIds.push(others[i]._id.toString());
       }
-      
+
       const resData = randomAssignWithOverflow(splitIds, roomInputs);
       assignments = resData.assignments;
       unassignedResult = resData.unassigned;
@@ -219,7 +219,7 @@ export const confirmAssignments = async (req: Request, res: Response): Promise<v
     try {
       getIO().to(`drive:${driveId}`).emit('assignments:confirmed', { roundType });
       getIO().to(`drive:${driveId}`).emit('student:status_changed');
-    } catch {}
+    } catch { }
 
     res.json({ success: true, data: { confirmed: true, totalAssigned } });
   } catch (error: any) {
@@ -232,7 +232,7 @@ export const confirmAssignments = async (req: Request, res: Response): Promise<v
 export const getAssignments = async (req: Request, res: Response): Promise<void> => {
   try {
     const { driveId, roundType } = req.params;
-    
+
     const drive = await DriveModel.findById(driveId).lean();
     const isFirstRound = drive?.rounds?.[0]?.type === roundType;
 
@@ -245,7 +245,7 @@ export const getAssignments = async (req: Request, res: Response): Promise<void>
     } else {
       statusFilter = ['attended', `${roundType}_pending`, `${roundType}_passed`];
     }
-    
+
     const students = await ApplicationModel.find({
       driveId,
       currentRound: roundType,
@@ -254,18 +254,18 @@ export const getAssignments = async (req: Request, res: Response): Promise<void>
 
     let eligibleStudents = students;
     if (isFirstRound) {
-       eligibleStudents = students.filter(s => s.status === 'shortlisted' || s.status === 'invited');
+      eligibleStudents = students.filter(s => s.status === 'shortlisted' || s.status === 'invited');
     } else {
-       eligibleStudents = students.filter(s => s.status === 'attended' || s.status === `${roundType}_passed`);
+      eligibleStudents = students.filter(s => s.status === 'attended' || s.status === `${roundType}_passed`);
     }
     if (eligibleStudents.length === 0) { eligibleStudents = students; } // fallback
 
     const allStudentIdsAssigned = rooms.flatMap(r => r.assignedStudents || []);
-    
+
     // In case assigned students aren't perfectly in the 'eligible' pool due to status state
     const assignedStudentsFallback = await ApplicationModel.find({ _id: { $in: allStudentIdsAssigned } })
       .select('_id data.name data.fullName data.branch data.usn data.email status').lean();
-      
+
     const fullStudentMap = new Map([...eligibleStudents, ...assignedStudentsFallback].map(s => [s._id.toString(), s]));
 
     const enrichedRooms = rooms.map(r => ({
@@ -286,20 +286,20 @@ export const getAssignments = async (req: Request, res: Response): Promise<void>
 
     const assignedSet = new Set(allStudentIdsAssigned.map(id => id.toString()));
     const unassignedStudents = eligibleStudents
-       .filter(s => !assignedSet.has(s._id.toString()))
-       .map(s => ({
-         _id: s._id.toString(),
-         name: s.data?.fullName || s.data?.name || 'Unknown',
-         branch: s.data?.branch || ''
-       }));
+      .filter(s => !assignedSet.has(s._id.toString()))
+      .map(s => ({
+        _id: s._id.toString(),
+        name: s.data?.fullName || s.data?.name || 'Unknown',
+        branch: s.data?.branch || ''
+      }));
 
-    res.json({ 
-       success: true, 
-       data: {
-          assignments: enrichedRooms,
-          unassigned: unassignedStudents,
-          totalStudents: eligibleStudents.length
-       }
+    res.json({
+      success: true,
+      data: {
+        assignments: enrichedRooms,
+        unassigned: unassignedStudents,
+        totalStudents: eligibleStudents.length
+      }
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -363,7 +363,7 @@ export const uploadRoundResults = async (req: Request, res: Response): Promise<v
 
     try {
       getIO().to(`drive:${driveId}`).emit('round:results_uploaded', { roundType, passed, failed });
-    } catch {}
+    } catch { }
 
     res.json({
       success: true,
@@ -467,14 +467,14 @@ export const finalSelection = async (req: Request, res: Response): Promise<void>
             companyName: drive.companyName,
             jobRole: drive.jobRole
           });
-        } catch {}
+        } catch { }
 
         // Fire-and-forget push notification
         sendPushNotification(app._id.toString(), {
           title: '🎉 Congratulations! You are selected!',
           body: `You have been selected by ${drive.companyName} for ${drive.jobRole}. Check the app for details.`,
           url: `/event/${driveId}/welcome/${app._id}`
-        }).catch(() => {});
+        }).catch(() => { });
       } else {
         notFound++;
       }

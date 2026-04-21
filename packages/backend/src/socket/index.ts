@@ -98,8 +98,8 @@ export async function initSocket(httpServer: any) {
     });
 
     // Event Day: SOS (Student -> Admins)
-    socket.on('student:sos', ({ applicationId, driveId, studentName, room }: any) => {
-      io.to(`drive:${driveId}:admin`).emit('admin:sos-alert', { applicationId, studentName, room, timestamp: new Date() });
+    socket.on('student:sos', ({ applicationId, driveId, studentName, room, triageCategory }: any) => {
+      io.to(`drive:${driveId}:admin`).emit('admin:sos-alert', { applicationId, studentName, room, triageCategory, timestamp: new Date() });
     });
   });
 

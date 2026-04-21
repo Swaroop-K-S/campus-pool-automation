@@ -1,0 +1,35 @@
+name: CampusPool CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Run Typecheck (All Workspaces)
+        run: npm run typecheck
+
+      - name: Build Docker Backend Image
+        run: docker build -t campuspool-backend -f Dockerfile.backend .
+
+      - name: Build Docker Frontend Image
+        run: docker build -t campuspool-frontend -f Dockerfile.frontend .

@@ -12,6 +12,7 @@ export const RoomSchema = z.object({
   capacity: z.number().min(1),
   panelists: z.array(z.object({
     name: z.string(),
+    email: z.string().email(),
     expertise: z.array(z.string())
   })),
   assignedStudents: z.array(ObjectIdSchema).optional(),

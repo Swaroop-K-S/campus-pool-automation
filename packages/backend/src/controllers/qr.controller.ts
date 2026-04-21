@@ -177,7 +177,7 @@ export const verifyStudent = async (req: Request, res: Response): Promise<void> 
       // Construct a full datetime from eventDate + reportTime (e.g. "09:00")
       const eventDateStr = new Date(driveEventDate).toISOString().split('T')[0];
       const [reportHour, reportMin] = driveReportTime.split(':').map(Number);
-      const reportDateTime = new Date(`${eventDateStr}T${String(reportHour).padStart(2,'0')}:${String(reportMin).padStart(2,'0')}:00`);
+      const reportDateTime = new Date(`${eventDateStr}T${String(reportHour).padStart(2, '0')}:${String(reportMin).padStart(2, '0')}:00`);
       const lateThreshold = new Date(reportDateTime.getTime() + 30 * 60 * 1000);
 
       if (now > lateThreshold) {
@@ -193,7 +193,7 @@ export const verifyStudent = async (req: Request, res: Response): Promise<void> 
             applicationId: application._id,
             minutesLate: Math.floor((now.getTime() - lateThreshold.getTime()) / 60000) + 30
           });
-        } catch {}
+        } catch { }
 
         const sessionToken = jwt.sign(
           { applicationId: application._id, driveId },
@@ -233,17 +233,17 @@ export const verifyStudent = async (req: Request, res: Response): Promise<void> 
             bestRoom = room;
           }
         }
-        
+
         if (bestRoom && maxAvailable > 0) {
           await RoomModel.findByIdAndUpdate(bestRoom._id, {
-             $addToSet: { assignedStudents: application._id }
+            $addToSet: { assignedStudents: application._id }
           });
           (application as any).assignedRoomId = bestRoom._id;
           assignedRoomInfo = bestRoom.name;
         }
       }
     }
-    
+
     await application.save();
 
     // 7. Emit Socket.io
@@ -254,9 +254,9 @@ export const verifyStudent = async (req: Request, res: Response): Promise<void> 
     try {
       getIO().to(`drive:${driveId}`).emit('student:verified', { count: attendedCount, studentName });
       getIO().to(`drive:${driveId}`).emit('drive:round_batch_updated', { currentRound: application.currentRound });
-      getIO().to(`app:${application._id}`).emit('student:status_changed', { 
-        status: 'attended', 
-        message: assignedRoomInfo ? `Assigned to ${assignedRoomInfo}` : undefined 
+      getIO().to(`app:${application._id}`).emit('student:status_changed', {
+        status: 'attended',
+        message: assignedRoomInfo ? `Assigned to ${assignedRoomInfo}` : undefined
       });
       // God View live checked-in counter (admin dashboard)
       getIO().to(`drive:${driveId}:admin`).emit('drive:stats_updated', {
@@ -264,7 +264,7 @@ export const verifyStudent = async (req: Request, res: Response): Promise<void> 
         checkedIn: attendedCount,
         studentName
       });
-    } catch {}
+    } catch { }
 
     // 8. Generate session token (8h)
     const sessionToken = jwt.sign(
@@ -297,7 +297,7 @@ export const getWelcomeData = async (req: Request, res: Response): Promise<void>
     // Verify session token
     const authHeader = req.headers.authorization;
     if (!authHeader) { res.status(401).json({ success: false, error: 'No session token' }); return; }
-    
+
     let decoded: any;
     try {
       decoded = jwt.verify(authHeader.replace('Bearer ', ''), env.JWT_ACCESS_SECRET);
@@ -527,7 +527,7 @@ export const approveLatecomers = async (req: Request, res: Response): Promise<vo
         });
       }
       getIO().to(`drive:${driveId}`).emit('latecomer:approved', { applicationIds, approvedAt: now });
-    } catch {}
+    } catch { }
 
     res.json({
       success: true,

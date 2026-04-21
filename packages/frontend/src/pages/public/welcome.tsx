@@ -5,6 +5,98 @@ import { LifeBuoy, MapPin, Clock, Home, Copy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import toast from 'react-hot-toast';
 
+// --------- NEW COMPONENTS FOR EMPATHETIC UX --------- //
+const EmpatheticRejectionCard = ({ drive, navigate }: { drive: any, navigate: any }) => (
+  <div style={{
+    minHeight: '100vh',
+    background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+    fontFamily: "'Inter','Segoe UI',sans-serif",
+    maxWidth: 480, margin: '0 auto',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    padding: 32, textAlign: 'center'
+  }} className="animate-in fade-in duration-700">
+    <div style={{
+      width: 80, height: 80, borderRadius: '50%',
+      background: 'rgba(99,102,241,0.1)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      marginBottom: 24, padding: 16
+    }}>
+      <div style={{ fontSize: 40 }}>🤍</div>
+    </div>
+    
+    <h1 style={{ fontSize: 24, fontWeight: 800, color: '#E2E8F0', marginBottom: 12 }}>
+      Thank you for your effort today
+    </h1>
+    
+    <p style={{ color: '#94A3B8', fontSize: 16, lineHeight: 1.6, marginBottom: 32 }}>
+      We appreciate the time and energy you invested with <strong style={{ color: '#CBD5E1' }}>{drive?.companyName}</strong>. 
+      This specific role wasn't a match right now, but your journey doesn't end here.
+    </p>
+
+    <div style={{
+      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)',
+      borderRadius: 16, padding: '24px', width: '100%', marginBottom: 32
+    }}>
+      <p style={{ color: '#64748B', fontSize: 14, marginBottom: 16, lineHeight: 1.5 }}>
+        Take a moment. When you're ready, you can review your drive history and discover new opportunities.
+      </p>
+      <button 
+        onClick={() => navigate('/passport')}
+        className="w-full bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-semibold py-3 px-6 rounded-xl transition-all active:scale-95"
+      >
+        View My Passport
+      </button>
+    </div>
+
+    <p style={{ color: '#475569', fontSize: 13, lineHeight: 1.5 }}>
+      Please gather your belongings feeling proud of your work, and gracefully exit the premises.
+    </p>
+  </div>
+);
+
+const SOSTriageModal = ({ isOpen, onClose, onSubmit }: { isOpen: boolean, onClose: () => void, onSubmit: (category: string) => void }) => {
+  if (!isOpen) return null;
+  
+  const options = [
+    { id: 'technical', label: "I am experiencing technical issues.", icon: "💻" },
+    { id: 'anxiety', label: "I need a moment (Feeling overwhelmed/Anxious).", icon: "🌱" },
+    { id: 'medical', label: "I have a medical emergency.", icon: "🏥" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="bg-slate-800 border border-slate-700/50 rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+        <h2 className="text-xl font-bold text-white mb-2">Request Assistance</h2>
+        <p className="text-sm text-slate-400 mb-6">Let us know how we can best support you right now. The right person will come to you.</p>
+        
+        <div className="flex flex-col gap-3">
+          {options.map(opt => (
+            <button 
+              key={opt.id}
+              onClick={() => {
+                onSubmit(opt.label);
+                onClose();
+              }}
+              className="text-left w-full bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600/30 p-4 rounded-xl flex items-center gap-3 transition-colors text-slate-200 active:scale-95"
+            >
+              <span className="text-xl">{opt.icon}</span>
+              <span className="font-medium">{opt.label}</span>
+            </button>
+          ))}
+        </div>
+        
+        <button 
+          onClick={onClose}
+          className="mt-6 w-full text-slate-400 font-medium py-3 text-center hover:text-slate-200 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+};
+// ---------------------------------------------------- //
+
 const WelcomePage: React.FC = () => {
   const { driveId, appId } = useParams<{ driveId: string; appId: string }>();
   const navigate = useNavigate();
@@ -17,6 +109,7 @@ const WelcomePage: React.FC = () => {
   const [queueData, setQueueData] = useState<any>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [latecomerApproved, setLatecomerApproved] = useState(false);
+  const [showSOSModal, setShowSOSModal] = useState(false);
 
   // Derived: estimated wait time in minutes
   const estimatedWait = queueData?.position && queueData.position > 0
@@ -171,49 +264,24 @@ const WelcomePage: React.FC = () => {
   const { student, drive, assignedRoom, activeRound } = data;
 
   // ─── REJECTED STATE ───
+  // Replaced with EmpatheticRejectionCard enforcing soft-landing psychological safety.
   const isRejected = studentStatus === 'rejected' || data.status === 'rejected';
 
   if (isRejected) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
-        fontFamily: "'Inter','Segoe UI',sans-serif",
-        maxWidth: 480, margin: '0 auto',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        padding: 32, textAlign: 'center'
-      }}>
-        <div style={{ fontSize: 72, marginBottom: 20 }}>💙</div>
-        <h1 style={{ fontSize: 26, fontWeight: 900, color: 'white', marginBottom: 8 }}>Thank you for your effort</h1>
-        <p style={{ color: '#94A3B8', fontSize: 15, lineHeight: 1.7, marginBottom: 24 }}>
-          We appreciate you participating in the <strong style={{ color: '#C7D2FE' }}>{drive?.companyName}</strong> placement drive.
-          Unfortunately, you haven't been selected to advance at this time.
-        </p>
-        <div style={{
-          background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 16, padding: '20px 24px', marginBottom: 24, width: '100%'
-        }}>
-          <div style={{ fontSize: 13, color: '#64748B', marginBottom: 4 }}>Drive</div>
-          <div style={{ fontWeight: 800, color: 'white' }}>{drive?.companyName} — {drive?.jobRole}</div>
-        </div>
-        <div style={{
-          background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)',
-          borderRadius: 16, padding: '20px 24px', marginBottom: 24, width: '100%'
-        }}>
-          <p style={{ color: '#FCA5A5', fontSize: 15, fontWeight: 600, lineHeight: 1.5 }}>
-            Please silently collect your belongings and exit the premises so the remaining rounds can proceed without interruption.
-          </p>
-        </div>
-        <p style={{ color: '#475569', fontSize: 12 }}>
-          Thank you for your cooperation and best of luck in your future endeavors.
-        </p>
-      </div>
-    );
+    return <EmpatheticRejectionCard drive={drive} navigate={navigate} />;
   }
 
-  const handleSOS = () => {
-    socket.emit('student:sos', { applicationId: appId, driveId, studentName: student.name, room: assignedRoom?.name || 'Waiting Area' });
-    alert("Volunteer pinged! Please stay where you are, help is on the way.");
+  const handleSOS = () => setShowSOSModal(true);
+
+  const submitSOS = (category: string) => {
+    socket.emit('student:sos', { 
+      applicationId: appId, 
+      driveId, 
+      studentName: student.name, 
+      room: assignedRoom?.name || 'Waiting Area',
+      triageCategory: category 
+    });
+    toast.success("Help is on the way. Please stay where you are.", { duration: 6000 });
   };
 
   const openMap = () => {
@@ -586,42 +654,42 @@ const WelcomePage: React.FC = () => {
           <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
         </div>
       ) : !data.isSelected && (
-        /* STANDBY — checked in, rounds not started yet */
-        <div className="mx-5 mt-6 bg-slate-800/50 backdrop-blur-xl rounded-3xl border border-slate-700/50 p-8 text-center shadow-2xl relative overflow-hidden">
-          <div className="absolute inset-0 border-2 border-indigo-500/20 rounded-3xl"></div>
-          <div className="text-[48px] mb-4 animate-bounce drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">⏳</div>
-          <div className="text-white font-black text-2xl mb-3 relative z-10 tracking-tight">
-            {latecomerApproved ? '✅ Entry Approved!' : 'You\'re Checked In!'}
+        /* PSYCHOLOGICALLY CALMING STANDBY UX — checked in, rounds not started yet */
+        <div className="mx-5 mt-6 bg-blue-950/40 backdrop-blur-xl rounded-3xl border border-blue-900/50 p-8 text-center shadow-2xl relative overflow-hidden">
+          <div className="absolute inset-0 border-2 border-blue-800/30 rounded-3xl"></div>
+          <div className="text-[48px] mb-4 opacity-80 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] transition-transform ease-in-out duration-[3000ms] hover:scale-105">🌱</div>
+          <div className="text-blue-100 font-bold text-2xl mb-3 relative z-10 tracking-tight">
+            {latecomerApproved ? '✅ Entry Approved!' : 'You\'re Checked In'}
           </div>
-          <div className="text-slate-300 text-[15px] leading-relaxed relative z-10 mb-6">
+          <div className="text-blue-200/80 text-[15px] leading-relaxed relative z-10 mb-6">
             {latecomerApproved
               ? 'Your late entry has been approved. Please proceed to your assigned room.'
-              : (<>Rounds haven't started yet. Please proceed to<br />
-                <strong className="text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded-md mx-1">{drive?.venueDetails?.hallName || 'the main hall'}</strong> and relax.</>)
+              : (<>We are preparing the environment. Please proceed to<br />
+                <strong className="text-blue-200 bg-blue-900/50 px-2 py-1 rounded-md mx-1">{drive?.venueDetails?.hallName || 'the main hall'}</strong> and relax.</>)
             }
           </div>
           {drive?.reportTime && !latecomerApproved && (
-            <div className="bg-slate-900/60 rounded-xl py-3 px-5 inline-flex items-center gap-2 text-sm font-bold text-slate-200 border border-slate-700 relative z-10 shadow-inner">
-              <Clock size={16} className="text-indigo-400" /> Report by: {drive.reportTime}
+            <div className="bg-blue-950/60 rounded-xl py-3 px-5 inline-flex items-center gap-2 text-sm font-semibold text-blue-300 border border-blue-900 relative z-10 shadow-inner">
+              <Clock size={16} className="text-blue-400" /> Report by: {drive.reportTime}
             </div>
           )}
-          {/* LIVE WAIT TIME PILL */}
+          {/* LIVE WAIT TIME PILL - calming deep breathing animation */}
           {estimatedWait && !latecomerApproved && (
             <div className="mt-5 relative z-10 flex justify-center">
               <div style={{
-                background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
-                color: 'white',
+                background: 'linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%)',
+                color: '#93C5FD',
                 borderRadius: 999,
                 padding: '8px 20px',
                 fontSize: 14,
-                fontWeight: 800,
+                fontWeight: 600,
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 8,
-                boxShadow: '0 4px 15px rgba(245,158,11,0.4)',
-                animation: 'pulse 2s ease-in-out infinite'
+                boxShadow: '0 4px 15px rgba(30,58,138,0.3)',
+                animation: 'pulse 6s cubic-bezier(0.4, 0, 0.6, 1) infinite' /* Mimics deep, slow breathing */
               }}>
-                <span style={{ width: 8, height: 8, background: 'white', borderRadius: '50%', display: 'inline-block', boxShadow: '0 0 10px white' }}></span>
+                <span style={{ width: 8, height: 8, background: '#60A5FA', borderRadius: '50%', display: 'inline-block', boxShadow: '0 0 10px #60A5FA' }}></span>
                 Est. wait: ~{estimatedWait} min
               </div>
             </div>
@@ -741,6 +809,12 @@ const WelcomePage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <SOSTriageModal 
+        isOpen={showSOSModal} 
+        onClose={() => setShowSOSModal(false)} 
+        onSubmit={submitSOS} 
+      />
 
       {/* === BOTTOM MOBILE NAVIGATION === */}
       </div> {/* Closes the relative zIndex 1 container */}

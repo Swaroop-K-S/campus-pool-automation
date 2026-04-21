@@ -1,0 +1,44 @@
+# Stage 1: Build
+FROM node:18-alpine AS builder
+WORKDIR /app
+
+# Copy root configurations
+COPY package.json package-lock.json ./
+# Copy workspace configurations
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/backend/package.json ./packages/backend/
+COPY packages/frontend/package.json ./packages/frontend/
+
+# Install dependencies for the monorepo
+RUN npm ci
+
+# Copy full source
+COPY . .
+
+# Build the shared workspace
+RUN npm run build:shared
+
+# Build the backend
+RUN npm run build:backend
+
+# Stage 2: Production execution
+FROM node:18-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy necessary files from builder
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/package-lock.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/shared ./packages/shared
+COPY --from=builder /app/packages/backend ./packages/backend
+
+# The startup script points into packages/backend/dist
+WORKDIR /app/packages/backend
+
+# Clean up any non-production things if needed, but npm ci already covers our base.
+# Expose Port 8080 as requested
+EXPOSE 8080
+
+CMD ["npm", "start"]

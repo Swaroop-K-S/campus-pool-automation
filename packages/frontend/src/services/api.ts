@@ -20,6 +20,22 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Zero-Drop Offline Resilience
+    if (error.code === 'ERR_NETWORK' || !navigator.onLine) {
+      if (!originalRequest._isReplay && originalRequest.method?.toLowerCase() !== 'get') {
+        try {
+          const { useOfflineSyncStore } = await import('../store/offline-sync.store');
+          await useOfflineSyncStore.getState().queueHttpAction(originalRequest);
+          toast.success('Offline. Action saved and will sync automatically.', { id: 'offline-toast' });
+          // Return a pseudo-success so the app doesn't crash visually
+          return Promise.resolve({ success: true, cached: true });
+        } catch (e) {
+          console.error("Failed to queue offline action", e);
+        }
+      }
+      return Promise.reject(error.response?.data || error.message || 'Network Error');
+    }
+
     // Check if error is 401 Unauthorized
     if (error.response?.status === 401 && !originalRequest._retry) {
       const isAuthRoute = originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/refresh');
@@ -35,21 +51,16 @@ api.interceptors.response.use(
             const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/auth/refresh`, {}, { withCredentials: true });
 
             if (res.data.success) {
-              // The backend automatically overrides the old cookies with the new ones
-              // Retry the original request
               return axios(originalRequest).then(r => r.data);
             }
           }
         } catch (refreshError) {
-          // If refresh fails, log them out
           useAuthStore.getState().logout();
           toast.error('Session expired. Please login again.');
           window.location.href = '/login';
           return Promise.reject(refreshError);
         }
 
-        // If no user in store — don't force redirect, just reject silently
-        // (handles the case right after login before the store hydrates)
         if (useAuthStore.getState().user) {
           useAuthStore.getState().logout();
           toast.error('Session expired. Please login again.');
