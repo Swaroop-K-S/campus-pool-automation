@@ -72,8 +72,22 @@ export default function NewDriveWizard() {
     branches: [...BRANCH_OPTIONS],
     tenth: { required: false, minPercentage: 60, ruleType: 'strict' },
     twelfth: { required: false, minPercentage: 60, ruleType: 'strict' },
-    diploma: { required: false, minCGPA: 6.0, ruleType: 'strict' }
+    diploma: { required: false, minCGPA: 6.0, ruleType: 'strict' },
+    minTenthMarks: 60,
+    minTwelfthOrDiplomaMarks: 60,
+    allowActiveBacklogs: false,
+    maxBacklogs: 0
   });
+
+  const [requestedFields, setRequestedFields] = useState({
+    github: false, linkedin: false, portfolio: false, resumeText: false
+  });
+
+  const [applicationWindow, setApplicationWindow] = useState({
+    startDate: '', endDate: '', extensionReason: ''
+  });
+
+  const [aiSkillPrompt, setAiSkillPrompt] = useState('');
 
   const [customBranchInput, setCustomBranchInput] = useState('');
   const [customBranches, setCustomBranches] = useState<string[]>([]);
@@ -145,10 +159,21 @@ export default function NewDriveWizard() {
       if (allBranches.length === 0) { toast.error("Select at least one branch"); return; }
       setStep(3);
     } else if (step === 3) {
-      if (selectedRounds.length === 0) { toast.error("Select at least one round"); return; }
+      // Form Builder toggles — no validation required
       setStep(4);
     } else if (step === 4) {
+      // Time-Lock — validate date order if both set
+      if (applicationWindow.startDate && applicationWindow.endDate) {
+        if (new Date(applicationWindow.startDate) >= new Date(applicationWindow.endDate)) {
+          toast.error('Start date must be before end date'); return;
+        }
+      }
       setStep(5);
+    } else if (step === 5) {
+      if (selectedRounds.length === 0) { toast.error("Select at least one round"); return; }
+      setStep(6);
+    } else if (step === 6) {
+      setStep(7);
     }
   };
 
@@ -280,8 +305,19 @@ export default function NewDriveWizard() {
           allowedBranches: allBranches,
           tenth: eligibility.tenth,
           twelfth: eligibility.twelfth,
-          diploma: eligibility.diploma
+          diploma: eligibility.diploma,
+          minTenthMarks: eligibility.minTenthMarks,
+          minTwelfthOrDiplomaMarks: eligibility.minTwelfthOrDiplomaMarks,
+          allowActiveBacklogs: eligibility.allowActiveBacklogs,
+          maxBacklogs: eligibility.maxBacklogs
         },
+        requestedFields,
+        applicationWindow: {
+          startDate:  applicationWindow.startDate  || null,
+          endDate:    applicationWindow.endDate    || null,
+          extensionReason: applicationWindow.extensionReason || null
+        },
+        aiSkillPrompt,
         rounds: selectedRounds.map(r => ({
           type: r.type,
           label: r.label,
@@ -309,7 +345,7 @@ export default function NewDriveWizard() {
     }
   };
 
-  const stepLabels = ['INFO', 'ELIGIBILITY', 'ROUNDS', 'EVENT SETUP', 'CONFIRM'];
+  const stepLabels = ['INFO', 'ELIGIBILITY', 'FORM FIELDS', 'TIME-LOCK', 'ROUNDS', 'EVENT SETUP', 'CONFIRM'];
   const allBranches = [...eligibility.branches, ...customBranches];
 
   return (
@@ -625,8 +661,133 @@ export default function NewDriveWizard() {
           </div>
         )}
 
-        {/* ═══ STEP 3 — ROUNDS (DnD) ═══ */}
+        {/* ═══ STEP 3 — FORM BUILDER (One-Click Toggles) ═══ */}
         {step === 3 && (
+          <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
+            <h2 className="text-2xl font-black text-slate-800 mb-1">Application Form Fields</h2>
+            <p className="text-slate-500 text-sm mb-8">Toggle the optional profile fields you want students to fill in. Standard fields (Name, USN, CGPA, Email) are always included.</p>
+
+            {/* Optional Toggles */}
+            <div className="space-y-3 mb-8">
+              {([
+                { key: 'github',     label: 'GitHub Profile',    desc: 'Great for technical / dev roles', icon: '⚙️', color: 'indigo' },
+                { key: 'linkedin',   label: 'LinkedIn Profile',  desc: 'Professional presence & endorsements', icon: '💼', color: 'blue' },
+                { key: 'portfolio',  label: 'Portfolio / Website', desc: 'Design, content & product roles', icon: '🌐', color: 'purple' },
+                { key: 'resumeText', label: 'Resume Paste-In',   desc: 'AI will extract skills from raw text', icon: '🤖', color: 'emerald' },
+              ] as const).map(({ key, label, desc, icon, color }) => {
+                const active = requestedFields[key];
+                return (
+                  <div
+                    key={key}
+                    onClick={() => setRequestedFields(prev => ({ ...prev, [key]: !prev[key] }))}
+                    className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                      active ? 'border-indigo-400 bg-indigo-50/60 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="text-2xl select-none">{icon}</span>
+                    <div className="flex-1">
+                      <p className={`font-bold text-sm ${ active ? 'text-indigo-900' : 'text-slate-800'}`}>{label}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+                    </div>
+                    {/* Pill toggle */}
+                    <div className={`relative w-12 h-6 rounded-full transition-colors ${ active ? 'bg-indigo-600' : 'bg-slate-200' }`}>
+                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${ active ? 'left-7' : 'left-1' }`} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* AI Skill Prompt */}
+            <div className="bg-gradient-to-br from-violet-50 to-indigo-50 border border-indigo-200 rounded-2xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">🧠</span>
+                <h3 className="font-bold text-indigo-900 text-sm">AI Evaluation Hint (Optional)</h3>
+              </div>
+              <p className="text-xs text-indigo-700 mb-3">Describe the top 3 technical skills this role demands. The AI ATS parser will weigh resumes against these when scoring candidates.</p>
+              <textarea
+                rows={3}
+                value={aiSkillPrompt}
+                onChange={e => setAiSkillPrompt(e.target.value)}
+                placeholder="e.g. React, System Design, SQL query optimisation"
+                className="w-full border border-indigo-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 resize-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ═══ STEP 4 — TIME-LOCK WINDOW ═══ */}
+        {step === 4 && (
+          <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
+            <h2 className="text-2xl font-black text-slate-800 mb-1">Application Time-Lock</h2>
+            <p className="text-slate-500 text-sm mb-8">Set a strict server-enforced window. Students cannot view OR submit the form outside these dates — not even with a direct link.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                  <Calendar size={14} className="text-indigo-500"/>
+                  Applications Open
+                </label>
+                <input
+                  type="datetime-local"
+                  value={applicationWindow.startDate}
+                  onChange={e => setApplicationWindow(p => ({ ...p, startDate: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                  <Clock size={14} className="text-red-500"/>
+                  Applications Close
+                </label>
+                <input
+                  type="datetime-local"
+                  value={applicationWindow.endDate}
+                  onChange={e => setApplicationWindow(p => ({ ...p, endDate: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                />
+              </div>
+            </div>
+
+            {/* Live preview */}
+            {applicationWindow.startDate && applicationWindow.endDate && (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3 mb-5">
+                <span className="text-green-500 text-lg mt-0.5">✅</span>
+                <div>
+                  <p className="text-sm font-bold text-green-800">Window Set</p>
+                  <p className="text-xs text-green-700 mt-0.5">
+                    Open: {new Date(applicationWindow.startDate).toLocaleString()}
+                    &nbsp;→&nbsp;
+                    Close: {new Date(applicationWindow.endDate).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Extension reason */}
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Extension Reason <span className="text-slate-400 font-normal">(optional)</span></label>
+              <p className="text-xs text-slate-500 mb-2">If you extend the deadline in future, this message will be shown to students on the apply page.</p>
+              <input
+                type="text"
+                value={applicationWindow.extensionReason}
+                onChange={e => setApplicationWindow(p => ({ ...p, extensionReason: e.target.value }))}
+                placeholder="e.g. Deadline extended due to server maintenance on April 30th"
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+              />
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-5 flex items-start gap-3">
+              <span className="text-amber-500 mt-0.5 text-sm">⚠️</span>
+              <p className="text-xs text-amber-700">
+                <strong>Skip this step</strong> if you want to manage open/close manually from the Drive Detail page. Leaving dates empty disables the time-lock.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ STEP 5 — ROUNDS (DnD) ═══ */}
+        {step === 5 && (
           <div className="max-w-4xl mx-auto animate-in slide-in-from-right-4 duration-300">
             <h2 className="text-2xl font-black text-slate-800 mb-2">Select Rounds</h2>
             <p className="text-slate-500 mb-8 font-medium">Choose rounds and drag to set the order.</p>
@@ -695,8 +856,8 @@ export default function NewDriveWizard() {
           </div>
         )}
 
-        {/* ═══ STEP 4 — EVENT SETUP ═══ */}
-        {step === 4 && (
+        {/* ═══ STEP 6 — EVENT SETUP ═══ */}
+        {step === 6 && (
           <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
             <h2 className="text-2xl font-black text-slate-800 mb-2">Event Setup</h2>
             <p className="text-slate-500 mb-8 font-medium">Set the initial event date, report time, and primary seminar/test hall configuration.</p>
@@ -778,8 +939,8 @@ export default function NewDriveWizard() {
           </div>
         )}
 
-        {/* ═══ STEP 5 — CONFIRM ═══ */}
-        {step === 5 && (
+        {/* ═══ STEP 7 — CONFIRM ═══ */}
+        {step === 7 && (
           <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
             <div className="text-center mb-8">
               <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -858,7 +1019,7 @@ export default function NewDriveWizard() {
           </button>
         ) : <div aria-hidden="true"></div>}
         
-        {step < 5 ? (
+        {step < 7 ? (
           <button onClick={handleNext} className="px-8 py-3.5 rounded-xl font-bold text-white bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/40 active:scale-95 hover:-translate-y-0.5 transition-all flex items-center gap-2 group">
             Next Step <ArrowRight size={18} strokeWidth={3} className="group-hover:translate-x-1 transition-transform"/>
           </button>

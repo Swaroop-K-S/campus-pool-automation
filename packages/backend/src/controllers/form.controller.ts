@@ -63,6 +63,35 @@ export const getPublicFormConfig = async (req: Request, res: Response) => {
     const drive = await DriveModel.findOne({ formToken });
     if (!drive) return res.status(404).json({ success: false, error: 'Form not found' });
 
+    // ── Application Window Time-Lock Guard ────────────────────────────────────
+    const win = (drive as any).applicationWindow;
+    if (win?.startDate || win?.endDate) {
+      const now = new Date();
+      if (win.startDate && now < new Date(win.startDate)) {
+        return res.status(403).json({
+          success: false,
+          code: 'DRIVE_NOT_OPEN',
+          data: {
+            startDate:       win.startDate,
+            endDate:         win.endDate,
+            extensionReason: win.extensionReason ?? null
+          }
+        });
+      }
+      if (win.endDate && now > new Date(win.endDate)) {
+        return res.status(403).json({
+          success: false,
+          code: 'DRIVE_CLOSED',
+          data: {
+            startDate:       win.startDate,
+            endDate:         win.endDate,
+            extensionReason: win.extensionReason ?? null
+          }
+        });
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const formConfig = await FormFieldModel.findOne({ driveId: drive._id });
     
     return res.json({ success: true, data: {
@@ -77,6 +106,8 @@ export const getPublicFormConfig = async (req: Request, res: Response) => {
       formCloseDate: drive.formCloseDate,
       formStatus: drive.formStatus,
       eligibility: drive.eligibility,
+      requestedFields:    (drive as any).requestedFields ?? null,
+      applicationWindow:  (drive as any).applicationWindow ?? null,
       fields: formConfig?.fields || []
     }});
   } catch (error: unknown) {
@@ -84,6 +115,7 @@ export const getPublicFormConfig = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, error: message });
   }
 };
+
 
 export const getCloudinarySignature = async (req: Request, res: Response) => {
   try {

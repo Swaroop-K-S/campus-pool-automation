@@ -29,8 +29,28 @@ export const DriveSchema = z.object({
       required: z.boolean(),
       minCGPA: z.number().min(0).max(10),
       ruleType: z.enum(['strict', 'relaxed', 'info']).default('strict')
-    }).optional()
+    }).optional(),
+    // Unified marks threshold (student picks 12th OR diploma path)
+    minTenthMarks:            z.number().min(0).max(100).default(0),
+    minTwelfthOrDiplomaMarks: z.number().min(0).max(100).default(0),
+    allowActiveBacklogs:      z.boolean().default(false),
+    maxBacklogs:              z.number().int().min(0).default(0)
   }),
+
+  // Admin-toggled optional fields shown in the application form
+  requestedFields: z.object({
+    github:     z.boolean().default(false),
+    linkedin:   z.boolean().default(false),
+    portfolio:  z.boolean().default(false),
+    resumeText: z.boolean().default(false)
+  }).optional(),
+
+  // Strict time-lock window enforced server-side
+  applicationWindow: z.object({
+    startDate:       z.string().or(z.date()),
+    endDate:         z.string().or(z.date()),
+    extensionReason: z.string().optional()
+  }).optional(),
   rounds: z.array(z.object({
     type: z.string(),
     label: z.string().optional(),

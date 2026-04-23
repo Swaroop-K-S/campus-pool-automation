@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
-import { GraduationCap, FileText, CheckCircle, AlertTriangle, Image as ImageIcon, Copy, Check, Calendar, Zap, Download } from 'lucide-react';
+import { GraduationCap, FileText, CheckCircle, AlertTriangle, Image as ImageIcon, Copy, Check, Calendar, Zap, Download, Github, Linkedin, Globe, FileType2, Clock, Lock } from 'lucide-react';
 
 interface FormFieldConfig {
   id: string;
@@ -20,11 +20,83 @@ interface FormFieldConfig {
   };
 }
 
+interface DriveClosedInfo {
+  code: 'DRIVE_NOT_OPEN' | 'DRIVE_CLOSED';
+  startDate?: string;
+  endDate?: string;
+  extensionReason?: string | null;
+}
+
+// ── Drive Closed / Not Open Banner ─────────────────────────────────────────
+function DriveClosedBanner({ info }: { info: DriveClosedInfo }) {
+  const isNotOpen = info.code === 'DRIVE_NOT_OPEN';
+  const openTime  = info.startDate ? new Date(info.startDate).toLocaleString() : null;
+  const closeTime = info.endDate   ? new Date(info.endDate).toLocaleString()   : null;
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full">
+        <div className={`rounded-2xl p-8 text-center shadow-lg ${
+          isNotOpen
+            ? 'bg-gradient-to-br from-blue-600 to-indigo-700'
+            : 'bg-gradient-to-br from-slate-700 to-slate-900'
+        }`}>
+          <div className="w-16 h-16 mx-auto bg-white/10 rounded-full flex items-center justify-center mb-5">
+            {isNotOpen ? <Clock size={32} className="text-white" /> : <Lock size={32} className="text-white" />}
+          </div>
+          <h1 className="text-2xl font-black text-white mb-2">
+            {isNotOpen ? 'Applications Not Open Yet' : 'Applications Closed'}
+          </h1>
+          <p className="text-white/70 text-sm mb-6">
+            {isNotOpen
+              ? 'This drive is not yet accepting applications. Please come back when the window opens.'
+              : 'The application deadline has passed. No further submissions are being accepted.'}
+          </p>
+
+          {/* Date pills */}
+          <div className="space-y-3 text-left">
+            {openTime && (
+              <div className="flex items-center gap-3 bg-white/10 rounded-xl px-4 py-3">
+                <Calendar size={16} className="text-white/60 flex-shrink-0" />
+                <div>
+                  <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Opens</p>
+                  <p className="text-white font-bold text-sm">{openTime}</p>
+                </div>
+              </div>
+            )}
+            {closeTime && (
+              <div className="flex items-center gap-3 bg-white/10 rounded-xl px-4 py-3">
+                <Lock size={16} className="text-white/60 flex-shrink-0" />
+                <div>
+                  <p className="text-white/50 text-xs font-semibold uppercase tracking-wider">Closes</p>
+                  <p className="text-white font-bold text-sm">{closeTime}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Extension reason */}
+          {info.extensionReason && (
+            <div className="mt-5 bg-amber-400/20 border border-amber-400/30 rounded-xl px-4 py-3 text-left">
+              <p className="text-amber-200 text-xs font-semibold uppercase tracking-wider mb-1">Notice</p>
+              <p className="text-amber-100 text-sm">{info.extensionReason}</p>
+            </div>
+          )}
+        </div>
+
+        <p className="text-center text-xs text-slate-400 mt-4">Powered by <span className="font-black text-slate-600">CampusPool</span></p>
+      </div>
+    </div>
+  );
+}
+
+
 export default function PublicApplyPage() {
   const { formToken } = useParams();
   const [config, setConfig] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<string | null>(null);
+  const [driveClosedInfo, setDriveClosedInfo] = useState<DriveClosedInfo | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
   
@@ -32,12 +104,11 @@ export default function PublicApplyPage() {
 
   const [ssoId, setSsoId] = useState('');
   const [ssoLoading, setSsoLoading] = useState(false);
+  // Education path state for PUC / Diploma toggle
+  const [educationPath, setEducationPath] = useState<'puc' | 'diploma' | null>(null);
 
   const { register, handleSubmit, formState: { errors }, trigger, setValue, watch } = useForm();
   
-  // Watch education path to determine if 12th or Diploma is shown
-  const educationPath = watch('field_education_path');
-
   const pages = useMemo(() => {
     if (!config?.fields) return [];
     
@@ -47,7 +118,6 @@ export default function PublicApplyPage() {
 
     config.fields.forEach((field: FormFieldConfig) => {
       if (field.type === 'page_break') {
-        // Only push if there are fields, to avoid empty pages if multiple breaks are back-to-back
         if (currentFields.length > 0) {
           result.push({ title: currentTitle, fields: currentFields });
           currentFields = [];
@@ -90,10 +160,19 @@ export default function PublicApplyPage() {
       const res = await api.get(`/form/${formToken}`);
       if ((res as any).success) setConfig((res as any).data);
     } catch (err: unknown) {
-      const ae = err as { response?: { status: number } };
-      if (ae.response?.status === 403) setErrorState('Applications for this drive are closed.');
-      else if (ae.response?.status === 404) setErrorState('This form link is invalid or expired.');
-      else setErrorState('Failed to load form. Please try again later.');
+      const ae = err as { response?: { status: number; data?: { code?: string; data?: any } } };
+      if (ae.response?.status === 403) {
+        const body = ae.response.data;
+        if (body?.code === 'DRIVE_NOT_OPEN' || body?.code === 'DRIVE_CLOSED') {
+          setDriveClosedInfo({ code: body.code, ...(body.data ?? {}) });
+        } else {
+          setErrorState('Applications for this drive are closed.');
+        }
+      } else if (ae.response?.status === 404) {
+        setErrorState('This form link is invalid or expired.');
+      } else {
+        setErrorState('Failed to load form. Please try again later.');
+      }
     } finally {
       setLoading(false);
     }
@@ -227,6 +306,9 @@ export default function PublicApplyPage() {
   };
 
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 text-slate-500 font-bold">Loading Form...</div>;
+
+  // Structured time-lock banners (DRIVE_NOT_OPEN / DRIVE_CLOSED)
+  if (driveClosedInfo) return <DriveClosedBanner info={driveClosedInfo} />;
 
   if (errorState) {
     return (
@@ -533,6 +615,138 @@ export default function PublicApplyPage() {
                 )}
               </div>
             )})}
+
+            {/* ── PUC vs Diploma Radio (shown on first page) ─────────────────── */}
+            {currentPage === 0 && (
+              <div className="border-t border-slate-100 pt-6">
+                <label className="block text-sm font-bold text-slate-700 mb-3">
+                  My 12th/Pre-University Education <span className="text-red-500">*</span>
+                </label>
+                <p className="text-xs text-slate-500 mb-4">Select which qualification you completed before your current degree.</p>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  {(['puc', 'diploma'] as const).map(path => {
+                    const label = path === 'puc' ? '12th Standard / PUC' : 'Diploma (Lateral Entry)';
+                    const active = educationPath === path;
+                    return (
+                      <button
+                        key={path}
+                        type="button"
+                        onClick={() => setEducationPath(path)}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${
+                          active ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <p className={`font-bold text-sm ${active ? 'text-indigo-800' : 'text-slate-700'}`}>{label}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {path === 'puc' ? 'HSC / PUC / Intermediate (% marks)' : 'Polytechnic / 3-year Diploma'}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Conditional marks input — both map to twelfthOrDiplomaMarks */}
+                {educationPath && (
+                  <div className="animate-in fade-in duration-200">
+                    <label className="block text-sm font-bold text-slate-700 mb-2">
+                      {educationPath === 'puc' ? '12th / PUC Percentage' : 'Diploma CGPA'} <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        max={educationPath === 'puc' ? 100 : 10}
+                        placeholder={educationPath === 'puc' ? 'e.g. 87.5' : 'e.g. 8.2'}
+                        {...register('twelfthOrDiplomaMarks', {
+                          required: 'This field is required',
+                          validate: (val) => {
+                            const v = parseFloat(val);
+                            const min = config?.eligibility?.minTwelfthOrDiplomaMarks ?? 0;
+                            if (min > 0 && v < min) return `Minimum required: ${min}${educationPath === 'puc' ? '%' : ' CGPA'}`;
+                            return true;
+                          }
+                        })}
+                        className={`w-full border rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors ${errors.twelfthOrDiplomaMarks ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">
+                        {educationPath === 'puc' ? '%' : '/ 10'}
+                      </span>
+                    </div>
+                    {errors.twelfthOrDiplomaMarks && (
+                      <p className="text-red-500 text-xs font-bold mt-2">{errors.twelfthOrDiplomaMarks.message as string}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Admin-requested optional fields ────────────────────────────── */}
+            {currentPage === 0 && config?.requestedFields && (
+              <div className="border-t border-slate-100 pt-6 space-y-5">
+                <p className="text-sm font-bold text-slate-700">Optional Profile Links</p>
+
+                {config.requestedFields.github && (
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                      <Github size={15} className="text-slate-600" /> GitHub Profile
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://github.com/yourusername"
+                      {...register('github', { pattern: { value: /^https?:\/\/(www\.)?github\.com\/.+/, message: 'Enter a valid GitHub URL' } })}
+                      className={`w-full border rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors ${errors.github ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
+                    />
+                    {errors.github && <p className="text-red-500 text-xs font-bold mt-2">{errors.github.message as string}</p>}
+                  </div>
+                )}
+
+                {config.requestedFields.linkedin && (
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                      <Linkedin size={15} className="text-blue-600" /> LinkedIn Profile
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://linkedin.com/in/yourprofile"
+                      {...register('linkedin', { pattern: { value: /^https?:\/\/(www\.)?linkedin\.com\/in\/.+/, message: 'Enter a valid LinkedIn URL' } })}
+                      className={`w-full border rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors ${errors.linkedin ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
+                    />
+                    {errors.linkedin && <p className="text-red-500 text-xs font-bold mt-2">{errors.linkedin.message as string}</p>}
+                  </div>
+                )}
+
+                {config.requestedFields.portfolio && (
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                      <Globe size={15} className="text-purple-600" /> Portfolio / Website
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://yourportfolio.com"
+                      {...register('portfolio', { pattern: { value: /^https?:\/\/.+/, message: 'Enter a valid URL' } })}
+                      className={`w-full border rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors ${errors.portfolio ? 'border-red-400 bg-red-50' : 'border-slate-200'}`}
+                    />
+                    {errors.portfolio && <p className="text-red-500 text-xs font-bold mt-2">{errors.portfolio.message as string}</p>}
+                  </div>
+                )}
+
+                {config.requestedFields.resumeText && (
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                      <FileType2 size={15} className="text-emerald-600" /> Paste Your Resume Text
+                      <span className="text-slate-400 font-normal text-xs">(AI will extract your skills)</span>
+                    </label>
+                    <textarea
+                      rows={5}
+                      placeholder="Copy and paste the text content of your resume here..."
+                      {...register('resumeText')}
+                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors resize-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-4">

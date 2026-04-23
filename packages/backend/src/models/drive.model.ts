@@ -35,7 +35,27 @@ const driveSchema = new Schema({
       required: { type: Boolean, default: false },
       minCGPA: { type: Number, default: 0 },
       ruleType: { type: String, enum: ['strict', 'relaxed', 'info'], default: 'strict' }
-    }
+    },
+    // Unified 12th/Diploma minimum — used when student chooses either path
+    minTenthMarks:              { type: Number, default: 0 },
+    minTwelfthOrDiplomaMarks:   { type: Number, default: 0 },
+    allowActiveBacklogs:        { type: Boolean, default: false },
+    maxBacklogs:                { type: Number, default: 0 }  // 0 = no backlogs allowed
+  },
+
+  // Dynamic optional fields requested by the admin for the application form
+  requestedFields: {
+    github:     { type: Boolean, default: false },
+    linkedin:   { type: Boolean, default: false },
+    portfolio:  { type: Boolean, default: false },
+    resumeText: { type: Boolean, default: false }
+  },
+
+  // Time-locked application window (stricter than formOpenDate/formCloseDate — enforced by backend guard)
+  applicationWindow: {
+    startDate:       { type: Date },
+    endDate:         { type: Date },
+    extensionReason: { type: String }
   },
   rounds: [roundSchema],
   formToken: { type: String, unique: true, sparse: true },
