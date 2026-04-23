@@ -1,11 +1,16 @@
 import { create } from 'zustand';
 import { openDB } from 'idb';
 import type { DBSchema, IDBPDatabase } from 'idb';
-import { v4 as uuidv4 } from 'uuid';
 import { useAuthStore } from './auth.store';
 import { api } from '../services/api';
 // We will export a getter for socket to avoid circular deps
 import { getSocket } from '../hooks/use-socket';
+
+/** Prefer the native Web Crypto API over the uuid package (avoids ESM/CJS conflicts) */
+const generateId = (): string =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export interface OfflineAction {
   id: string;
@@ -68,7 +73,7 @@ export const useOfflineSyncStore = create<OfflineSyncState>((set, get) => ({
 
   queueHttpAction: async (config) => {
     const db = await dbPromise;
-    const id = uuidv4();
+    const id = generateId();
     
     // Avoid double queueing
     if (config._isReplay) return id;
@@ -94,7 +99,7 @@ export const useOfflineSyncStore = create<OfflineSyncState>((set, get) => ({
 
   queueSocketAction: async (event, payload) => {
     const db = await dbPromise;
-    const id = payload?.triageRequestId || payload?.id || uuidv4(); // Prefer existing keys or make one
+    const id = payload?.triageRequestId || payload?.id || generateId(); // Prefer existing keys or make one
     
     // inject idempotency key into payload
     const safePayload = typeof payload === 'object' && payload !== null ? { ...payload, idempotencyKey: id } : payload;
