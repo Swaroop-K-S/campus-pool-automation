@@ -37,9 +37,11 @@ services:
       - REDIS_URL=redis://redis:6379
       # Map additional missing ENVs dynamically as needed during deploy
       - JWT_ACCESS_SECRET=campuspool-docker-compose-secret-key-32chars
+      - LOCAL_AI_URL=http://ollama:11434/api/generate
     depends_on:
       - mongodb
       - redis
+      - ollama
     networks:
       - campuspool_net
     restart: unless-stopped
@@ -57,9 +59,34 @@ services:
       - campuspool_net
     restart: unless-stopped
 
+  # ── Local AI (Ollama) ──────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: campuspool-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - campuspool_net
+    restart: unless-stopped
+    # Pull the model automatically on first boot.
+    # gemma2:2b is ~1.6 GB — fits comfortably on CPU-only Docker hosts.
+    # Once downloaded it lives in the ollama_data volume (no re-download on restart).
+    entrypoint: ["/bin/sh", "-c",
+      "ollama serve & sleep 5 && ollama pull gemma2:2b && wait"
+    ]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s   # generous — model pull can take a few minutes
+
 volumes:
   mongodb_data:
   redis_data:
+  ollama_data:             # persists the downloaded model weights
 
 networks:
   campuspool_net:

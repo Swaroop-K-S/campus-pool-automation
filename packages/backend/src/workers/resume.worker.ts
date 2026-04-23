@@ -1,73 +1,164 @@
 import { Queue, Worker, Job } from 'bullmq';
 import { redisClient } from '../config/redis';
 import { StudentProfileModel } from '../models/student-profile.model';
-import { llmInvoke } from '../utils/llm';
+import { llmInvoke, OllamaUnavailableError } from '../utils/llm';
 
 export const resumeParsingQueue = new Queue('resumeParsingQueue', { connection: redisClient });
 
-export const resumeParsingWorker = new Worker('resumeParsingQueue', async (job: Job) => {
-  const { usn, rawText } = job.data;
-  console.log(`[Resume Worker] Commencing NLP extraction for USN: ${usn}`);
+// ─── BullMQ Worker ───────────────────────────────────────────────────────────
 
-  try {
+export const resumeParsingWorker = new Worker(
+  'resumeParsingQueue',
+  async (job: Job) => {
+    const { usn, rawText } = job.data as { usn: string; rawText: string };
+    console.log(`[Resume Worker] Starting ATS extraction — USN: ${usn} | Attempt: ${job.attemptsMade + 1}`);
+
     const profile = await StudentProfileModel.findOne({ usn });
-    if (!profile) throw new Error('Student Profile missing constraint.');
+    if (!profile) throw new Error(`[Resume Worker] Student profile not found for USN: ${usn}`);
 
-    // Pre-flight setup: Ensure it's marked as pending
+    // Mark as pending so the UI shows a loading skeleton
     await StudentProfileModel.findByIdAndUpdate(profile._id, { parsingStatus: 'pending' });
 
-    // AI Prompt Construction
-    const prompt = `
-      You are an expert HR ATS Parser. Extract the meaningful candidate profile strictly conforming to the following JSON schema:
-      {
-        "skills": ["string"],
-        "education": [{ "degree": "string", "institution": "string", "year": "string" }],
-        "projects": [{ "title": "string", "techStack": ["string"], "description": "string" }]
+    // ── Prompt Engineering: Strict JSON + one-shot example ─────────────────
+    // Local models (Gemma 2B, LLaMA 3.2) hallucinate JSON structure very easily.
+    // A one-shot example dramatically improves schema compliance without fine-tuning.
+    const prompt = buildAtsPrompt(rawText);
+
+    // ── Timeout: 45s for local model (Ollama GPU warm-up), 15s for cloud stub ──
+    const TIMEOUT_MS = process.env.LOCAL_AI_URL ? 45_000 : 15_000;
+    const abortController = new AbortController();
+    const timeoutHandle = setTimeout(() => abortController.abort(), TIMEOUT_MS);
+
+    let responseText: string;
+    try {
+      responseText = await llmInvoke(prompt, abortController.signal);
+    } catch (err) {
+      clearTimeout(timeoutHandle);
+
+      // OllamaUnavailableError = model still loading → let BullMQ retry
+      if (err instanceof OllamaUnavailableError) {
+        console.warn(`[Resume Worker] Ollama not ready yet for ${usn}. BullMQ will retry.`);
+        throw err; // re-throw so BullMQ applies the backoff schedule
       }
-      Aggressively normalize tech stacks (e.g. React.js to React).
-      Do NOT include any markdown blocks. Return only parseable JSON.
 
-      Raw Resume Text:
-      ${rawText}
-    `;
+      // AbortError = our own timeout fired
+      if ((err as any)?.name === 'AbortError') {
+        throw new Error(`[Resume Worker] LLM timeout after ${TIMEOUT_MS}ms for USN ${usn}`);
+      }
 
-    // Strict 15-second Circuit Breaker
-    const timeoutPromise = new Promise<string>((_, reject) => 
-      setTimeout(() => reject(new Error('LLM Timeout: ATS Extraction Circuit Breaker Triggered')), 15000)
-    );
+      throw err;
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
 
-    const responseText = await Promise.race([
-      llmInvoke(prompt),
-      timeoutPromise
-    ]);
+    // ── Parse & validate the LLM response ───────────────────────────────────
+    let parsedData: { skills: string[]; education: any[]; projects: any[] };
+    try {
+      parsedData = JSON.parse(responseText);
+    } catch {
+      throw new Error(
+        `[Resume Worker] LLM returned non-JSON for ${usn}. Raw: ${responseText.slice(0, 200)}`,
+      );
+    }
 
-    const parsedData = JSON.parse(responseText);
+    // Defensive normalisation — local models sometimes omit keys
+    const normalised = {
+      skills:    Array.isArray(parsedData.skills)    ? parsedData.skills    : [],
+      education: Array.isArray(parsedData.education) ? parsedData.education : [],
+      projects:  Array.isArray(parsedData.projects)  ? parsedData.projects  : [],
+    };
 
     await StudentProfileModel.findByIdAndUpdate(profile._id, {
       $set: {
         parsingStatus: 'completed',
-        parsedResume: {
-          skills: parsedData.skills || [],
-          education: parsedData.education || [],
-          projects: parsedData.projects || []
-        }
-      }
+        parsedResume:  normalised,
+      },
     });
 
-    console.log(`[Resume Worker] Successfully normalized and saved JSON for ${usn}`);
-    return { success: true };
+    console.log(`[Resume Worker] ✅ Completed ATS extraction for ${usn}`);
+    return { success: true, usn };
+  },
+  {
+    connection: redisClient,
+    // Retry schedule designed for Ollama cold-start:
+    //   Attempt 1: immediate
+    //   Attempt 2: +10s  (model may still be loading weights)
+    //   Attempt 3: +30s
+    //   Attempt 4: +60s  (final attempt — if model is not up by now, fail gracefully)
+    settings: {
+      backoffStrategy: (attemptsMade: number) => {
+        const delays = [0, 10_000, 30_000, 60_000];
+        return delays[Math.min(attemptsMade, delays.length - 1)];
+      },
+    },
+  },
+);
 
-  } catch (error) {
-    console.error(`[Resume Worker] Parsing critical failure for ${usn}:`, error);
-    // Mark as failed so UI triggers the PDF fallback gracefully
-    await StudentProfileModel.findOneAndUpdate({ usn }, { $set: { parsingStatus: 'failed' } });
-    throw error;
-  }
-}, { connection: redisClient });
+resumeParsingWorker.on('failed', async (job, err) => {
+  if (!job) return;
+  const { usn } = job.data as { usn: string };
+  console.error(`[Resume Worker] ❌ Job permanently failed for ${usn}:`, err.message);
+  // Mark as failed so the invigilator UI shows a "PDF fallback" indicator
+  await StudentProfileModel.findOneAndUpdate({ usn }, { $set: { parsingStatus: 'failed' } });
+});
+
+// ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function enqueueResumeParsing(usn: string, rawText: string) {
-  return await resumeParsingQueue.add('extract-json-from-resume', { usn, rawText }, {
-    removeOnComplete: true,
-    removeOnFail: false
-  });
+  return resumeParsingQueue.add(
+    'extract-json-from-resume',
+    { usn, rawText },
+    {
+      attempts:      4,          // 4 total attempts (handles Ollama cold-start window)
+      removeOnComplete: true,
+      removeOnFail:  false,      // keep failed jobs for post-mortem inspection
+      backoff: { type: 'custom' },
+    },
+  );
+}
+
+// ─── Prompt builder ───────────────────────────────────────────────────────────
+
+/**
+ * Constructs a structured ATS extraction prompt optimised for small local models.
+ *
+ * Key techniques used:
+ *  - Explicit role instruction ("You are…")
+ *  - Hard constraint: "Return ONLY valid JSON. No markdown."
+ *  - One-shot example showing the exact output schema before the real input
+ *  - Tech-stack normalisation rules (React.js → React, etc.)
+ */
+function buildAtsPrompt(rawText: string): string {
+  return `You are an expert HR ATS (Applicant Tracking System) parser.
+Your task is to extract structured information from the resume text below.
+
+STRICT RULES:
+1. Return ONLY valid JSON. No markdown, no code fences, no explanation text.
+2. The JSON must follow this EXACT schema — no extra keys, no missing keys:
+   {
+     "skills": ["string"],
+     "education": [{"degree": "string", "institution": "string", "year": "string"}],
+     "projects": [{"title": "string", "techStack": ["string"], "description": "string"}]
+   }
+3. Normalise all tech stack names: "React.js" → "React", "NodeJS" → "Node.js", "Mongo" → "MongoDB".
+4. If a field cannot be found, use an empty array [].
+5. Do NOT add any text before or after the JSON object.
+
+ONE-SHOT EXAMPLE — Given this resume snippet:
+  "Priya has a B.Tech in CSE from RVCE (2024). Skills: React, Node.js, PostgreSQL.
+   Project: LiveBoard — a collaborative whiteboard using WebSockets and React."
+
+Expected output:
+{
+  "skills": ["React", "Node.js", "PostgreSQL"],
+  "education": [{"degree": "B.Tech in Computer Science", "institution": "RVCE", "year": "2024"}],
+  "projects": [{"title": "LiveBoard", "techStack": ["WebSockets", "React"], "description": "A collaborative whiteboard application built with real-time WebSocket communication."}]
+}
+
+Now parse the following resume:
+---
+${rawText}
+---
+
+Return ONLY the JSON object. Nothing else.`;
 }

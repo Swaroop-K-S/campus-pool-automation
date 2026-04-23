@@ -31,6 +31,9 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.string().default('900000'),
   RATE_LIMIT_MAX_REQUESTS: z.string().default('100'),
   REDIS_URL: z.string().optional(),
+
+  // Local AI (Ollama) — optional; when set, bypasses cloud LLM vendors
+  LOCAL_AI_URL: z.string().url().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
