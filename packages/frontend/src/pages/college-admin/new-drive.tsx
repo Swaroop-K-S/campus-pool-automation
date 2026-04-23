@@ -836,12 +836,12 @@ export default function NewDriveWizard() {
               </div>
 
               {/* Event Details */}
-              {(eventSetup.eventDate || eventSetup.hallName) && (
+              {(eventSetup.eventDate || Object.keys(eventSetup.roundRooms).length > 0) && (
                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
                   <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Event Setup</h3>
                   <div className="grid grid-cols-2 gap-4">
                     {eventSetup.eventDate && <div><span className="text-xs font-bold text-slate-400 uppercase">Date & Time</span><p className="font-bold text-slate-800 text-lg">{eventSetup.eventDate} <span className="text-sm font-medium text-slate-500">{eventSetup.reportTime}</span></p></div>}
-                    {eventSetup.hallName && <div><span className="text-xs font-bold text-slate-400 uppercase">Primary Hall</span><p className="font-bold text-slate-800 text-lg">{eventSetup.hallName} <span className="text-sm font-medium text-slate-500">({eventSetup.capacity} seats)</span></p></div>}
+                    {Object.keys(eventSetup.roundRooms).length > 0 && <div><span className="text-xs font-bold text-slate-400 uppercase">Infrastructure</span><p className="font-bold text-slate-800 text-lg">{Object.values(eventSetup.roundRooms).flat().length} Rooms Mapped</p></div>}
                   </div>
                 </div>
               )}

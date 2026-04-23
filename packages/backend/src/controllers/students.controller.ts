@@ -101,3 +101,55 @@ export const clearStudentStrikes = async (req: Request, res: Response) => {
   req.body = { ...req.body, strikes: 0 };
   return updateStudentStrikes(req, res);
 };
+
+import { CloudinaryProvider } from '../services/storage/cloudinary.provider';
+import { parsePdfBuffer } from '../services/resume-parser.service';
+import { enqueueResumeParsing } from '../workers/resume.worker';
+
+// POST /api/v1/students/:usn/resume
+// Accepts a PDF via multer, immediately streams to Cloudinary, extracts text, queues BullMQ JSON task, and returns 202
+export const uploadResume = async (req: Request, res: Response) => {
+  try {
+    const { usn } = req.params;
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, error: 'Resume PDF missing from request.' });
+    }
+
+    const student = await StudentProfileModel.findOne({ usn });
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student Profile not found.' });
+    }
+
+    // Simultaneously fire off Cloudinary backend upload and PDF parsing
+    const buffer = file.buffer;
+    
+    // We await both to ensure we have the Cloudinary URL and the raw text before returning 202
+    // and sending to BullMQ. Since Cloudinary is ~1000ms and pdf-parse is ~50ms, this is acceptable.
+    const [cloudinaryUrl, rawText] = await Promise.all([
+      CloudinaryProvider.uploadBuffer(buffer, `campuspool/resumes/${usn}`),
+      parsePdfBuffer(buffer)
+    ]);
+
+    // Update Student Profile with the final URL immediately
+    student.resumeUrl = cloudinaryUrl;
+    student.parsingStatus = 'pending';
+    await student.save();
+
+    // Fire & Forget the BullMQ Job (LLM is slow, don't await)
+    enqueueResumeParsing(usn, rawText).catch(err => console.error('[Resume BullMQ Submit Error]', err));
+
+    return res.status(202).json({ 
+      success: true, 
+      data: { 
+        resumeUrl: cloudinaryUrl, 
+        message: 'Resume accepted. AI Agent is processing the document.' 
+      } 
+    });
+
+  } catch (error: unknown) {
+    console.error('[uploadResume] Error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error updating resume';
+    return res.status(500).json({ success: false, error: message });
+  }
+};

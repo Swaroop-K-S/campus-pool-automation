@@ -59,7 +59,7 @@ export const updateTwilio = asyncHandler(async (req: Request, res: Response) => 
 export const getTemplates = asyncHandler(async (req: Request, res: Response) => {
   const collegeId = (req as any).user.collegeId;
   const college = await CollegeModel.findById(collegeId).select('driveTemplates');
-  res.json({ success: true, data: college?.driveTemplates || [] });
+  res.json({ success: true, data: (college as any)?.driveTemplates || [] });
 });
 
 // POST /api/v1/college/templates — save a drive as a template

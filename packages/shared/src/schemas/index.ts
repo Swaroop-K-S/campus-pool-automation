@@ -8,3 +8,5 @@ export * from './qr-session.schema';
 export * from './push-subscription.schema';
 export * from './notification.schema';
 export * from './auth.schema';
+export * from './socket.schema';
+export * from './resume.schema';

@@ -15,7 +15,6 @@ interface PassportProfile {
   name: string;
   email: string;
   branch?: string;
-  branch?: string;
   strikes?: number;
   improvementPlan?: {
     strengths: string[];

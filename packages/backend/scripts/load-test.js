@@ -1,77 +1,142 @@
 const { io } = require('socket.io-client');
 const os = require('os');
+const { performance } = require('perf_hooks');
 
 const SOCKET_URL = process.env.SOCKET_URL || 'http://localhost:5000';
-const CONCURRENT_CLIENTS = 2000;
+const CONCURRENT_STUDENTS = 1500;
+const CONCURRENT_HRS = 100;
 const BATCH_SIZE = 50; 
 const BATCH_DELAY_MS = 200;
+const DRIVE_ID = 'test_drive_123';
+const ROOM_ID = 'test_room_456'; 
+// Note: Normally ROOM_ID needs to exist in Mongo to resolve the name, but our socket defaults to 'Unknown Room' safely if not found.
 
-console.log(`Starting Load Test with ${CONCURRENT_CLIENTS} concurrent socket connections...`);
-const clients = [];
+console.log(`Starting Load Test | Students: ${CONCURRENT_STUDENTS} | HRs: ${CONCURRENT_HRS}...`);
+const studentClients = [];
+const hrClients = [];
+let adminClient = null;
+
 let connectionsEstablished = 0;
-let roomsAssigned = 0;
+let dispatchAlertsReceived = 0;
+let burstStartTime = 0;
+const latencies = [];
 
-function printMemoryStats() {
+function printSystemStats() {
   const mem = process.memoryUsage();
-  console.log(`\n--- System Memory ---`);
-  console.log(`RSS: ${Math.round(mem.rss / 1024 / 1024)} MB`);
-  console.log(`Heap Total: ${Math.round(mem.heapTotal / 1024 / 1024)} MB`);
-  console.log(`Heap Used: ${Math.round(mem.heapUsed / 1024 / 1024)} MB`);
-  console.log(`Connections: ${connectionsEstablished} | Rooms Assigned: ${roomsAssigned} | Target: ${CONCURRENT_CLIENTS}\n`);
+  console.log(`\n--- System Status ---`);
+  console.log(`RSS: ${Math.round(mem.rss / 1024 / 1024)} MB | Heap Used: ${Math.round(mem.heapUsed / 1024 / 1024)} MB`);
+  console.log(`Connections Active: ${connectionsEstablished} | Dispatches Rx by Admin: ${dispatchAlertsReceived} / ${CONCURRENT_HRS}\n`);
 }
 
-function spawnClient(id) {
+function spawnClient(id, role = 'student') {
   return new Promise((resolve) => {
-    // Force WebSocket transport to avoid polling overhead which isn't true load for our purposes
     const socket = io(SOCKET_URL, {
       transports: ['websocket'],
       reconnection: false,
-      query: { usn: `USN_LOAD_${id}`, role: 'student' }
+      query: { usn: `${role.toUpperCase()}_LOAD_${id}`, role }
     });
 
     socket.on('connect', () => {
       connectionsEstablished++;
-      // Immediately request to join drive and listen for assignments
-      socket.emit('student:join_drive', { driveId: 'drive_xyz', studentId: `ST_${id}` });
+      if (role === 'student') {
+        socket.emit('join:drive', DRIVE_ID);
+        // Student normal traffic noise
+        setInterval(() => socket.emit('ping'), 20000); 
+      } else if (role === 'hr') {
+        socket.emit('join:drive', DRIVE_ID);
+      }
       resolve(socket);
     });
 
-    socket.on('room:assigned', (data) => {
-      roomsAssigned++;
-    });
+    socket.on('disconnect', () => connectionsEstablished--);
+    socket.on('connect_error', (err) => resolve(null));
+  });
+}
 
-    socket.on('disconnect', () => {
-      connectionsEstablished--;
-    });
-    
-    socket.on('connect_error', (err) => {
-      console.warn(`[Client ${id}] Connection error: ${err.message}`);
-      resolve(socket);
+async function spawnAdminClient() {
+  return new Promise((resolve) => {
+    adminClient = io(SOCKET_URL, { transports: ['websocket'], reconnection: false, query: { role: 'admin' } });
+    adminClient.on('connect', () => {
+      connectionsEstablished++;
+      adminClient.emit('join:drive:admin', DRIVE_ID);
+      
+      adminClient.on('admin:dispatch_alert', (payload) => {
+        dispatchAlertsReceived++;
+        latencies.push(performance.now() - burstStartTime);
+      });
+      resolve(true);
     });
   });
 }
 
-async function runLoadTest() {
-  setInterval(printMemoryStats, 5000);
-
-  // Spawn in batches to prevent overwhelming OS ephemeral ports in one tick
-  for (let i = 0; i < CONCURRENT_CLIENTS; i += BATCH_SIZE) {
-    const batch = [];
-    for (let j = 0; j < BATCH_SIZE && (i + j) < CONCURRENT_CLIENTS; j++) {
-      batch.push(spawnClient(i + j));
+function fireHrBurst() {
+  console.log(`\n======================================================`);
+  console.log(`🔫 [BURST FIRING] ${CONCURRENT_HRS} HR Clients triggering 'hr:dispatch_request'...`);
+  console.log(`======================================================\n`);
+  
+  burstStartTime = performance.now();
+  
+  hrClients.forEach((hr, i) => {
+    if (hr) {
+      hr.emit('hr:dispatch_request', {
+        roomId: ROOM_ID,
+        driveId: DRIVE_ID,
+        hrEmail: `hr_${i}@bench.mark`,
+        requestType: 'technical'
+      });
     }
-    await Promise.all(batch).then(sockets => clients.push(...sockets));
+  });
+}
+
+async function runLoadTest() {
+  const statInterval = setInterval(printSystemStats, 3000);
+
+  // Spawn Admin
+  await spawnAdminClient();
+
+  // Spawn HRs 
+  for (let i = 0; i < CONCURRENT_HRS; i++) {
+    hrClients.push(await spawnClient(i, 'hr'));
+  }
+
+  // Spawn Students in batches for noise
+  for (let i = 0; i < CONCURRENT_STUDENTS; i += BATCH_SIZE) {
+    const batch = [];
+    for (let j = 0; j < BATCH_SIZE && (i + j) < CONCURRENT_STUDENTS; j++) {
+      batch.push(spawnClient(i + j, 'student'));
+    }
+    const sockets = await Promise.all(batch);
+    studentClients.push(...sockets.filter(Boolean));
     await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
   }
 
-  console.log(`\n✅ All ${CONCURRENT_CLIENTS} connection attempts dispatched.`);
+  console.log(`\n✅ Background connection mesh established.`);
   
-  // Keep alive for 60 seconds to process room assignments then teardown
+  // At Exactly 10 seconds post-mesh, Fire Burst
+  setTimeout(fireHrBurst, 10000);
+  
+  // Conclude 5 seconds post-burst
   setTimeout(() => {
-    console.log(`Load test concluded. Tearing down...`);
-    clients.forEach(c => c.disconnect());
+    clearInterval(statInterval);
+    
+    // Calculate P95 Latency
+    latencies.sort((a,b) => a - b);
+    const p95 = latencies.length > 0 ? latencies[Math.floor(latencies.length * 0.95)] : 0;
+    const avg = latencies.length > 0 ? (latencies.reduce((a,b)=>a+b, 0) / latencies.length) : 0;
+    
+    console.log(`\n🏁 Load Test Concluded`);
+    console.log(`--- Dispatch Delivery Metrics ---`);
+    console.log(`Dispatched: ${CONCURRENT_HRS}`);
+    console.log(`Delivered to Admin: ${dispatchAlertsReceived}`);
+    console.log(`Avg Latency: ${avg.toFixed(2)}ms`);
+    console.log(`P95 Latency: ${p95.toFixed(2)}ms`);
+    
+    console.log(`Tearing down sockets...`);
+    adminClient.disconnect();
+    hrClients.forEach(c => c?.disconnect());
+    studentClients.forEach(c => c?.disconnect());
     process.exit(0);
-  }, 60000);
+  }, 15000 + 10000); 
 }
 
 runLoadTest().catch(console.error);

@@ -34,6 +34,11 @@ export interface IStudentProfile {
     generatedAt: Date;
     driveId?: mongoose.Types.ObjectId;
   };
+  
+  // ATS Resume Pipeline
+  parsingStatus?: 'pending' | 'completed' | 'failed';
+  parsedResume?: any;
+  resumeUrl?: string;
 }
 
 const studentProfileSchema = new Schema({
@@ -69,7 +74,12 @@ const studentProfileSchema = new Schema({
     actionableNextSteps: [{ type: String }],
     generatedAt: { type: Date },
     driveId: { type: Schema.Types.ObjectId, ref: 'Drive' }
-  }
+  },
+
+  // ATS Resume Pipeline
+  parsingStatus: { type: String, enum: ['pending', 'completed', 'failed'] },
+  parsedResume: { type: Schema.Types.Mixed },
+  resumeUrl: { type: String }
 }, {
   timestamps: true
 });

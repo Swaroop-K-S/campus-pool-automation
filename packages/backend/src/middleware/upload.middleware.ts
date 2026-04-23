@@ -25,3 +25,9 @@ export const uploadApplicationFiles = multer({
   { name: 'resume', maxCount: 1 },
   { name: 'photo', maxCount: 1 }
 ]);
+
+export const uploadSingleResume = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }
+}).single('resume');

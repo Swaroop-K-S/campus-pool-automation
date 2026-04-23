@@ -2,14 +2,18 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: true,
+  fullyParallel: false,  // serial – we want to watch sequentially
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
+  retries: 0,
+  reporter: [['html'], ['list']],
   use: {
-    baseURL: 'http://localhost:5173',
-    trace: 'on-first-retry',
+    baseURL: 'http://localhost',   // Docker nginx on port 80
+    trace: 'on',
+    video: 'on',
+    screenshot: 'on',
+    headless: false,               // headed so we can watch the ghost in the machine
+    actionTimeout: 10_000,
+    navigationTimeout: 15_000,
   },
   projects: [
     {
@@ -17,9 +21,5 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'cd ../.. && npm run dev:frontend',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-  },
+  // No webServer block – frontend is already live in Docker
 });

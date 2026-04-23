@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { DriveModel, FormFieldModel, ApplicationModel } from '../models';
 import { getGridFSBucket } from '../services/gridfs.service';
 import { generateUniqueDriveId } from '../utils/generate-drive-id';
@@ -27,7 +27,7 @@ export const upsertFormFields = async (req: Request, res: Response) => {
 
     let formToken = drive.formToken;
     if (!formToken) {
-      formToken = Buffer.from(uuidv4()).toString('base64url');
+      formToken = Buffer.from(randomUUID()).toString('base64url');
       drive.formToken = formToken;
       await drive.save();
     }

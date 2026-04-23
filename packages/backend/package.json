@@ -33,6 +33,7 @@
     "multer-gridfs-storage": "^5.0.2",
     "node-cache": "^5.1.2",
     "nodemailer": "^8.0.3",
+    "pdf-parse": "^2.4.5",
     "qrcode": "^1.5.4",
     "rate-limit-redis": "^4.3.1",
     "socket.io": "^4.8.3",
@@ -56,6 +57,7 @@
     "@types/uuid": "^10.0.0",
     "@types/web-push": "^3.6.4",
     "nodemon": "^3.0.2",
+    "socket.io-client": "^4.8.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }

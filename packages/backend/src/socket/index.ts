@@ -4,11 +4,14 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { pubClient, subClient } from '../config/redis';
 import { RoomModel, DriveModel } from '../models';
+import { SosEventSchema, JoinDriveSchema, JoinAppSchema, JoinDriveQrSchema, DispatchRequestSchema } from '@campuspool/shared';
+import { checkSocketRateLimit } from './socket-rate-limit';
 
 let ioInstance: Server | null = null;
 
 export async function initSocket(httpServer: any) {
   const io = new Server(httpServer, {
+    maxHttpBufferSize: 1e6, // Hard cap incoming packets to 1MB to prevent memory exhaustion DDoS
     cors: { 
       origin: [env.FRONTEND_URL || 'http://localhost:5173', 'http://127.0.0.1:5173'], 
       methods: ['GET', 'POST'],
@@ -44,16 +47,28 @@ export async function initSocket(httpServer: any) {
   });
 
   io.on('connection', (socket) => {
-    socket.on('join:drive', (driveId: string) => {
-      socket.join(`drive:${driveId}`);
+    socket.on('join:drive', async (driveId: string) => {
+      if (!(await checkSocketRateLimit(socket, 'join:drive', 60))) return;
+      try {
+        const validated = JoinDriveSchema.parse(driveId);
+        socket.join(`drive:${validated}`);
+      } catch { /* Swallowing malformed parsing attempt */ }
     });
 
-    socket.on('join:app', (applicationId: string) => {
-      socket.join(`app:${applicationId}`);
+    socket.on('join:app', async (applicationId: string) => {
+      if (!(await checkSocketRateLimit(socket, 'join:app', 60))) return;
+      try {
+        const validated = JoinAppSchema.parse(applicationId);
+        socket.join(`app:${validated}`);
+      } catch { /* Swallowing malformed parsing attempt */ }
     });
 
-    socket.on('join:drive:qr', (driveId: string) => {
-      socket.join(`drive:${driveId}:qr`);
+    socket.on('join:drive:qr', async (driveId: string) => {
+      if (!(await checkSocketRateLimit(socket, 'join:drive:qr', 60))) return;
+      try {
+        const validated = JoinDriveQrSchema.parse(driveId);
+        socket.join(`drive:${validated}:qr`);
+      } catch { /* Swallowing malformed parsing attempt */ }
     });
 
     // Event Day: Megaphone / Mass Broadcast (Admin -> All in drive room)
@@ -68,7 +83,8 @@ export async function initSocket(httpServer: any) {
     // NOTE: Role guard removed — admin uses cookie auth so socket.data.user is not populated
     // (same reason as admin:broadcast above). Security is maintained by driveId scoping:
     // only the authenticated GodViewTab calls this event from inside the protected route.
-    socket.on('join:drive:admin', (driveId: string) => {
+    socket.on('join:drive:admin', async (driveId: string) => {
+      if (!(await checkSocketRateLimit(socket, 'join:drive:admin', 60))) return;
       if (driveId) socket.join(`drive:${driveId}:admin`);
     });
 
@@ -97,9 +113,45 @@ export async function initSocket(httpServer: any) {
       }
     });
 
+    // Event Day: HR Assistance Request (HR -> Admins)
+    socket.on('hr:dispatch_request', async (payload: any) => {
+      if (!(await checkSocketRateLimit(socket, 'hr:dispatch_request', 60))) return;
+
+      try {
+        const validated = DispatchRequestSchema.parse(payload);
+        
+        // Enrich with room details to provide tactical info to admins
+        const room = await RoomModel.findById(validated.roomId).select('name flexSpaceNumber').lean();
+        const roomName = room ? (room.name || (room as any).flexSpaceNumber || 'Unknown Room') : 'Unknown Room';
+
+        io.to(`drive:${validated.driveId}:admin`).emit('admin:dispatch_alert', {
+          ...validated,
+          roomName,
+          timestamp: new Date()
+        });
+      } catch (err) {
+        // Silently swallow malformed payloads to starve automated scanners
+        console.warn(`[SECURITY] Invalid payload dropped from socket ${socket.id} on 'hr:dispatch_request'`, err);
+      }
+    });
+
     // Event Day: SOS (Student -> Admins)
-    socket.on('student:sos', ({ applicationId, driveId, studentName, room, triageCategory }: any) => {
-      io.to(`drive:${driveId}:admin`).emit('admin:sos-alert', { applicationId, studentName, room, triageCategory, timestamp: new Date() });
+    socket.on('student:sos', async (payload: any) => {
+      if (!(await checkSocketRateLimit(socket, 'student:sos', 5))) return;
+
+      try {
+        const validated = SosEventSchema.parse(payload);
+        io.to(`drive:${validated.driveId}:admin`).emit('admin:sos-alert', { 
+          applicationId: validated.applicationId, 
+          studentName: validated.studentName, 
+          room: validated.room, 
+          triageCategory: validated.triageCategory, 
+          timestamp: new Date() 
+        });
+      } catch (err) {
+        // Silently swallow malformed or malicious payload injections.
+        console.warn(`[SECURITY] Invalid payload dropped from socket ${socket.id} on 'student:sos'`, err);
+      }
     });
   });
 

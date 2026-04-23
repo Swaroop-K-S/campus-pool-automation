@@ -1,13 +1,13 @@
 import QRCode from 'qrcode';
 import jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 const QR_SECRET = (process.env.JWT_ACCESS_SECRET || 'fallback_secret') + '_QR';
 const QR_EXPIRY = 35; // 35 seconds
 
 export function generateQRToken(driveId: string): string {
   return jwt.sign(
-    { driveId, nonce: uuidv4(), type: 'event_checkin' },
+    { driveId, nonce: randomUUID(), type: 'event_checkin' },
     QR_SECRET,
     { expiresIn: QR_EXPIRY }
   );

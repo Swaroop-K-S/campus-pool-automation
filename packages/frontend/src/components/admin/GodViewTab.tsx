@@ -148,6 +148,31 @@ export function GodViewTab({ drive, driveId, onUpdate }: Props) {
       addEvent({ type: 'system', message: data.isPaused ? '🚦 Drive PAUSED by admin' : '▶️ Drive RESUMED by admin', badge: data.isPaused ? 'PAUSED' : 'LIVE' });
     };
 
+    const onDispatchAlert = (data: any) => {
+      const { requestType, roomName, hrEmail } = data;
+      const typeIcons: any = { 'technical': '🖥️', 'refreshment': '☕', 'stationery': '📄', 'other': '🔔' };
+      const icon = typeIcons[requestType] || '🔔';
+
+      const message = `Assistance Required in Room ${roomName} (${hrEmail})`;
+      
+      if (requestType === 'technical') {
+        toast.error(`TECH EMERGENCY: Room ${roomName}\n${hrEmail}`, { 
+          icon, 
+          duration: Infinity,
+          position: 'top-center',
+          style: { minWidth: '350px', fontSize: '1.05rem', fontWeight: 'bold', border: '2px solid #ef4444' } 
+        });
+      } else {
+        toast(`${requestType.toUpperCase()} ALERT: Room ${roomName}`, { 
+          icon, 
+          duration: 4000,
+          position: 'top-right'
+        });
+      }
+      
+      addEvent({ type: 'system', message, badge: `HR: ${requestType.toUpperCase()}` });
+    };
+
     const onDriveCompleted = () => {
       addEvent({ type: 'system', message: '🎉 Drive COMPLETED — Final selection uploaded', badge: 'DONE' });
       onUpdate();
@@ -167,6 +192,7 @@ export function GodViewTab({ drive, driveId, onUpdate }: Props) {
     socket.on('event:walk_in_registered', onWalkIn);
     socket.on('drive:round_rotated', onRoundRotated);
     socket.on('drive:paused', onPaused);
+    socket.on('admin:dispatch_alert', onDispatchAlert);
     socket.on('drive:completed', onDriveCompleted);
     socket.on('drive:notify_complete', onNotifyComplete);
 
@@ -180,6 +206,7 @@ export function GodViewTab({ drive, driveId, onUpdate }: Props) {
       socket.off('event:walk_in_registered', onWalkIn);
       socket.off('drive:round_rotated', onRoundRotated);
       socket.off('drive:paused', onPaused);
+      socket.off('admin:dispatch_alert', onDispatchAlert);
       socket.off('drive:completed', onDriveCompleted);
       socket.off('drive:notify_complete', onNotifyComplete);
     };

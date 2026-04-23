@@ -1,7 +1,102 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Loader2, CheckCircle, XCircle, User, FileText, Star, Mic, UserMinus, Play } from 'lucide-react';
+import { Loader2, CheckCircle,XCircle,User,FileText,Star,Mic,UserMinus,Play,LifeBuoy,Sparkles } from 'lucide-react';
 import { useSocket } from '../../hooks/use-socket';
+
+const ATSCandidateCard = ({ student }: { student: any }) => {
+  const { parsedResume, parsingStatus, data } = student;
+
+  if (parsingStatus === 'pending') {
+    return (
+      <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-center min-h-[100px] mb-8">
+        <Loader2 className="animate-spin text-indigo-500 w-6 h-6 mr-3" />
+        <span className="text-slate-500 font-medium text-sm">AI Agent is parsing resume...</span>
+      </div>
+    );
+  }
+
+  if (parsingStatus === 'failed' || !parsedResume) {
+    if (!data?.resumeUrl) return null;
+    return (
+      <div className="bg-rose-50 p-5 rounded-3xl border border-rose-100 shadow-sm mb-8 text-center mt-4">
+        <p className="text-rose-600 font-medium text-sm mb-3">AI parsing was unsuccessful or no structured resume found.</p>
+        <a href={data.resumeUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 border border-rose-200 px-4 py-2 rounded-xl transition-colors">
+          <FileText size={16} /> View Original PDF
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm mb-8 mt-4">
+      <div className="flex items-center justify-between mb-6">
+         <h3 className="font-black text-slate-800 text-sm tracking-wide flex items-center gap-2">
+            <span className="bg-indigo-600 text-white p-1 rounded-md"><Sparkles size={14} /></span> 
+            AI Extracted Profile
+         </h3>
+         {data?.resumeUrl && (
+            <a href={data.resumeUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 shadow-sm">
+              <FileText size={14} /> Original
+            </a>
+         )}
+      </div>
+
+      {/* Skills list */}
+      {parsedResume.skills && parsedResume.skills.length > 0 && (
+        <div className="mb-5">
+           <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-2">Verified Skills</p>
+           <div className="flex flex-wrap gap-2">
+              {parsedResume.skills.map((skill: string, i: number) => (
+                <span key={i} className="px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold text-xs rounded-lg shadow-sm">
+                   {skill}
+                </span>
+              ))}
+           </div>
+        </div>
+      )}
+
+      {/* Projects */}
+      {parsedResume.projects && parsedResume.projects.length > 0 && (
+        <div className="mb-5">
+           <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-2">Key Projects</p>
+           <div className="space-y-3">
+              {parsedResume.projects.map((proj: any, i: number) => (
+                <div key={i} className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                   <h4 className="font-bold text-slate-800 text-sm">{proj.title}</h4>
+                   <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{proj.description}</p>
+                   {proj.techStack && proj.techStack.length > 0 && (
+                     <div className="flex flex-wrap gap-1.5 mt-3">
+                        {proj.techStack.map((tech: string, j: number) => (
+                          <span key={j} className="text-[10px] font-bold text-slate-500 bg-slate-200/50 border border-slate-200 px-2 py-0.5 rounded-md">{tech}</span>
+                        ))}
+                     </div>
+                   )}
+                </div>
+              ))}
+           </div>
+        </div>
+      )}
+
+      {/* Education */}
+      {parsedResume.education && parsedResume.education.length > 0 && (
+        <div>
+           <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-2">Education</p>
+           <ul className="space-y-2">
+              {parsedResume.education.map((edu: any, i: number) => (
+                <li key={i} className="flex justify-between items-start text-sm bg-slate-50 border border-slate-100 rounded-xl p-3">
+                   <div>
+                     <p className="font-bold text-slate-800">{edu.degree}</p>
+                     <p className="text-xs text-slate-500 mt-0.5">{edu.institution}</p>
+                   </div>
+                   <span className="text-[10px] font-black text-slate-400 bg-slate-100 border border-slate-200 px-2 py-1 rounded-md">{edu.year}</span>
+                </li>
+              ))}
+           </ul>
+        </div>
+      )}
+    </div>
+  );
+};
 import toast from 'react-hot-toast';
 
 const StudentCard = ({ student, onEvaluate, onMarkAbsent, onSummon, variant = 'waiting' }: any) => {
@@ -100,6 +195,9 @@ export default function InvigilatorPortal() {
   // Evaluation Modal State
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Dispatch Modal State
+  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
 
   // Voice Notes State
   const [isRecording, setIsRecording] = useState(false);
@@ -285,6 +383,18 @@ export default function InvigilatorPortal() {
     toast.success(`Sent summon notification to ${studentObj.data?.name?.split(' ')[0] || 'student'}!`);
   };
 
+  const handleDispatchRequest = (type: 'technical' | 'refreshment' | 'stationery' | 'other') => {
+    if (!data?.driveDetails?._id || !data?.roomId) return;
+    socket.emit('hr:dispatch_request', {
+      roomId: data.roomId,
+      driveId: data.driveDetails._id,
+      hrEmail: evalName || 'anonymous-hr@campuspool.in',
+      requestType: type
+    });
+    toast.success('Assistance request sent to admins.');
+    setIsDispatchModalOpen(false);
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin w-8 h-8 text-indigo-600" /></div>;
   if (!data) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-medium">Invalid or Expired Link</div>;
 
@@ -453,14 +563,11 @@ export default function InvigilatorPortal() {
                   <h3 className="font-black text-2xl text-slate-800 mb-1">{selectedStudent.data?.name || selectedStudent.data?.fullName}</h3>
                   <p className="text-indigo-600 font-bold text-sm tracking-wide">{selectedStudent.data?.usn}</p>
                   <p className="text-slate-500 font-medium text-xs mt-1">{selectedStudent.data?.branch}</p>
-
-                  {selectedStudent.data?.resumeUrl && (
-                    <a href={selectedStudent.data.resumeUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-4 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-4 py-2 rounded-xl transition-colors">
-                      <FileText size={16} /> View Attached Resume
-                    </a>
-                  )}
                 </div>
               </div>
+
+              {/* AI Resume Profile Display */}
+              <ATSCandidateCard student={selectedStudent} />
 
               <div className="pt-2">
                 <h3 className="font-black text-slate-800 mb-5 text-sm uppercase tracking-widest flex items-center justify-between">
@@ -575,6 +682,58 @@ export default function InvigilatorPortal() {
               >
                 {submitting ? <Loader2 size={24} className="animate-spin" /> : <CheckCircle size={24} />}
                 <span className="text-[11px] tracking-widest uppercase mt-0.5">Approve & Advance</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Floating Action Button for HR Dispatch */}
+      <button
+        onClick={() => setIsDispatchModalOpen(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(79,70,229,0.4)] hover:bg-indigo-700 hover:scale-105 active:scale-95 transition-all z-40 border-2 border-white"
+      >
+        <LifeBuoy size={24} />
+      </button>
+
+      {/* Dispatch Modal */}
+      {isDispatchModalOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white rounded-t-3xl shadow-2xl flex flex-col animate-in slide-in-from-bottom-full duration-300 p-6 pb-12">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-black text-slate-800 text-xl flex items-center gap-2">
+                <LifeBuoy className="text-indigo-600" size={24} />
+                Require Assistance?
+              </h2>
+              <button onClick={() => setIsDispatchModalOpen(false)} className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
+                <XCircle size={20} />
+              </button>
+            </div>
+            
+            <p className="text-slate-500 mb-6 text-sm">Tap an option below to instantly notify the floor admins. We will dispatch a volunteer to Room {data?.roomName} immediately.</p>
+
+            <div className="flex flex-col gap-3">
+              <button onClick={() => handleDispatchRequest('technical')} className="flex items-center gap-4 p-4 bg-rose-50 border border-rose-100 rounded-2xl active:scale-[0.98] transition-transform">
+                <div className="text-2xl">🖥️</div>
+                <div className="text-left">
+                  <h4 className="font-bold text-rose-900 text-base">IT / Tech Support</h4>
+                  <p className="text-rose-600/80 text-xs font-medium">Tablet issues, WiFi down, or system crash.</p>
+                </div>
+              </button>
+              
+              <button onClick={() => handleDispatchRequest('refreshment')} className="flex items-center gap-4 p-4 bg-amber-50 border border-amber-100 rounded-2xl active:scale-[0.98] transition-transform">
+                <div className="text-2xl">☕</div>
+                <div className="text-left">
+                  <h4 className="font-bold text-amber-900 text-base">Water / Refreshment</h4>
+                  <p className="text-amber-600/80 text-xs font-medium">Request water bottle, coffee, or tea.</p>
+                </div>
+              </button>
+
+              <button onClick={() => handleDispatchRequest('stationery')} className="flex items-center gap-4 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl active:scale-[0.98] transition-transform">
+                <div className="text-2xl">📄</div>
+                <div className="text-left">
+                  <h4 className="font-bold text-emerald-900 text-base">Printout / Stationery</h4>
+                  <p className="text-emerald-600/80 text-xs font-medium">Need more rubric sheets or pens.</p>
+                </div>
               </button>
             </div>
           </div>

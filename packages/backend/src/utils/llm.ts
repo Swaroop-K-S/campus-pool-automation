@@ -22,6 +22,23 @@ export async function llmInvoke(prompt: string): Promise<string> {
     });
   }
 
+  // If prompt is for ATS Resume Extraction
+  if (prompt.includes("HR ATS Parser")) {
+    return JSON.stringify({
+      skills: ["React", "TypeScript", "Node.js", "Docker", "Mongoose"],
+      education: [
+        { degree: "B.Tech in Computer Science", institution: "PES University", year: "2026" }
+      ],
+      projects: [
+        { 
+          title: "Real-time Operations Dashboard", 
+          techStack: ["React", "Redis", "Sockets"], 
+          description: "Engineered a low-latency websocket queue for large-scale operations under load." 
+        }
+      ]
+    });
+  }
+
   // Fallback (e.g. for Room Assignment Match Score)
   return JSON.stringify({ matchReason: "Strong candidate matching role requirements.", matchScore: 90 });
 }

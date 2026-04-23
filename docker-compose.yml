@@ -36,7 +36,7 @@ services:
       - MONGODB_URI=mongodb://mongodb:27017/campuspool
       - REDIS_URL=redis://redis:6379
       # Map additional missing ENVs dynamically as needed during deploy
-      - JWT_ACCESS_SECRET=docker-compose-secret-key
+      - JWT_ACCESS_SECRET=campuspool-docker-compose-secret-key-32chars
     depends_on:
       - mongodb
       - redis

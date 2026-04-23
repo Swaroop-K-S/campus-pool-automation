@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB } from 'idb';
+import type { DBSchema, IDBPDatabase } from 'idb';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuthStore } from './auth.store';
 import { api } from '../services/api';

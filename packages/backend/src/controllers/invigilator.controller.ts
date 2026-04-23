@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { RoomModel, DriveModel, ApplicationModel } from '../models';
+import { RoomModel, DriveModel, ApplicationModel, StudentProfileModel } from '../models';
 import { EvaluationModel } from '../models/evaluation.model';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
@@ -63,8 +63,17 @@ export const getDashboard = async (req: Request, res: Response): Promise<void> =
 
     const evaluatedAppIds = evaluatedApps.map((e: any) => e.applicationId.toString());
 
-    // Separate into Waiting vs Evaluated
-    const waiting = applications.filter((app: any) => !evaluatedAppIds.includes(app._id.toString()));
+    // Pull down AI Parsed Resumes from StudentProfiles for enriched display
+    const usnList = applications.map((app: any) => app.data?.usn || app.data?.USN).filter(Boolean);
+    const profiles = await StudentProfileModel.find({ usn: { $in: usnList } }).select('usn parsedResume parsingStatus').lean();
+
+    // Separate into Waiting vs Evaluated and attach external profile data
+    const waiting = applications.filter((app: any) => !evaluatedAppIds.includes(app._id.toString())).map((app: any) => {
+      const usn = app.data?.usn || app.data?.USN;
+      const profile = profiles.find((p: any) => p.usn === usn);
+      return { ...app, parsedResume: profile?.parsedResume || null, parsingStatus: profile?.parsingStatus || null };
+    });
+    
     const evaluated = applications.filter((app: any) => evaluatedAppIds.includes(app._id.toString())).map((app: any) => {
       const evalData = evaluatedApps.find((e: any) => e.applicationId.toString() === app._id.toString());
       return { ...app, decision: evalData?.decision };

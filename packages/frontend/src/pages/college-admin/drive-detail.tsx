@@ -8,7 +8,7 @@ import {
   Image as ImageIcon, GripVertical, Trash2, Edit2, Copy, Lock, Plus, X, UploadCloud, Mail,
   Presentation, PenTool, Code2, Users, Cpu, UserCheck, Download, Clock, Check, Search, Eye,
   Send, Loader2, Info, MessageSquare, SplitSquareHorizontal, UserPlus, Play, QrCode, Menu, BarChart2,
-  AlertTriangle, ArrowLeft, RefreshCcw, Minus, CheckCircle, Monitor, AlertCircle, BookOpen, Save, ShieldAlert
+  AlertTriangle, ArrowLeft, RefreshCcw, Minus, CheckCircle, Monitor, AlertCircle, BookOpen, Save, ShieldAlert, List, Shield
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { useSocket } from '../../hooks/use-socket';
