@@ -25,6 +25,7 @@ import { GodViewTab } from '../../components/admin/GodViewTab';
 import { DrivePreflightModal } from '../../components/admin/DrivePreflightModal';
 import { MobileAdminBar } from '../../components/admin/MobileAdminBar';
 import { DriveTemplateManager } from '../../components/admin/DriveTemplateManager';
+import { LaunchControlMatrix } from '../../components/admin/LaunchControlMatrix';
 
 const FIELD_TYPES = [
   { type: 'text', label: 'Text Field', icon: AlignLeft },
@@ -1175,7 +1176,7 @@ export default function DriveDetailPage() {
       <div className="bg-white/80 backdrop-blur-md border-b border-slate-200/60 px-8 flex gap-8 shrink-0 relative z-10 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)] overflow-x-auto hide-scrollbar">
         <div className="max-w-7xl mx-auto flex gap-6 w-full h-14">
           
-          {[{ id: 'Config', label: 'Engine Setup' }, { id: 'Pipeline', label: 'The Pipeline' }, { id: 'CommandCenter', label: 'Command Center' }].map(hub => (
+          {[{ id: 'Config', label: 'Engine Setup' }, { id: 'Pipeline', label: 'The Pipeline' }, { id: 'CommandCenter', label: 'Command Center' }, { id: 'LaunchControl', label: '🚀 Launch Control' }].map(hub => (
             <button 
               key={hub.id}
               onClick={() => { setActiveHub(hub.id); if(hub.id === 'Config') setActiveTab('Form Builder'); else if(hub.id === 'Pipeline') setActiveTab('Overview'); }}
@@ -1270,6 +1271,12 @@ export default function DriveDetailPage() {
           </div>
         )}
 
+
+        {activeHub === 'LaunchControl' && (
+          <div className="flex-1 overflow-hidden h-full">
+            <LaunchControlMatrix driveId={driveId!} />
+          </div>
+        )}
         {activeHub === 'Pipeline' && activeTab === 'Overview' && (
           <div className="p-8 overflow-y-auto custom-scrollbar h-full flex flex-col gap-8 bg-[#F8FAFC]">
             

@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
+import { z } from 'zod';
 import { DriveModel, ApplicationModel, FormFieldModel, RoomModel, StudentProfileModel, UserModel } from '../models';
 import mongoose from 'mongoose';
 import exceljs from 'exceljs';
@@ -901,3 +903,76 @@ export const getDriveFunnel = asyncHandler(async (req: Request, res: Response) =
   res.status(200).json({ success: true, data: funnel, cached: false });
 });
 
+// ── Zod schema for the dispatch-hrs payload ─────────────────────────────────
+const dispatchHRsSchema = z.object({
+  allocations: z.array(z.object({
+    hrEmail: z.string().email('Invalid HR email'),
+    hrName:  z.string().min(1, 'HR name is required'),
+    roomId:  z.string().min(1, 'roomId is required'),
+  })).min(1, 'At least one allocation is required'),
+});
+
+// POST /api/v1/drives/:driveId/dispatch-hrs
+export const dispatchHRs = asyncHandler(async (req: Request, res: Response) => {
+  const { driveId } = req.params;
+
+  // 1. Validate payload
+  const parsed = dispatchHRsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, errors: parsed.error.flatten().fieldErrors });
+  }
+
+  const { allocations } = parsed.data;
+
+  // 2. Confirm drive exists
+  const drive = await DriveModel.findById(driveId).lean();
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  const secret = process.env.JWT_ACCESS_SECRET!;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost';
+
+  const results: { hrEmail: string; hrName: string; roomId: string; token: string; magicLink: string }[] = [];
+
+  for (const alloc of allocations) {
+    const { hrEmail, hrName, roomId } = alloc;
+
+    // 3. Generate a 24-hour panelist JWT
+    const payload = {
+      email:   hrEmail,
+      name:    hrName,
+      roomId,
+      driveId,
+      role:    'invigilator',
+    };
+    const token = jwt.sign(payload, secret, { expiresIn: '24h' });
+    const magicLink = `${frontendUrl}/invigilator/${token}`;
+
+    // 4. Upsert panelist into the Room document (avoid duplicate entries)
+    await RoomModel.findByIdAndUpdate(
+      roomId,
+      {
+        $addToSet: {
+          panelists: { name: hrName, email: hrEmail, expertise: [] },
+        },
+      },
+      { new: true },
+    );
+
+    results.push({ hrEmail, hrName, roomId, token, magicLink });
+  }
+
+  // 5. Audit log
+  await logAuditEvent({
+    driveId,
+    actorId:  (req as any).user._id,
+    actorRole: (req as any).user.role,
+    action:   'DISPATCH_HR_MAGIC_LINKS',
+    metadata: { count: results.length, emails: results.map(r => r.hrEmail) },
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: `${results.length} Magic Link(s) generated. Copy and send them to the HR panelists.`,
+    data: results,
+  });
+});

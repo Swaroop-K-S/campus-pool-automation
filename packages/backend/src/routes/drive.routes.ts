@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive, archiveDrive, scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted, finalizeDrive, updateSettings, toggleDrivePause, purgeNoShows, getAuditLogs, checkConflict, matchCandidates, getDriveFunnel } from '../controllers/drive.controller';
+import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive, archiveDrive, scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted, finalizeDrive, updateSettings, toggleDrivePause, purgeNoShows, getAuditLogs, checkConflict, matchCandidates, getDriveFunnel, dispatchHRs } from '../controllers/drive.controller';
 import { generateNOC, generateOfferLetter } from '../controllers/noc.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { authorizeRoles } from '../middleware/rbac.middleware';
@@ -36,6 +36,7 @@ router.get('/:driveId/noc/:appId', authorizeRoles('admin', 'superadmin'), genera
 router.get('/:driveId/offer/:appId', authorizeRoles('admin', 'superadmin'), generateOfferLetter);
 router.get('/:driveId/match', authorizeRoles('admin', 'superadmin'), matchCandidates);
 router.get('/:driveId/funnel', authorizeRoles('admin', 'superadmin'), getDriveFunnel);
+router.post('/:driveId/dispatch-hrs', authorizeRoles('admin', 'superadmin'), dispatchHRs);
 
 // The original file had a duplicate import for these, consolidating them into the first import.
 // import { scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted } from '../controllers/drive.controller';
