@@ -1,24 +1,9 @@
 import { env } from '../config/env';
 
-/**
- * llmInvoke
- *
- * Unified LLM gateway. Routing priority:
- *
- *   1. LOCAL_AI_URL is set → Ollama /api/generate (on-premise, privacy-compliant)
- *   2. Fallback            → Deterministic stub (dev / no-cloud mode)
- *
- * Cloud vendors (OpenAI / Anthropic) can be inserted in slot 2 before the stub
- * by checking for OPENAI_API_KEY / ANTHROPIC_API_KEY env vars if needed in future.
- *
- * @param prompt  Full prompt string (system + user content combined)
- * @param signal  Optional AbortSignal so callers can enforce their own timeout
- */
 export async function llmInvoke(
   prompt: string,
   signal?: AbortSignal,
 ): Promise<string> {
-
   // ── Route 1: Local Ollama ──────────────────────────────────────────────────
   if (env.LOCAL_AI_URL) {
     return invokeOllama(env.LOCAL_AI_URL, prompt, signal);
@@ -29,13 +14,6 @@ export async function llmInvoke(
 }
 
 // ─── Ollama implementation ────────────────────────────────────────────────────
-
-/**
- * Calls the Ollama /api/generate endpoint in non-streaming mode.
- * Handles two expected failure modes gracefully:
- *   - 503 / ECONNREFUSED → model still loading → caller should retry via BullMQ
- *   - Partial / invalid JSON in response → throws ParseError → BullMQ retry
- */
 async function invokeOllama(
   url: string,
   prompt: string,
@@ -52,15 +30,14 @@ async function invokeOllama(
       body: JSON.stringify({
         model:  MODEL,
         prompt,
-        stream: false,          // wait for the complete response, not SSE chunks
+        stream: false,
         options: {
           temperature: 0.1,     // low temp = deterministic, schema-compliant JSON
-          num_predict: 1024,    // hard cap on tokens — resumes are small
+          num_predict: 1024,    // hard cap on tokens
         },
       }),
     });
   } catch (fetchError: any) {
-    // ECONNREFUSED / timeout while Ollama is still loading the model into VRAM
     const msg = fetchError?.message ?? String(fetchError);
     throw new OllamaUnavailableError(
       `Ollama connection failed (model may still be loading): ${msg}`,
@@ -70,7 +47,6 @@ async function invokeOllama(
   if (!response.ok) {
     const body = await response.text().catch(() => '');
     if (response.status === 503 || response.status === 502) {
-      // Retryable — model not warm yet
       throw new OllamaUnavailableError(
         `Ollama returned ${response.status} — model is not ready yet. BullMQ will retry.`,
       );
@@ -84,11 +60,9 @@ async function invokeOllama(
     throw new Error('Ollama returned an empty response field.');
   }
 
-  // Strip any accidental markdown fences the model inserted despite instructions
   return stripMarkdownFences(json.response);
 }
 
-/** Removes ```json ... ``` or ``` ... ``` wrappers a model occasionally adds */
 function stripMarkdownFences(raw: string): string {
   return raw
     .replace(/^```(?:json)?\s*/i, '')
@@ -96,7 +70,6 @@ function stripMarkdownFences(raw: string): string {
     .trim();
 }
 
-/** Sentinel error class — BullMQ can inspect the name to decide retry strategy */
 export class OllamaUnavailableError extends Error {
   constructor(msg: string) {
     super(msg);
@@ -105,28 +78,9 @@ export class OllamaUnavailableError extends Error {
 }
 
 // ─── Deterministic stub (no cloud, no Docker) ────────────────────────────────
-
 async function invokeStub(prompt: string): Promise<string> {
-  // Simulate realistic inference latency
   await new Promise((r) => setTimeout(r, 500));
-
-  // Simulate occasional model hallucination to test BullMQ retry path (5% chance)
-  if (Math.random() > 0.95) {
-    throw new Error('LLM Stub: simulated hallucination/timeout for resilience testing');
-  }
-
-  if (prompt.includes('career mentor') || prompt.includes('Improvement Plan')) {
-    return JSON.stringify({
-      strengths:          ['Strong problem-solving methodology', 'Clear communication of complex ideas'],
-      criticalWeakness:   'Requires deeper optimization knowledge for large-scale systemic design',
-      actionableNextSteps: [
-        'Review advanced caching patterns (Redis/Memcached)',
-        'Practice highly scalable system design questions',
-        'Engage more confidently when explaining trade-offs',
-      ],
-    });
-  }
-
+  
   if (prompt.includes('HR ATS Parser')) {
     return JSON.stringify({
       skills:    ['React', 'TypeScript', 'Node.js', 'Docker', 'Mongoose'],
@@ -139,6 +93,5 @@ async function invokeStub(prompt: string): Promise<string> {
     });
   }
 
-  // Fallback (e.g. Room Assignment Match Score)
   return JSON.stringify({ matchReason: 'Strong candidate matching role requirements.', matchScore: 90 });
 }

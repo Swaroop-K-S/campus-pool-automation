@@ -25,7 +25,7 @@ import { GodViewTab } from '../../components/admin/GodViewTab';
 import { DrivePreflightModal } from '../../components/admin/DrivePreflightModal';
 import { MobileAdminBar } from '../../components/admin/MobileAdminBar';
 import { DriveTemplateManager } from '../../components/admin/DriveTemplateManager';
-import { LaunchControlMatrix } from '../../components/admin/LaunchControlMatrix';
+import { LaunchControlMatrix } from '../../components/domain/LaunchControlMatrix';
 
 const FIELD_TYPES = [
   { type: 'text', label: 'Text Field', icon: AlignLeft },

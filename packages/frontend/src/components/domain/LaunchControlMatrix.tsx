@@ -9,14 +9,7 @@ import {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface Room {
-  _id: string;
-  name: string;
-  round: string;
-  capacity: number;
-  isLocked: boolean;
-  panelists: { name: string; email: string }[];
-}
+import type { Room } from '@campuspool/shared';
 
 interface AllocationRow {
   roomId: string;
@@ -123,7 +116,7 @@ export function LaunchControlMatrix({ driveId }: LaunchControlMatrixProps) {
       setRooms(roomList);
       // Pre-populate allocation rows
       setAllocations(
-        roomList.map(r => ({ roomId: r._id, hrName: '', hrEmail: '' }))
+        roomList.map(r => ({ roomId: r._id as string, hrName: '', hrEmail: '' }))
       );
     } catch {
       toast.error('Failed to load rooms.');
@@ -241,7 +234,7 @@ export function LaunchControlMatrix({ driveId }: LaunchControlMatrixProps) {
                       <p className="font-black text-slate-800">{room.name}</p>
                       <p className="text-xs text-slate-500 font-medium">
                         {room.round} &bull; Capacity: {room.capacity}
-                        {room.isLocked && (
+                        {(room as any).isLocked && (
                           <span className="ml-2 text-rose-500 font-bold">🔒 Locked</span>
                         )}
                       </p>
@@ -268,7 +261,7 @@ export function LaunchControlMatrix({ driveId }: LaunchControlMatrixProps) {
                         type="text"
                         placeholder="e.g. Priya Sharma"
                         value={alloc?.hrName ?? ''}
-                        onChange={e => updateAlloc(room._id, 'hrName', e.target.value)}
+                        onChange={e => updateAlloc(room._id!, 'hrName', e.target.value)}
                         className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"
                       />
                     </div>
@@ -280,7 +273,7 @@ export function LaunchControlMatrix({ driveId }: LaunchControlMatrixProps) {
                         type="email"
                         placeholder="priya@company.com"
                         value={alloc?.hrEmail ?? ''}
-                        onChange={e => updateAlloc(room._id, 'hrEmail', e.target.value)}
+                        onChange={e => updateAlloc(room._id!, 'hrEmail', e.target.value)}
                         className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"
                       />
                     </div>

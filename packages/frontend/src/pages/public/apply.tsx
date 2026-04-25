@@ -495,8 +495,8 @@ export default function PublicApplyPage() {
               if (field.type === 'page_break') return null;
 
               // Hide conditionally based on education path
-              if (field.id === 'field_twelfth' && educationPath !== '12th Standard / PUC') return null;
-              if (field.id === 'field_diploma' && educationPath !== 'Diploma (Lateral Entry)') return null;
+              if (field.id === 'field_twelfth' && educationPath !== 'puc') return null;
+              if (field.id === 'field_diploma' && educationPath !== 'diploma') return null;
 
               const isOnCurrentPage = pages[currentPage]?.fields.some(f => f.id === field.id);
 

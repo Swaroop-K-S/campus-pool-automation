@@ -68,7 +68,7 @@ async function seed() {
   log('✅ Connected to MongoDB');
 
   // ── 1. College (idempotent — reuse if already seeded) ────────────────────
-  let college = await CollegeModel.findOne({ name: 'Demo College of Engineering' }).lean();
+  let college: any = await CollegeModel.findOne({ name: 'Demo College of Engineering' }).lean();
 
   if (!college) {
     college = await CollegeModel.create({
@@ -81,7 +81,7 @@ async function seed() {
     log(`ℹ️  College already exists: ${college.name}`);
   }
 
-  const collegeId = (college as any)._id as mongoose.Types.ObjectId;
+  const collegeId = college._id as mongoose.Types.ObjectId;
 
   // ── 2. Admin User (idempotent) ────────────────────────────────────────────
   const existingAdmin = await UserModel.findOne({ email: 'admin@campuspool.in' });

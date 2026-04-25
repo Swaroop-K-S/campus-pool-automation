@@ -3,7 +3,8 @@ import multer from 'multer';
 import { authenticate } from '../middleware/auth.middleware';
 import { driveGuard } from '../middleware/drive-guard.middleware';
 import { authorizeRoles } from '../middleware/rbac.middleware';
-import { updateEventSetup, getEventSetup, createRoom, getRooms, getRoomWithStudents, updateRoom, deleteRoom, activateRound, completeRound, startEventDay, advanceRound, advancePresentStudents, updateRoomCapacity, purgeNoShows, walkInRegistration, getProjectorStats, lockRoom, transferStudent, getRoomEWT, rotateRooms, getRoundStudents, finalSelection, broadcastMessage } from '../controllers/event.controller';
+import { updateEventSetup, getEventSetup, activateRound, completeRound, startEventDay, advanceRound, advancePresentStudents, updateRoomCapacity, purgeNoShows, walkInRegistration, getProjectorStats, lockRoom, transferStudent, getRoomEWT, rotateRooms, getRoundStudents, finalSelection, broadcastMessage } from '../controllers/event.controller';
+import { createRoom, getRooms, getRoomWithStudents, updateRoom, deleteRoom } from '../controllers/room.controller';
 
 const router = Router({ mergeParams: true });
 const upload = multer({ storage: multer.memoryStorage() });

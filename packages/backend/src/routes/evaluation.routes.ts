@@ -1,5 +1,5 @@
 import express from 'express';
-import { generateMagicLink, getDashboard, evaluateStudent } from '../controllers/invigilator.controller';
+import { generateMagicLink, getDashboard, evaluateStudent } from '../controllers/evaluation.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { magicLinkAuth } from '../middleware/magic-link.middleware';
 

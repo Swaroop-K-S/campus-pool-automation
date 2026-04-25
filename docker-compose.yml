@@ -35,7 +35,6 @@ services:
       - PORT=8080
       - MONGODB_URI=mongodb://mongodb:27017/campuspool
       - REDIS_URL=redis://redis:6379
-      # Map additional missing ENVs dynamically as needed during deploy
       - JWT_ACCESS_SECRET=campuspool-docker-compose-secret-key-32chars
       - LOCAL_AI_URL=http://ollama:11434/api/generate
     depends_on:

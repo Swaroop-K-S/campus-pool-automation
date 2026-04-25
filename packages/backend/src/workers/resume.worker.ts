@@ -5,8 +5,6 @@ import { llmInvoke, OllamaUnavailableError } from '../utils/llm';
 
 export const resumeParsingQueue = new Queue('resumeParsingQueue', { connection: redisClient });
 
-// ─── BullMQ Worker ───────────────────────────────────────────────────────────
-
 export const resumeParsingWorker = new Worker(
   'resumeParsingQueue',
   async (job: Job) => {
@@ -16,12 +14,8 @@ export const resumeParsingWorker = new Worker(
     const profile = await StudentProfileModel.findOne({ usn });
     if (!profile) throw new Error(`[Resume Worker] Student profile not found for USN: ${usn}`);
 
-    // Mark as pending so the UI shows a loading skeleton
     await StudentProfileModel.findByIdAndUpdate(profile._id, { parsingStatus: 'pending' });
 
-    // ── Prompt Engineering: Strict JSON + one-shot example ─────────────────
-    // Local models (Gemma 2B, LLaMA 3.2) hallucinate JSON structure very easily.
-    // A one-shot example dramatically improves schema compliance without fine-tuning.
     const prompt = buildAtsPrompt(rawText);
 
     // ── Timeout: 45s for local model (Ollama GPU warm-up), 15s for cloud stub ──
@@ -34,18 +28,13 @@ export const resumeParsingWorker = new Worker(
       responseText = await llmInvoke(prompt, abortController.signal);
     } catch (err) {
       clearTimeout(timeoutHandle);
-
-      // OllamaUnavailableError = model still loading → let BullMQ retry
       if (err instanceof OllamaUnavailableError) {
         console.warn(`[Resume Worker] Ollama not ready yet for ${usn}. BullMQ will retry.`);
-        throw err; // re-throw so BullMQ applies the backoff schedule
+        throw err; 
       }
-
-      // AbortError = our own timeout fired
       if ((err as any)?.name === 'AbortError') {
         throw new Error(`[Resume Worker] LLM timeout after ${TIMEOUT_MS}ms for USN ${usn}`);
       }
-
       throw err;
     } finally {
       clearTimeout(timeoutHandle);
@@ -61,7 +50,6 @@ export const resumeParsingWorker = new Worker(
       );
     }
 
-    // Defensive normalisation — local models sometimes omit keys
     const normalised = {
       skills:    Array.isArray(parsedData.skills)    ? parsedData.skills    : [],
       education: Array.isArray(parsedData.education) ? parsedData.education : [],
@@ -80,11 +68,6 @@ export const resumeParsingWorker = new Worker(
   },
   {
     connection: redisClient,
-    // Retry schedule designed for Ollama cold-start:
-    //   Attempt 1: immediate
-    //   Attempt 2: +10s  (model may still be loading weights)
-    //   Attempt 3: +30s
-    //   Attempt 4: +60s  (final attempt — if model is not up by now, fail gracefully)
     settings: {
       backoffStrategy: (attemptsMade: number) => {
         const delays = [0, 10_000, 30_000, 60_000];
@@ -98,36 +81,22 @@ resumeParsingWorker.on('failed', async (job, err) => {
   if (!job) return;
   const { usn } = job.data as { usn: string };
   console.error(`[Resume Worker] ❌ Job permanently failed for ${usn}:`, err.message);
-  // Mark as failed so the invigilator UI shows a "PDF fallback" indicator
   await StudentProfileModel.findOneAndUpdate({ usn }, { $set: { parsingStatus: 'failed' } });
 });
-
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function enqueueResumeParsing(usn: string, rawText: string) {
   return resumeParsingQueue.add(
     'extract-json-from-resume',
     { usn, rawText },
     {
-      attempts:      4,          // 4 total attempts (handles Ollama cold-start window)
+      attempts:      4,
       removeOnComplete: true,
-      removeOnFail:  false,      // keep failed jobs for post-mortem inspection
+      removeOnFail:  false,
       backoff: { type: 'custom' },
     },
   );
 }
 
-// ─── Prompt builder ───────────────────────────────────────────────────────────
-
-/**
- * Constructs a structured ATS extraction prompt optimised for small local models.
- *
- * Key techniques used:
- *  - Explicit role instruction ("You are…")
- *  - Hard constraint: "Return ONLY valid JSON. No markdown."
- *  - One-shot example showing the exact output schema before the real input
- *  - Tech-stack normalisation rules (React.js → React, etc.)
- */
 function buildAtsPrompt(rawText: string): string {
   return `You are an expert HR ATS (Applicant Tracking System) parser.
 Your task is to extract structured information from the resume text below.

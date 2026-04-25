@@ -5,6 +5,7 @@ import { DriveModel, ApplicationModel, FormFieldModel, RoomModel, StudentProfile
 import mongoose from 'mongoose';
 import exceljs from 'exceljs';
 import { asyncHandler } from '../utils/async-handler';
+import { DriveService } from '../services/drive.service';
 import { DriveStatusEnum } from '@campuspool/shared';
 import { generateFinalCSV } from '../services/export.service';
 import { enqueueMassEmail } from '../services/email.service';
@@ -20,27 +21,7 @@ export const getDrives = asyncHandler(async (req: Request, res: Response) => {
   const collegeId = (req as any).user.collegeId;
   const includeCount = req.query.includeCount === 'true';
   
-  // Sort by most recent
-  let drives = await DriveModel.find({ collegeId }).sort({ createdAt: -1 }).lean();
-
-  if (includeCount) {
-    const counts = await ApplicationModel.aggregate([
-      { $match: { collegeId: new mongoose.Types.ObjectId(collegeId) } },
-      { $group: { 
-        _id: { driveId: '$driveId', status: '$status' },
-        count: { $sum: 1 }
-      }}
-    ]);
-
-    drives = drives.map(drive => {
-      const driveCounts = counts.filter(c => c._id.driveId?.toString() === drive._id.toString());
-      const applicationCount = driveCounts.reduce((acc, curr) => acc + curr.count, 0);
-      const shortlistedCount = driveCounts.find(c => c._id.status === 'shortlisted')?.count || 0;
-      const selectedCount = driveCounts.find(c => c._id.status === 'selected')?.count || 0;
-      
-      return { ...drive, applicationCount, shortlistedCount, selectedCount };
-    });
-  }
+  const drives = await DriveService.getDrivesWithCounts(collegeId, includeCount);
 
   res.status(200).json({
     success: true,
@@ -52,108 +33,7 @@ export const getDrives = asyncHandler(async (req: Request, res: Response) => {
 export const createDrive = asyncHandler(async (req: Request, res: Response) => {
   const collegeId = (req as any).user.collegeId;
   
-  // Create a new drive from the New Drive Wizard step 1 payload plus defaults
-  const newDrive = await DriveModel.create({
-    collegeId,
-    companyName: req.body.companyName || 'Draft Drive',
-    jobRole: req.body.jobRole,
-    ctc: req.body.ctc || 'Not Disclosed',
-    locations: req.body.locations ? req.body.locations.split(',').map((l: string) => l.trim()) : [],
-    description: req.body.description,
-    status: DriveStatusEnum.enum.draft,
-    eligibility: {
-      cgpa: req.body.eligibilityCriteria?.cgpa || { minimum: 0, ruleType: 'strict' },
-      branches: req.body.eligibilityCriteria?.allowedBranches || [],
-      tenth: req.body.eligibilityCriteria?.tenth || { required: false, minPercentage: 0, ruleType: 'strict' },
-      twelfth: req.body.eligibilityCriteria?.twelfth || { required: false, minPercentage: 0, ruleType: 'strict' },
-      diploma: req.body.eligibilityCriteria?.diploma || { required: false, minCGPA: 0, ruleType: 'strict' }
-    },
-    rounds: req.body.rounds || [],
-    scorecardTraits: req.body.scorecardTraits || [],
-    tags: req.body.tags || [],
-    eventDate: req.body.eventDate || null,
-    reportTime: req.body.reportTime || null
-  });
-
-  // Construct initial locked form fields based on Drive Configuration
-  const initialFields: any[] = [
-    { id: 'field_name', type: 'text', label: 'Full Name', required: true, locked: true, order: 0 },
-    { id: 'field_usn', type: 'text', label: 'USN', required: true, locked: true, order: 1, validation: { pattern: '^[A-Za-z0-9]{5,20}$', customErrorMessage: 'Must be a valid alphanumeric USN/Roll No' } },
-    { id: 'field_email', type: 'email', label: 'Email Address', required: true, locked: true, order: 2, validation: { pattern: '^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$', customErrorMessage: 'Valid email required' } },
-    { id: 'field_phone', type: 'phone', label: 'Phone Number', required: true, locked: true, order: 3, validation: { pattern: '^\\d{10}$', customErrorMessage: 'Must be exactly 10 digits' } },
-    { id: 'field_gender', type: 'dropdown', label: 'Gender', required: true, locked: true, order: 4, options: ['Male', 'Female', 'Other'] },
-    { id: 'field_branch', type: 'dropdown', label: 'Branch', required: true, locked: true, order: 5, options: ['CSE', 'CSE (AIML)', 'CSE (Data Science)', 'ISE', 'ECE', 'EEE', 'MECH', 'CIVIL', 'OTHER'] },
-    { id: 'field_cgpa', type: 'number', label: 'Degree CGPA', required: true, locked: true, order: 6, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' } },
-  ];
-
-  let currentOrder = 7;
-
-  // If 10th is enabled, add a locked 10th field
-  if (newDrive.eligibility?.tenth?.required) {
-    initialFields.push({
-      id: 'field_tenth', type: 'number', label: '10th Percentage', required: true, locked: true, order: currentOrder++, validation: { min: 0, max: 100, customErrorMessage: 'Percentage must be between 0 and 100' }
-    });
-  }
-
-  // If 12th or Diploma is enabled, add an education path selector
-  if (newDrive.eligibility?.twelfth?.required || newDrive.eligibility?.diploma?.required) {
-    initialFields.push({
-      id: 'field_education_path', type: 'dropdown', label: '10+2 Education Path', required: true, locked: true, order: currentOrder++, options: ['12th Standard / PUC', 'Diploma (Lateral Entry)']
-    });
-    
-    if (newDrive.eligibility?.twelfth?.required) {
-       initialFields.push({
-         id: 'field_twelfth', type: 'number', label: '12th Percentage', required: false, locked: true, order: currentOrder++, validation: { min: 0, max: 100, customErrorMessage: 'Percentage must be between 0 and 100' }
-       });
-    }
-
-    if (newDrive.eligibility?.diploma?.required) {
-       initialFields.push({
-         id: 'field_diploma', type: 'number', label: 'Diploma CGPA', required: false, locked: true, order: currentOrder++, validation: { min: 0, max: 10, customErrorMessage: 'CGPA must be between 0 and 10' }
-       });
-    }
-  }
-
-  // Seed default form fields for the new drive
-  await FormFieldModel.create({
-    driveId: newDrive._id,
-    collegeId,
-    fields: initialFields
-  });
-
-  // THE BOOTSTRAPPER: Pre-seed empty Rooms for the Drive based on mappedRooms payload mapping
-  if (req.body.mappedRooms && typeof req.body.mappedRooms === 'object') {
-    const mappedRooms = req.body.mappedRooms;
-    const roomPromises = [];
-    
-    for (const roundId of Object.keys(mappedRooms)) {
-      const roundObj = (req.body.rounds || []).find((r: any) => r.id === roundId);
-      // We map the UI's roundId to the structural roundType (e.g., 'aptitude', 'technical')
-      const roundType = roundObj ? roundObj.type : 'ppt';
-      
-      const roomsForRound = mappedRooms[roundId];
-      if (Array.isArray(roomsForRound)) {
-        for (const roomData of roomsForRound) {
-          if (!roomData.name) continue; // Skip empty room names 
-          roomPromises.push(
-            RoomModel.create({
-              driveId: newDrive._id,
-              collegeId,
-              round: roundType,
-              name: roomData.name,
-              floor: 'Ground', // Default value, can be updated later
-              capacity: roomData.capacity || 60,
-              panelists: []
-            })
-          );
-        }
-      }
-    }
-    
-    if (roomPromises.length > 0) {
-      await Promise.all(roomPromises);
-    }
-  }
+  const newDrive = await DriveService.createDrive(collegeId, req.body);
 
   await logAuditEvent({
     userId: (req as any).user.userId,
@@ -181,7 +61,7 @@ export const getDriveById = asyncHandler(async (req: Request, res: Response) => 
     return res.status(200).json({ success: true, data: cachedData, cached: true });
   }
 
-  const drive = await DriveModel.findOne({ _id: driveId, collegeId }).lean();
+  const drive = await DriveService.getDriveById(driveId, collegeId);
   
   if (!drive) {
     return res.status(404).json({ success: false, error: 'Drive not found' });
@@ -963,11 +843,12 @@ export const dispatchHRs = asyncHandler(async (req: Request, res: Response) => {
 
   // 5. Audit log
   await logAuditEvent({
-    driveId,
-    actorId:  (req as any).user._id,
-    actorRole: (req as any).user.role,
-    action:   'DISPATCH_HR_MAGIC_LINKS',
-    metadata: { count: results.length, emails: results.map(r => r.hrEmail) },
+    userId: (req as any).user.userId || (req as any).user._id,
+    action: 'DISPATCH_HR_MAGIC_LINKS',
+    resourceType: 'Drive',
+    resourceId: driveId,
+    details: `Dispatched ${results.length} Magic Links to HR panelists: ${results.map(r => r.hrEmail).join(', ')}`,
+    ipAddress: req.ip || req.socket.remoteAddress
   });
 
   return res.status(200).json({
