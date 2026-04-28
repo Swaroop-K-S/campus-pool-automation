@@ -1,11 +1,31 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, Trophy, Clock, TrendingUp, ChevronRight,
-  Upload, CheckCircle, XCircle, AlertCircle, Loader2,
-  Calendar, MapPin, RefreshCw, Radio,
-  User, Briefcase, BarChart3, FileSpreadsheet, LogOut,
-  Grid3x3, Table2, Download
+  Users,
+  Trophy,
+  Clock,
+  TrendingUp,
+  ChevronRight,
+  Upload,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Loader2,
+  Calendar,
+  MapPin,
+  RefreshCw,
+  Radio,
+  User,
+  Briefcase,
+  BarChart3,
+  FileSpreadsheet,
+  LogOut,
+  Grid3x3,
+  Table2,
+  Download,
+  Zap,
+  Sparkles,
+  QrCode,
 } from 'lucide-react';
 import { GlobalOfflineBanner } from '../../components/shared/GlobalOfflineBanner';
 import { useAuthStore } from '../../store/auth.store';
@@ -85,44 +105,73 @@ const ROUND_LABELS: Record<string, string> = {
 };
 
 const fmtDate = (d?: string) =>
-  d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  d
+    ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '—';
 
 // ── Sub-components ────────────────────────────────────────────────────────
-const StatCard = ({ label, value, color, icon }: {
-  label: string; value: number; color: string; icon: React.ReactNode;
+const StatCard = ({
+  label,
+  value,
+  color,
+  icon,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  icon: React.ReactNode;
 }) => (
-  <div style={{
-    background: 'white',
-    border: `1px solid ${color}30`,
-    borderRadius: 16,
-    padding: '20px 24px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 16,
-    boxShadow: `0 4px 20px ${color}15`,
-  }}>
-    <div style={{
-      width: 44, height: 44, borderRadius: 12,
-      background: `${color}15`, display: 'flex',
-      alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-    }}>
+  <div
+    style={{
+      background: 'white',
+      border: `1px solid ${color}30`,
+      borderRadius: 16,
+      padding: '20px 24px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 16,
+      boxShadow: `0 4px 20px ${color}15`,
+    }}
+  >
+    <div
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        background: `${color}15`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
       {icon}
     </div>
     <div>
       <p style={{ fontSize: 13, color: '#64748B', fontWeight: 500, margin: 0 }}>{label}</p>
-      <p style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', margin: 0, lineHeight: 1.2 }}>{value.toLocaleString()}</p>
+      <p style={{ fontSize: 26, fontWeight: 800, color: '#0F172A', margin: 0, lineHeight: 1.2 }}>
+        {value.toLocaleString()}
+      </p>
     </div>
   </div>
 );
 
 const StatusBadge = ({ status }: { status: string }) => (
-  <span style={{
-    display: 'inline-flex', alignItems: 'center', gap: 4,
-    padding: '3px 10px', borderRadius: 8,
-    background: STATUS_BG[status] || '#F1F5F9',
-    color: STATUS_COLORS[status] || '#64748B',
-    fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
-  }}>
+  <span
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
+      padding: '3px 10px',
+      borderRadius: 8,
+      background: STATUS_BG[status] || '#F1F5F9',
+      color: STATUS_COLORS[status] || '#64748B',
+      fontSize: 11,
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em',
+    }}
+  >
     {status?.replace(/_/g, ' ')}
   </span>
 );
@@ -146,7 +195,28 @@ export default function HRDashboard() {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<any>(null);
   const [roundType, setRoundType] = useState('');
-  const [liveBar, setLiveBar] = useState<{ type: 'info' | 'success' | 'warning'; msg: string } | null>(null);
+  const [liveBar, setLiveBar] = useState<{
+    type: 'info' | 'success' | 'warning';
+    msg: string;
+  } | null>(null);
+
+  // Summon State Machine
+  const [myRoomId, setMyRoomId] = useState<string>('');
+  const [summonState, setSummonState] = useState<'idle' | 'summoning' | 'interviewing'>('idle');
+  const [summonedCandidate, setSummonedCandidate] = useState<any>(null);
+  const [countdown, setCountdown] = useState(180); // 3 minutes
+  const [isSummoning, setIsSummoning] = useState(false);
+
+  // Interrogation Engine State
+  const RUBRIC_SCHEMA = [
+    { id: 'tech', label: 'Technical Competence' },
+    { id: 'comm', label: 'Communication' },
+    { id: 'prob', label: 'Problem Solving' },
+  ];
+  const [rubricScores, setRubricScores] = useState<Record<string, number>>({});
+  const [interviewFeedback, setInterviewFeedback] = useState('');
+  const [isSubmittingResult, setIsSubmittingResult] = useState(false);
+
   // Track driveId so socket can join the correct room
   const driveIdRef = useRef<string | null>(null);
 
@@ -199,9 +269,15 @@ export default function HRDashboard() {
     }
   }, []);
 
-  useEffect(() => { loadDashboard(); }, [loadDashboard]);
-  useEffect(() => { if (tab === 'students') loadStudents(); }, [tab, statusFilter, loadStudents]);
-  useEffect(() => { if (tab === 'rooms') loadRooms(); }, [tab, loadRooms]);
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+  useEffect(() => {
+    if (tab === 'students') loadStudents();
+  }, [tab, statusFilter, loadStudents]);
+  useEffect(() => {
+    if (tab === 'rooms') loadRooms();
+  }, [tab, loadRooms]);
 
   // ── Real-time socket subscriptions ──────────────────────────────────────────────
   useEffect(() => {
@@ -213,12 +289,15 @@ export default function HRDashboard() {
     socket.emit('join:drive', driveId);
 
     const onStatusChanged = ({ status }: { status: string }) => {
-      setDrive(prev => prev ? { ...prev, status } : prev);
+      setDrive((prev) => (prev ? { ...prev, status } : prev));
       if (status === 'event_day') {
         setLiveBar({ type: 'info', msg: '🚀 Event Day is LIVE — students are checking in now' });
         toast.success('Event Day started!');
       } else if (status === 'completed') {
-        setLiveBar({ type: 'success', msg: '🎉 Drive has been completed. Final selections have been submitted.' });
+        setLiveBar({
+          type: 'success',
+          msg: '🎉 Drive has been completed. Final selections have been submitted.',
+        });
         toast.success('Drive completed!');
         loadDashboard();
       } else if (status === 'active') {
@@ -227,24 +306,28 @@ export default function HRDashboard() {
     };
 
     const onPaused = ({ isPaused }: { isPaused: boolean }) => {
-      setDrive(prev => prev ? { ...prev, isPaused } : prev);
+      setDrive((prev) => (prev ? { ...prev, isPaused } : prev));
       setLiveBar({
         type: 'warning',
-        msg: isPaused ? '⛔ Drive operations PAUSED by admin — invigilators are on hold' : '▶️ Drive RESUMED — operations continuing',
+        msg: isPaused
+          ? '⛔ Drive operations PAUSED by admin — invigilators are on hold'
+          : '▶️ Drive RESUMED — operations continuing',
       });
     };
 
     const onRoundChanged = ({ roundType: rt, status: s }: any) => {
       // Patch the round status inline
-      setDrive(prev => {
+      setDrive((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
-          rounds: prev.rounds.map(r => r.type === rt ? { ...r, status: s } : r),
+          rounds: prev.rounds.map((r) => (r.type === rt ? { ...r, status: s } : r)),
         };
       });
-      if (s === 'active') setLiveBar({ type: 'info', msg: `🔄 Round started: ${rt.replace(/_/g, ' ')}` });
-      if (s === 'completed') setLiveBar({ type: 'success', msg: `✅ Round completed: ${rt.replace(/_/g, ' ')}` });
+      if (s === 'active')
+        setLiveBar({ type: 'info', msg: `🔄 Round started: ${rt.replace(/_/g, ' ')}` });
+      if (s === 'completed')
+        setLiveBar({ type: 'success', msg: `✅ Round completed: ${rt.replace(/_/g, ' ')}` });
       loadDashboard();
     };
 
@@ -256,7 +339,7 @@ export default function HRDashboard() {
 
     const onStudentVerified = () => {
       // Increment attended counter live without a full fetch
-      setFunnel(prev => prev ? { ...prev, attended: prev.attended + 1 } : prev);
+      setFunnel((prev) => (prev ? { ...prev, attended: prev.attended + 1 } : prev));
     };
 
     const onDriveCompleted = () => {
@@ -279,8 +362,8 @@ export default function HRDashboard() {
       socket.off('student:verified', onStudentVerified);
       socket.off('drive:completed', onDriveCompleted);
     };
-  // Run once drive is loaded (driveId available)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Run once drive is loaded (driveId available)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drive?._id]);
 
   const handleUpload = async () => {
@@ -294,7 +377,9 @@ export default function HRDashboard() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setUploadResult(res.data.data);
-      toast.success(`✅ ${res.data.data.passed} students advanced, ${res.data.data.failed} rejected`);
+      toast.success(
+        `✅ ${res.data.data.passed} students advanced, ${res.data.data.failed} rejected`,
+      );
       loadDashboard();
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Upload failed');
@@ -302,6 +387,56 @@ export default function HRDashboard() {
       setUploading(false);
     }
   };
+
+  const handleSummon = async () => {
+    if (!myRoomId) return toast.error('Please select your room first.');
+    try {
+      setIsSummoning(true);
+      const res = await api.post('/hr/next-candidate', { roomId: myRoomId });
+      setSummonedCandidate(res.data.data);
+      setSummonState('summoning');
+      setCountdown(180);
+      setRubricScores({});
+      setInterviewFeedback('');
+      toast.success('Candidate summoned successfully!');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to summon candidate');
+    } finally {
+      setIsSummoning(false);
+    }
+  };
+
+  const handleInterviewSubmit = async (decision: 'advance' | 'hire' | 'reject') => {
+    if (!summonedCandidate) return;
+    try {
+      setIsSubmittingResult(true);
+      await api.post('/hr/interview-result', {
+        applicationId: summonedCandidate.applicationId,
+        scores: rubricScores,
+        feedback: interviewFeedback,
+        decision,
+      });
+      toast.success(
+        `Candidate has been ${decision === 'advance' ? 'advanced to next round' : decision === 'hire' ? 'hired' : 'rejected'}!`,
+      );
+      setSummonState('idle');
+      setSummonedCandidate(null);
+      setRubricScores({});
+      setInterviewFeedback('');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to submit result');
+    } finally {
+      setIsSubmittingResult(false);
+    }
+  };
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (summonState === 'summoning' && countdown > 0) {
+      timer = setInterval(() => setCountdown((c) => c - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [summonState, countdown]);
 
   const handleLogout = async () => {
     await api.post('/auth/logout');
@@ -311,9 +446,25 @@ export default function HRDashboard() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC' }}>
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#F8FAFC',
+        }}
+      >
         <div style={{ textAlign: 'center' }}>
-          <Loader2 style={{ width: 36, height: 36, color: '#6366F1', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+          <Loader2
+            style={{
+              width: 36,
+              height: 36,
+              color: '#6366F1',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 12px',
+            }}
+          />
           <p style={{ color: '#64748B', fontWeight: 500 }}>Loading your drive data…</p>
         </div>
       </div>
@@ -325,36 +476,83 @@ export default function HRDashboard() {
       <GlobalOfflineBanner />
       {/* ── Real-time Live Bar ────────────────────────────────────────────── */}
       {liveBar && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 999,
-          background: liveBar.type === 'success' ? '#064E3B' : liveBar.type === 'warning' ? '#92400E' : '#1E1B4B',
-          color: 'white', padding: '10px 24px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-          fontSize: 13, fontWeight: 600,
-          boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-        }}>
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 999,
+            background:
+              liveBar.type === 'success'
+                ? '#064E3B'
+                : liveBar.type === 'warning'
+                  ? '#92400E'
+                  : '#1E1B4B',
+            color: 'white',
+            padding: '10px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            fontSize: 13,
+            fontWeight: 600,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+          }}
+        >
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Radio size={14} style={{ flexShrink: 0, opacity: 0.8 }} />
             {liveBar.msg}
           </span>
           <button
             onClick={() => setLiveBar(null)}
-            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 6, padding: '2px 10px', color: 'white', cursor: 'pointer', fontSize: 12 }}
+            style={{
+              background: 'rgba(255,255,255,0.15)',
+              border: 'none',
+              borderRadius: 6,
+              padding: '2px 10px',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: 12,
+            }}
           >
             Dismiss
           </button>
         </div>
       )}
       {/* Header */}
-      <div style={{
-        background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
-        padding: '0 24px',
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
-        position: 'sticky', top: 0, zIndex: 100,
-      }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 64 }}>
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
+          padding: '0 24px',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: '0 auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            height: 64,
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
               <Briefcase size={18} color="white" />
             </div>
             <div>
@@ -366,15 +564,51 @@ export default function HRDashboard() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {drive?.isPaused && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FEF2F2', color: '#EF4444', borderRadius: 8, padding: '4px 10px', fontSize: 12, fontWeight: 700 }}>
+              <span
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: '#FEF2F2',
+                  color: '#EF4444',
+                  borderRadius: 8,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
                 <AlertCircle size={13} /> Drive Paused
               </span>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 10, padding: '6px 12px' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'rgba(255,255,255,0.08)',
+                borderRadius: 10,
+                padding: '6px 12px',
+              }}
+            >
               <User size={14} color="#94A3B8" />
               <span style={{ color: '#CBD5E1', fontSize: 13 }}>{user?.name}</span>
             </div>
-            <button onClick={handleLogout} style={{ background: 'rgba(239,68,68,0.15)', border: 'none', borderRadius: 10, padding: '6px 12px', color: '#F87171', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
+            <button
+              onClick={handleLogout}
+              style={{
+                background: 'rgba(239,68,68,0.15)',
+                border: 'none',
+                borderRadius: 10,
+                padding: '6px 12px',
+                color: '#F87171',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
               <LogOut size={14} /> Logout
             </button>
           </div>
@@ -382,21 +616,40 @@ export default function HRDashboard() {
       </div>
 
       {/* Tab Navigation */}
-      <div style={{ background: 'white', borderBottom: '1px solid #E2E8F0', position: 'sticky', top: 64, zIndex: 90 }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', display: 'flex', gap: 4 }}>
-          {([
-            { id: 'overview', label: 'Overview', icon: BarChart3 },
-            { id: 'students', label: 'Students', icon: Users },
-            { id: 'rooms', label: 'Rooms', icon: Grid3x3 },
-            { id: 'upload', label: 'Upload Results', icon: Upload },
-          ] as const).map(t => (
+      <div
+        style={{
+          background: 'white',
+          borderBottom: '1px solid #E2E8F0',
+          position: 'sticky',
+          top: 64,
+          zIndex: 90,
+        }}
+      >
+        <div
+          style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', display: 'flex', gap: 4 }}
+        >
+          {(
+            [
+              { id: 'overview', label: 'Overview', icon: BarChart3 },
+              { id: 'summon', label: 'Summon', icon: Zap },
+              { id: 'students', label: 'Students', icon: Users },
+              { id: 'rooms', label: 'Rooms', icon: Grid3x3 },
+              { id: 'upload', label: 'Upload Results', icon: Upload },
+            ] as const
+          ).map((t) => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => setTab(t.id as any)}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '14px 16px', border: 'none', cursor: 'pointer',
-                background: 'none', fontSize: 14, fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '14px 16px',
+                border: 'none',
+                cursor: 'pointer',
+                background: 'none',
+                fontSize: 14,
+                fontWeight: 600,
                 color: tab === t.id ? '#6366F1' : '#64748B',
                 borderBottom: tab === t.id ? '2px solid #6366F1' : '2px solid transparent',
                 transition: 'all 0.15s',
@@ -410,16 +663,39 @@ export default function HRDashboard() {
       </div>
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 24px' }}>
-
         {/* ── OVERVIEW TAB ──────────────────────────────── */}
         {tab === 'overview' && drive && funnel && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             {/* Drive Info Card */}
-            <div style={{ background: 'white', borderRadius: 20, padding: 28, border: '1px solid #E2E8F0', boxShadow: '0 4px 24px rgba(0,0,0,0.04)' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+            <div
+              style={{
+                background: 'white',
+                borderRadius: 20,
+                padding: 28,
+                border: '1px solid #E2E8F0',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.04)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 16,
+                }}
+              >
                 <div>
-                  <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: '0 0 4px' }}>{drive.companyName}</h1>
-                  <p style={{ color: '#6366F1', fontWeight: 700, fontSize: 15, margin: '0 0 16px' }}>{drive.jobRole}</p>
+                  <h1
+                    style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: '0 0 4px' }}
+                  >
+                    {drive.companyName}
+                  </h1>
+                  <p
+                    style={{ color: '#6366F1', fontWeight: 700, fontSize: 15, margin: '0 0 16px' }}
+                  >
+                    {drive.jobRole}
+                  </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
                     {[
                       { icon: Calendar, text: fmtDate(drive.eventDate) },
@@ -428,24 +704,70 @@ export default function HRDashboard() {
                     ].map((item, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <item.icon size={14} color="#6366F1" />
-                        <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>{item.text}</span>
+                        <span style={{ fontSize: 13, color: '#475569', fontWeight: 500 }}>
+                          {item.text}
+                        </span>
                       </div>
                     ))}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{
-                    padding: '6px 14px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 6,
-                    background: drive.status === 'event_day' ? '#EEF2FF' : drive.status === 'active' ? '#ECFDF5' : drive.status === 'completed' ? '#F5F3FF' : '#F1F5F9',
-                    color: drive.status === 'event_day' ? '#6366F1' : drive.status === 'active' ? '#10B981' : drive.status === 'completed' ? '#8B5CF6' : '#64748B',
-                    fontSize: 12, fontWeight: 700, textTransform: 'uppercase',
-                  }}>
+                  <span
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 20,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      background:
+                        drive.status === 'event_day'
+                          ? '#EEF2FF'
+                          : drive.status === 'active'
+                            ? '#ECFDF5'
+                            : drive.status === 'completed'
+                              ? '#F5F3FF'
+                              : '#F1F5F9',
+                      color:
+                        drive.status === 'event_day'
+                          ? '#6366F1'
+                          : drive.status === 'active'
+                            ? '#10B981'
+                            : drive.status === 'completed'
+                              ? '#8B5CF6'
+                              : '#64748B',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                    }}
+                  >
                     {(drive.status === 'event_day' || drive.status === 'active') && (
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', animation: 'pulse 1.5s ease-in-out infinite', display: 'inline-block' }} />
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: 'currentColor',
+                          animation: 'pulse 1.5s ease-in-out infinite',
+                          display: 'inline-block',
+                        }}
+                      />
                     )}
                     {drive.status.replace(/_/g, ' ')}
                   </span>
-                  <button onClick={loadDashboard} style={{ background: '#F1F5F9', border: 'none', borderRadius: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  <button
+                    onClick={loadDashboard}
+                    style={{
+                      background: '#F1F5F9',
+                      border: 'none',
+                      borderRadius: 10,
+                      width: 36,
+                      height: 36,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
+                  >
                     <RefreshCw size={14} color="#64748B" />
                   </button>
                 </div>
@@ -453,22 +775,75 @@ export default function HRDashboard() {
             </div>
 
             {/* Funnel Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
-              <StatCard label="Total Applied" value={funnel.total} color="#6366F1" icon={<Table2 size={20} color="#6366F1" />} />
-              <StatCard label="Shortlisted" value={funnel.shortlisted} color="#8B5CF6" icon={<CheckCircle size={20} color="#8B5CF6" />} />
-              <StatCard label="Attended" value={funnel.attended} color="#F59E0B" icon={<Users size={20} color="#F59E0B" />} />
-              <StatCard label="Selected" value={funnel.selected} color="#10B981" icon={<Trophy size={20} color="#10B981" />} />
-              <StatCard label="Rejected" value={funnel.rejected} color="#EF4444" icon={<XCircle size={20} color="#EF4444" />} />
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: 16,
+              }}
+            >
+              <StatCard
+                label="Total Applied"
+                value={funnel.total}
+                color="#6366F1"
+                icon={<Table2 size={20} color="#6366F1" />}
+              />
+              <StatCard
+                label="Shortlisted"
+                value={funnel.shortlisted}
+                color="#8B5CF6"
+                icon={<CheckCircle size={20} color="#8B5CF6" />}
+              />
+              <StatCard
+                label="Attended"
+                value={funnel.attended}
+                color="#F59E0B"
+                icon={<Users size={20} color="#F59E0B" />}
+              />
+              <StatCard
+                label="Selected"
+                value={funnel.selected}
+                color="#10B981"
+                icon={<Trophy size={20} color="#10B981" />}
+              />
+              <StatCard
+                label="Rejected"
+                value={funnel.rejected}
+                color="#EF4444"
+                icon={<XCircle size={20} color="#EF4444" />}
+              />
             </div>
 
             {/* Conversion Rate */}
             {funnel.total > 0 && (
-              <div style={{ background: 'linear-gradient(135deg, #6366F1, #8B5CF6)', borderRadius: 20, padding: 24, display: 'flex', alignItems: 'center', gap: 20 }}>
-                <div style={{ width: 60, height: 60, borderRadius: 18, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                  borderRadius: 20,
+                  padding: 24,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 20,
+                }}
+              >
+                <div
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 18,
+                    background: 'rgba(255,255,255,0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
                   <TrendingUp size={28} color="white" />
                 </div>
                 <div>
-                  <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, margin: 0 }}>Overall Conversion Rate</p>
+                  <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, margin: 0 }}>
+                    Overall Conversion Rate
+                  </p>
                   <p style={{ color: 'white', fontSize: 32, fontWeight: 900, margin: 0 }}>
                     {((funnel.selected / funnel.total) * 100).toFixed(1)}%
                   </p>
@@ -481,23 +856,81 @@ export default function HRDashboard() {
 
             {/* Rounds */}
             {drive.rounds.length > 0 && (
-              <div style={{ background: 'white', borderRadius: 20, padding: 24, border: '1px solid #E2E8F0', boxShadow: '0 4px 24px rgba(0,0,0,0.04)' }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 16px' }}>Interview Rounds</h3>
+              <div
+                style={{
+                  background: 'white',
+                  borderRadius: 20,
+                  padding: 24,
+                  border: '1px solid #E2E8F0',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.04)',
+                }}
+              >
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 16px' }}>
+                  Interview Rounds
+                </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {drive.rounds.map((round, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', background: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 8, background: round.status === 'active' ? '#6366F1' : round.status === 'completed' ? '#10B981' : '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <span style={{ color: 'white', fontSize: 11, fontWeight: 800 }}>{i + 1}</span>
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 14,
+                        padding: '12px 16px',
+                        background: '#F8FAFC',
+                        borderRadius: 12,
+                        border: '1px solid #E2E8F0',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
+                          background:
+                            round.status === 'active'
+                              ? '#6366F1'
+                              : round.status === 'completed'
+                                ? '#10B981'
+                                : '#E2E8F0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <span style={{ color: 'white', fontSize: 11, fontWeight: 800 }}>
+                          {i + 1}
+                        </span>
                       </div>
                       <div style={{ flex: 1 }}>
-                        <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: '#0F172A' }}>{round.label || ROUND_LABELS[round.type] || round.type}</p>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: '#0F172A' }}>
+                          {round.label || ROUND_LABELS[round.type] || round.type}
+                        </p>
                       </div>
-                      <span style={{
-                        padding: '3px 10px', borderRadius: 6,
-                        background: round.status === 'active' ? '#EEF2FF' : round.status === 'completed' ? '#ECFDF5' : '#F1F5F9',
-                        color: round.status === 'active' ? '#6366F1' : round.status === 'completed' ? '#10B981' : '#94A3B8',
-                        fontSize: 11, fontWeight: 700, textTransform: 'uppercase'
-                      }}>{round.status}</span>
+                      <span
+                        style={{
+                          padding: '3px 10px',
+                          borderRadius: 6,
+                          background:
+                            round.status === 'active'
+                              ? '#EEF2FF'
+                              : round.status === 'completed'
+                                ? '#ECFDF5'
+                                : '#F1F5F9',
+                          color:
+                            round.status === 'active'
+                              ? '#6366F1'
+                              : round.status === 'completed'
+                                ? '#10B981'
+                                : '#94A3B8',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {round.status}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -506,78 +939,763 @@ export default function HRDashboard() {
           </div>
         )}
 
+        {/* ── SUMMON TAB ──────────────────────────────── */}
+        {tab === ('summon' as any) && (
+          <div
+            style={{
+              maxWidth: 800,
+              margin: '0 auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 24,
+            }}
+          >
+            <div
+              style={{
+                background: 'white',
+                borderRadius: 24,
+                padding: 32,
+                border: '1px solid #E2E8F0',
+                boxShadow: '0 10px 40px rgba(0,0,0,0.05)',
+                textAlign: 'center',
+              }}
+            >
+              <div
+                style={{
+                  marginBottom: 24,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12,
+                }}
+              >
+                <select
+                  value={myRoomId}
+                  onChange={(e) => setMyRoomId(e.target.value)}
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: 12,
+                    border: '2px solid #E2E8F0',
+                    fontSize: 15,
+                    outline: 'none',
+                    background: '#F8FAFC',
+                    fontWeight: 600,
+                    color: '#0F172A',
+                    minWidth: 250,
+                  }}
+                >
+                  <option value="">Select Your Room...</option>
+                  {rooms.map((r) => (
+                    <option key={r._id} value={r._id}>
+                      {r.name} - {r.floor ? `Floor ${r.floor}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={loadRooms}
+                  style={{
+                    background: '#F1F5F9',
+                    border: 'none',
+                    borderRadius: 10,
+                    width: 44,
+                    height: 44,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <RefreshCw size={16} color="#64748B" />
+                </button>
+              </div>
+
+              {summonState === 'idle' && (
+                <div style={{ padding: '40px 0' }}>
+                  <div
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: 24,
+                      background: 'linear-gradient(135deg, #EEF2FF, #E0E7FF)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 24px',
+                    }}
+                  >
+                    <Sparkles size={32} color="#6366F1" />
+                  </div>
+                  <h2
+                    style={{ fontSize: 24, fontWeight: 900, color: '#0F172A', margin: '0 0 8px' }}
+                  >
+                    Ready for your next interview?
+                  </h2>
+                  <p style={{ color: '#64748B', fontSize: 15, margin: '0 0 32px' }}>
+                    The AI Load Balancer will find the best match currently waiting.
+                  </p>
+
+                  <button
+                    onClick={handleSummon}
+                    disabled={isSummoning || !myRoomId}
+                    style={{
+                      background: !myRoomId
+                        ? '#CBD5E1'
+                        : 'linear-gradient(135deg, #6366F1, #8B5CF6)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 16,
+                      padding: '16px 32px',
+                      fontSize: 16,
+                      fontWeight: 800,
+                      cursor: !myRoomId ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      boxShadow: !myRoomId ? 'none' : '0 10px 25px -5px rgba(99,102,241,0.4)',
+                      transition: 'all 0.2s',
+                      transform: isSummoning ? 'scale(0.98)' : 'scale(1)',
+                    }}
+                  >
+                    {isSummoning ? <Loader2 className="animate-spin" /> : <Zap size={20} />}
+                    {isSummoning ? 'Summoning...' : 'Summon Next Candidate'}
+                  </button>
+                </div>
+              )}
+
+              {summonState === 'summoning' && summonedCandidate && (
+                <div style={{ padding: '20px 0' }}>
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      background: '#FEF3C7',
+                      color: '#D97706',
+                      padding: '6px 16px',
+                      borderRadius: 20,
+                      fontSize: 13,
+                      fontWeight: 800,
+                      alignItems: 'center',
+                      gap: 8,
+                      marginBottom: 24,
+                    }}
+                  >
+                    <Clock size={16} /> Waiting for candidate...
+                  </div>
+
+                  <h1
+                    style={{
+                      fontSize: 48,
+                      fontWeight: 900,
+                      color: '#0F172A',
+                      margin: '0 0 8px',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {Math.floor(countdown / 60)}:{(countdown % 60).toString().padStart(2, '0')}
+                  </h1>
+
+                  <div
+                    style={{
+                      background: '#F8FAFC',
+                      borderRadius: 16,
+                      padding: 24,
+                      margin: '24px 0',
+                      border: '1px solid #E2E8F0',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                      }}
+                    >
+                      <div>
+                        <p
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: '#64748B',
+                            margin: '0 0 4px',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          Summoned Candidate
+                        </p>
+                        <h3 style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                          {summonedCandidate.name}
+                        </h3>
+                        <p
+                          style={{
+                            color: '#6366F1',
+                            fontWeight: 600,
+                            fontSize: 14,
+                            margin: '4px 0 0',
+                          }}
+                        >
+                          {summonedCandidate.usn}
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div
+                          style={{
+                            background: '#ECFDF5',
+                            color: '#10B981',
+                            padding: '4px 10px',
+                            borderRadius: 8,
+                            fontSize: 16,
+                            fontWeight: 900,
+                            display: 'inline-block',
+                          }}
+                        >
+                          {summonedCandidate.matchScore}% Match
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                    <button
+                      onClick={() => setSummonState('interviewing')}
+                      style={{
+                        background: '#10B981',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 12,
+                        padding: '14px 24px',
+                        fontSize: 15,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        boxShadow: '0 4px 14px rgba(16,185,129,0.3)',
+                      }}
+                    >
+                      <CheckCircle size={18} /> Candidate Arrived
+                    </button>
+                    {countdown === 0 && (
+                      <button
+                        onClick={() => {
+                          setSummonState('idle');
+                          setSummonedCandidate(null);
+                          handleSummon();
+                        }}
+                        style={{
+                          background: '#EF4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: 12,
+                          padding: '14px 24px',
+                          fontSize: 15,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <AlertCircle size={18} /> Mark No-Show & Next
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {summonState === 'interviewing' && summonedCandidate && (
+                <div
+                  style={{
+                    padding: '0',
+                    textAlign: 'left',
+                    display: 'flex',
+                    gap: 24,
+                    alignItems: 'stretch',
+                  }}
+                >
+                  {/* Left Side: Candidate Context */}
+                  <div
+                    style={{
+                      flex: 1,
+                      background: '#F8FAFC',
+                      borderRadius: 20,
+                      padding: 24,
+                      border: '1px solid #E2E8F0',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}
+                    >
+                      <div
+                        style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 16,
+                          background: '#ECFDF5',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <User size={28} color="#10B981" />
+                      </div>
+                      <div>
+                        <h2 style={{ fontSize: 20, fontWeight: 900, color: '#0F172A', margin: 0 }}>
+                          {summonedCandidate.name}
+                        </h2>
+                        <p style={{ color: '#64748B', fontSize: 14, margin: '4px 0 0' }}>
+                          USN: {summonedCandidate.usn}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        background: 'white',
+                        borderRadius: 12,
+                        padding: 16,
+                        border: '1px solid #E2E8F0',
+                        marginBottom: 20,
+                      }}
+                    >
+                      <p
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          color: '#94A3B8',
+                          textTransform: 'uppercase',
+                          margin: '0 0 8px',
+                        }}
+                      >
+                        Vector Match Score
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div
+                          style={{
+                            flex: 1,
+                            height: 8,
+                            background: '#F1F5F9',
+                            borderRadius: 4,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: '100%',
+                              background: '#10B981',
+                              width: `${summonedCandidate.matchScore}%`,
+                              borderRadius: 4,
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontSize: 18, fontWeight: 900, color: '#10B981' }}>
+                          {summonedCandidate.matchScore}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                      <p
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          color: '#94A3B8',
+                          textTransform: 'uppercase',
+                          margin: '0 0 12px',
+                        }}
+                      >
+                        Resume Highlights
+                      </p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div
+                          style={{
+                            background: 'white',
+                            padding: 12,
+                            borderRadius: 12,
+                            border: '1px solid #F1F5F9',
+                          }}
+                        >
+                          <p style={{ margin: '0 0 4px', fontSize: 12, color: '#64748B' }}>
+                            Branch
+                          </p>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
+                            {summonedCandidate.candidateContext?.branch || 'N/A'}
+                          </p>
+                        </div>
+                        <div
+                          style={{
+                            background: 'white',
+                            padding: 12,
+                            borderRadius: 12,
+                            border: '1px solid #F1F5F9',
+                          }}
+                        >
+                          <p style={{ margin: '0 0 4px', fontSize: 12, color: '#64748B' }}>CGPA</p>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#0F172A' }}>
+                            {summonedCandidate.candidateContext?.cgpa ||
+                              summonedCandidate.candidateContext?.CGPA ||
+                              'N/A'}
+                          </p>
+                        </div>
+                        <div
+                          style={{
+                            background: 'white',
+                            padding: 12,
+                            borderRadius: 12,
+                            border: '1px solid #F1F5F9',
+                          }}
+                        >
+                          <p style={{ margin: '0 0 4px', fontSize: 12, color: '#64748B' }}>
+                            Skills Context
+                          </p>
+                          <p style={{ margin: 0, fontSize: 13, color: '#475569', lineHeight: 1.5 }}>
+                            {summonedCandidate.candidateContext?.skills?.join(', ') ||
+                              'AI Extracted skills will appear here.'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Side: The Rubric */}
+                  <div style={{ flex: 1.5, display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    <div
+                      style={{
+                        background: 'white',
+                        borderRadius: 20,
+                        padding: 24,
+                        border: '1px solid #E2E8F0',
+                        boxShadow: '0 4px 15px rgba(0,0,0,0.03)',
+                      }}
+                    >
+                      <h3
+                        style={{
+                          fontSize: 16,
+                          fontWeight: 800,
+                          color: '#0F172A',
+                          margin: '0 0 20px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <BarChart3 size={18} color="#6366F1" /> Evaluation Rubric
+                      </h3>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                        {RUBRIC_SCHEMA.map((item) => (
+                          <div key={item.id}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginBottom: 8,
+                              }}
+                            >
+                              <span style={{ fontSize: 14, fontWeight: 600, color: '#475569' }}>
+                                {item.label}
+                              </span>
+                              <span style={{ fontSize: 14, fontWeight: 800, color: '#6366F1' }}>
+                                {rubricScores[item.id] || 0} / 5
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              {[1, 2, 3, 4, 5].map((score) => (
+                                <button
+                                  key={score}
+                                  onClick={() =>
+                                    setRubricScores((prev) => ({ ...prev, [item.id]: score }))
+                                  }
+                                  style={{
+                                    flex: 1,
+                                    padding: '10px 0',
+                                    border: 'none',
+                                    borderRadius: 8,
+                                    cursor: 'pointer',
+                                    background:
+                                      rubricScores[item.id] === score ? '#6366F1' : '#F1F5F9',
+                                    color: rubricScores[item.id] === score ? 'white' : '#64748B',
+                                    fontWeight: 700,
+                                    fontSize: 14,
+                                    transition: 'all 0.15s',
+                                  }}
+                                >
+                                  {score}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ marginTop: 24 }}>
+                        <p
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: '#475569',
+                            margin: '0 0 8px',
+                          }}
+                        >
+                          Qualitative Feedback
+                        </p>
+                        <textarea
+                          value={interviewFeedback}
+                          onChange={(e) => setInterviewFeedback(e.target.value)}
+                          placeholder="Note key strengths, weaknesses, or specific technical answers..."
+                          style={{
+                            width: '100%',
+                            minHeight: 100,
+                            padding: 16,
+                            borderRadius: 12,
+                            border: '2px solid #E2E8F0',
+                            outline: 'none',
+                            fontSize: 14,
+                            color: '#0F172A',
+                            resize: 'vertical',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Action Panel */}
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <button
+                        onClick={() => handleInterviewSubmit('reject')}
+                        disabled={isSubmittingResult}
+                        style={{
+                          flex: 1,
+                          background: '#FEF2F2',
+                          color: '#EF4444',
+                          border: '2px solid #FECACA',
+                          borderRadius: 16,
+                          padding: '16px',
+                          fontSize: 16,
+                          fontWeight: 800,
+                          cursor: isSubmittingResult ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <XCircle size={20} /> Reject
+                      </button>
+
+                      <button
+                        onClick={() => handleInterviewSubmit('advance')}
+                        disabled={isSubmittingResult}
+                        style={{
+                          flex: 1.5,
+                          background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: 16,
+                          padding: '16px',
+                          fontSize: 16,
+                          fontWeight: 800,
+                          cursor: isSubmittingResult ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8,
+                          boxShadow: '0 4px 15px rgba(59,130,246,0.3)',
+                        }}
+                      >
+                        <ChevronRight size={20} /> Advance Round
+                      </button>
+
+                      <button
+                        onClick={() => handleInterviewSubmit('hire')}
+                        disabled={isSubmittingResult}
+                        style={{
+                          flex: 1.5,
+                          background: 'linear-gradient(135deg, #10B981, #059669)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: 16,
+                          padding: '16px',
+                          fontSize: 16,
+                          fontWeight: 800,
+                          cursor: isSubmittingResult ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8,
+                          boxShadow: '0 4px 15px rgba(16,185,129,0.3)',
+                        }}
+                      >
+                        <CheckCircle size={20} /> Hire (Final)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── STUDENTS TAB ──────────────────────────────── */}
         {tab === 'students' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Filters */}
-            <div style={{ background: 'white', borderRadius: 16, padding: '12px 20px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div
+              style={{
+                background: 'white',
+                borderRadius: 16,
+                padding: '12px 20px',
+                border: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexWrap: 'wrap',
+              }}
+            >
               <span style={{ fontSize: 13, fontWeight: 600, color: '#64748B' }}>Filter:</span>
-              {['all', 'applied', 'shortlisted', 'attended', 'selected', 'rejected'].map(s => (
+              {['all', 'applied', 'shortlisted', 'attended', 'selected', 'rejected'].map((s) => (
                 <button
                   key={s}
                   onClick={() => setStatusFilter(s)}
                   style={{
-                    padding: '5px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                    cursor: 'pointer', border: '1.5px solid',
+                    padding: '5px 14px',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    border: '1.5px solid',
                     borderColor: statusFilter === s ? '#6366F1' : '#E2E8F0',
                     background: statusFilter === s ? '#EEF2FF' : 'white',
                     color: statusFilter === s ? '#6366F1' : '#64748B',
                     textTransform: 'capitalize',
                   }}
-                >{s}</button>
+                >
+                  {s}
+                </button>
               ))}
               <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, color: '#94A3B8' }}>{students.length} students</span>
-                <button 
+                <button
                   onClick={() => {
-                    const csvContent = "data:text/csv;charset=utf-8," + 
-                      ['Drive ID', 'Name', 'Branch', 'CGPA', 'Round', 'Room', 'Status'].join(',') + "\n" +
-                      students.map(app => {
-                        const d = app.data || {};
-                        const name = (d.name || d.fullName || d.full_name || '—').replace(/,/g, '');
-                        const branch = (d.branch || '—').replace(/,/g, '');
-                        const cgpa = (d.cgpa || d.CGPA || '—').replace(/,/g, '');
-                        const round = app.currentRound ? (ROUND_LABELS[app.currentRound] || app.currentRound) : '—';
-                        const room = app.assignedRoomId?.name || '—';
-                        return `${app.driveStudentId || '—'},${name},${branch},${cgpa},${round},${room},${app.status}`;
-                      }).join("\n");
+                    const csvContent =
+                      'data:text/csv;charset=utf-8,' +
+                      ['Drive ID', 'Name', 'Branch', 'CGPA', 'Round', 'Room', 'Status'].join(',') +
+                      '\n' +
+                      students
+                        .map((app) => {
+                          const d = app.data || {};
+                          const name = (d.name || d.fullName || d.full_name || '—').replace(
+                            /,/g,
+                            '',
+                          );
+                          const branch = (d.branch || '—').replace(/,/g, '');
+                          const cgpa = (d.cgpa || d.CGPA || '—').replace(/,/g, '');
+                          const round = app.currentRound
+                            ? ROUND_LABELS[app.currentRound] || app.currentRound
+                            : '—';
+                          const room = app.assignedRoomId?.name || '—';
+                          return `${app.driveStudentId || '—'},${name},${branch},${cgpa},${round},${room},${app.status}`;
+                        })
+                        .join('\n');
                     const encodedUri = encodeURI(csvContent);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", encodedUri);
-                    link.setAttribute("download", `candidates_export_${statusFilter}.csv`);
+                    const link = document.createElement('a');
+                    link.setAttribute('href', encodedUri);
+                    link.setAttribute('download', `candidates_export_${statusFilter}.csv`);
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
                   }}
-                  style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', color: '#4F46E5', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  style={{
+                    background: '#EEF2FF',
+                    border: '1px solid #C7D2FE',
+                    color: '#4F46E5',
+                    borderRadius: 8,
+                    padding: '5px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer',
+                  }}
+                >
                   <Download size={14} /> Export CSV
                 </button>
-                <button onClick={loadStudents} style={{ background: '#F1F5F9', border: 'none', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <button
+                  onClick={loadStudents}
+                  style={{
+                    background: '#F1F5F9',
+                    border: 'none',
+                    borderRadius: 8,
+                    width: 30,
+                    height: 30,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
                   <RefreshCw size={12} color="#64748B" />
                 </button>
               </div>
             </div>
 
             {/* Table */}
-            <div style={{ background: 'white', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.04)' }}>
+            <div
+              style={{
+                background: 'white',
+                borderRadius: 16,
+                border: '1px solid #E2E8F0',
+                overflow: 'hidden',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.04)',
+              }}
+            >
               {studentsLoading ? (
                 <div style={{ padding: 60, textAlign: 'center' }}>
-                  <Loader2 size={28} style={{ color: '#6366F1', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+                  <Loader2
+                    size={28}
+                    style={{
+                      color: '#6366F1',
+                      animation: 'spin 1s linear infinite',
+                      margin: '0 auto 12px',
+                    }}
+                  />
                   <p style={{ color: '#64748B' }}>Loading students…</p>
                 </div>
               ) : students.length === 0 ? (
                 <div style={{ padding: 60, textAlign: 'center' }}>
-                  <Users size={40} style={{ color: '#CBD5E1', margin: '0 auto 12px', display: 'block' }} />
-                  <p style={{ color: '#94A3B8', fontWeight: 500 }}>No students found for this filter</p>
+                  <Users
+                    size={40}
+                    style={{ color: '#CBD5E1', margin: '0 auto 12px', display: 'block' }}
+                  />
+                  <p style={{ color: '#94A3B8', fontWeight: 500 }}>
+                    No students found for this filter
+                  </p>
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                        {['Drive ID', 'Name', 'Branch', 'CGPA', 'Round', 'Room', 'Status'].map(h => (
-                          <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: '#64748B', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
-                        ))}
+                        {['Drive ID', 'Name', 'Branch', 'CGPA', 'Round', 'Room', 'Status'].map(
+                          (h) => (
+                            <th
+                              key={h}
+                              style={{
+                                padding: '12px 16px',
+                                textAlign: 'left',
+                                fontWeight: 700,
+                                color: '#64748B',
+                                fontSize: 11,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {h}
+                            </th>
+                          ),
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -587,14 +1705,40 @@ export default function HRDashboard() {
                         const branch = d.branch || '—';
                         const cgpa = d.cgpa || d.CGPA || '—';
                         return (
-                          <tr key={app._id} style={{ borderBottom: '1px solid #F1F5F9', background: i % 2 === 0 ? 'white' : '#FAFAFA' }}>
-                            <td style={{ padding: '11px 16px', color: '#6366F1', fontWeight: 600, fontFamily: 'monospace', fontSize: 12 }}>{app.driveStudentId || '—'}</td>
-                            <td style={{ padding: '11px 16px', color: '#0F172A', fontWeight: 600 }}>{name}</td>
+                          <tr
+                            key={app._id}
+                            style={{
+                              borderBottom: '1px solid #F1F5F9',
+                              background: i % 2 === 0 ? 'white' : '#FAFAFA',
+                            }}
+                          >
+                            <td
+                              style={{
+                                padding: '11px 16px',
+                                color: '#6366F1',
+                                fontWeight: 600,
+                                fontFamily: 'monospace',
+                                fontSize: 12,
+                              }}
+                            >
+                              {app.driveStudentId || '—'}
+                            </td>
+                            <td style={{ padding: '11px 16px', color: '#0F172A', fontWeight: 600 }}>
+                              {name}
+                            </td>
                             <td style={{ padding: '11px 16px', color: '#475569' }}>{branch}</td>
                             <td style={{ padding: '11px 16px', color: '#475569' }}>{cgpa}</td>
-                            <td style={{ padding: '11px 16px', color: '#64748B', fontSize: 12 }}>{app.currentRound ? ROUND_LABELS[app.currentRound] || app.currentRound : '—'}</td>
-                            <td style={{ padding: '11px 16px', color: '#64748B', fontSize: 12 }}>{app.assignedRoomId?.name || '—'}</td>
-                            <td style={{ padding: '11px 16px' }}><StatusBadge status={app.status} /></td>
+                            <td style={{ padding: '11px 16px', color: '#64748B', fontSize: 12 }}>
+                              {app.currentRound
+                                ? ROUND_LABELS[app.currentRound] || app.currentRound
+                                : '—'}
+                            </td>
+                            <td style={{ padding: '11px 16px', color: '#64748B', fontSize: 12 }}>
+                              {app.assignedRoomId?.name || '—'}
+                            </td>
+                            <td style={{ padding: '11px 16px' }}>
+                              <StatusBadge status={app.status} />
+                            </td>
                           </tr>
                         );
                       })}
@@ -610,40 +1754,126 @@ export default function HRDashboard() {
         {tab === 'rooms' && (
           <div>
             {roomsLoading ? (
-              <div style={{ padding: 60, textAlign: 'center', background: 'white', borderRadius: 16 }}>
-                <Loader2 size={28} style={{ color: '#6366F1', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+              <div
+                style={{ padding: 60, textAlign: 'center', background: 'white', borderRadius: 16 }}
+              >
+                <Loader2
+                  size={28}
+                  style={{
+                    color: '#6366F1',
+                    animation: 'spin 1s linear infinite',
+                    margin: '0 auto 12px',
+                  }}
+                />
               </div>
             ) : rooms.length === 0 ? (
-              <div style={{ padding: 60, textAlign: 'center', background: 'white', borderRadius: 16, border: '1px solid #E2E8F0' }}>
-                <Grid3x3 size={40} style={{ color: '#CBD5E1', margin: '0 auto 12px', display: 'block' }} />
+              <div
+                style={{
+                  padding: 60,
+                  textAlign: 'center',
+                  background: 'white',
+                  borderRadius: 16,
+                  border: '1px solid #E2E8F0',
+                }}
+              >
+                <Grid3x3
+                  size={40}
+                  style={{ color: '#CBD5E1', margin: '0 auto 12px', display: 'block' }}
+                />
                 <p style={{ color: '#94A3B8', fontWeight: 500 }}>No rooms configured yet</p>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-                {rooms.map(room => (
-                  <div key={room._id} style={{ background: 'white', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.04)' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                  gap: 16,
+                }}
+              >
+                {rooms.map((room) => (
+                  <div
+                    key={room._id}
+                    style={{
+                      background: 'white',
+                      borderRadius: 16,
+                      border: '1px solid #E2E8F0',
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
+                    }}
+                  >
                     {/* Room Header */}
-                    <div style={{ padding: '16px 20px', background: 'linear-gradient(135deg, #1E293B, #0F172A)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div
+                      style={{
+                        padding: '16px 20px',
+                        background: 'linear-gradient(135deg, #1E293B, #0F172A)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
                       <div>
-                        <p style={{ color: 'white', fontWeight: 800, fontSize: 16, margin: 0 }}>{room.name}</p>
-                        <p style={{ color: '#94A3B8', fontSize: 12, margin: 0 }}>{room.floor ? `Floor ${room.floor}` : ''} · {ROUND_LABELS[room.round] || room.round}</p>
+                        <p style={{ color: 'white', fontWeight: 800, fontSize: 16, margin: 0 }}>
+                          {room.name}
+                        </p>
+                        <p style={{ color: '#94A3B8', fontSize: 12, margin: 0 }}>
+                          {room.floor ? `Floor ${room.floor}` : ''} ·{' '}
+                          {ROUND_LABELS[room.round] || room.round}
+                        </p>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <p style={{ color: '#6366F1', fontWeight: 800, fontSize: 18, margin: 0 }}>{(room.assignedStudents || []).length}</p>
-                        <p style={{ color: '#64748B', fontSize: 10, margin: 0 }}>/ {room.capacity || '∞'}</p>
+                        <p style={{ color: '#6366F1', fontWeight: 800, fontSize: 18, margin: 0 }}>
+                          {(room.assignedStudents || []).length}
+                        </p>
+                        <p style={{ color: '#64748B', fontSize: 10, margin: 0 }}>
+                          / {room.capacity || '∞'}
+                        </p>
                       </div>
                     </div>
                     {/* Panelist */}
                     {room.panelist?.name && (
-                      <div style={{ padding: '12px 20px', background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 10, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div
+                        style={{
+                          padding: '12px 20px',
+                          background: '#F8FAFC',
+                          borderBottom: '1px solid #E2E8F0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 10,
+                            background: '#EEF2FF',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
                           <User size={14} color="#6366F1" />
                         </div>
                         <div>
-                          <p style={{ fontWeight: 700, fontSize: 13, color: '#0F172A', margin: 0 }}>{room.panelist.name}</p>
+                          <p style={{ fontWeight: 700, fontSize: 13, color: '#0F172A', margin: 0 }}>
+                            {room.panelist.name}
+                          </p>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 3 }}>
                             {(room.panelist.expertise || []).map((e, i) => (
-                              <span key={i} style={{ background: '#EEF2FF', color: '#6366F1', fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4 }}>{e}</span>
+                              <span
+                                key={i}
+                                style={{
+                                  background: '#EEF2FF',
+                                  color: '#6366F1',
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  padding: '1px 6px',
+                                  borderRadius: 4,
+                                }}
+                              >
+                                {e}
+                              </span>
                             ))}
                           </div>
                         </div>
@@ -652,20 +1882,67 @@ export default function HRDashboard() {
                     {/* Students List */}
                     <div style={{ padding: '8px 0', maxHeight: 200, overflowY: 'auto' }}>
                       {(room.assignedStudents || []).length === 0 ? (
-                        <p style={{ fontSize: 12, color: '#CBD5E1', textAlign: 'center', padding: '16px 0' }}>No students assigned</p>
+                        <p
+                          style={{
+                            fontSize: 12,
+                            color: '#CBD5E1',
+                            textAlign: 'center',
+                            padding: '16px 0',
+                          }}
+                        >
+                          No students assigned
+                        </p>
                       ) : (
                         (room.assignedStudents || []).map((app: any, i) => {
                           const d = app.data || {};
                           const name = d.name || d.fullName || '—';
                           const branch = d.branch || '';
                           return (
-                            <div key={app._id || i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 20px', borderBottom: '1px solid #F8FAFC' }}>
-                              <div style={{ width: 24, height: 24, borderRadius: 6, background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <span style={{ fontSize: 9, fontWeight: 800, color: '#6366F1' }}>{i + 1}</span>
+                            <div
+                              key={app._id || i}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10,
+                                padding: '7px 20px',
+                                borderBottom: '1px solid #F8FAFC',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 24,
+                                  height: 24,
+                                  borderRadius: 6,
+                                  background: '#F1F5F9',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <span style={{ fontSize: 9, fontWeight: 800, color: '#6366F1' }}>
+                                  {i + 1}
+                                </span>
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</p>
-                                {branch && <p style={{ margin: 0, fontSize: 10, color: '#64748B' }}>{branch}</p>}
+                                <p
+                                  style={{
+                                    margin: 0,
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#0F172A',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {name}
+                                </p>
+                                {branch && (
+                                  <p style={{ margin: 0, fontSize: 10, color: '#64748B' }}>
+                                    {branch}
+                                  </p>
+                                )}
                               </div>
                               <StatusBadge status={app.status} />
                             </div>
@@ -683,23 +1960,56 @@ export default function HRDashboard() {
         {/* ── UPLOAD TAB ────────────────────────────────── */}
         {tab === 'upload' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 640 }}>
-            <div style={{ background: 'white', borderRadius: 20, padding: 28, border: '1px solid #E2E8F0', boxShadow: '0 4px 24px rgba(0,0,0,0.04)' }}>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: '0 0 6px' }}>Upload Round Results</h2>
+            <div
+              style={{
+                background: 'white',
+                borderRadius: 20,
+                padding: 28,
+                border: '1px solid #E2E8F0',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.04)',
+              }}
+            >
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#0F172A', margin: '0 0 6px' }}>
+                Upload Round Results
+              </h2>
               <p style={{ color: '#64748B', fontSize: 13, margin: '0 0 24px' }}>
-                Upload an XLSX or CSV file with columns <strong>USN</strong> or <strong>Email</strong>.
-                Students in the file will <strong>advance</strong> to the next round; others will be <strong>rejected</strong>.
+                Upload an XLSX or CSV file with columns <strong>USN</strong> or{' '}
+                <strong>Email</strong>. Students in the file will <strong>advance</strong> to the
+                next round; others will be <strong>rejected</strong>.
               </p>
 
               {/* Round selector */}
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B', display: 'block', marginBottom: 6, textTransform: 'uppercase' }}>Round</label>
+                <label
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: '#64748B',
+                    display: 'block',
+                    marginBottom: 6,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Round
+                </label>
                 <select
                   value={roundType}
-                  onChange={e => setRoundType(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 14, color: '#0F172A', background: 'white', outline: 'none' }}
+                  onChange={(e) => setRoundType(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: '1.5px solid #E2E8F0',
+                    fontSize: 14,
+                    color: '#0F172A',
+                    background: 'white',
+                    outline: 'none',
+                  }}
                 >
-                  {(drive?.rounds || []).map(r => (
-                    <option key={r.type} value={r.type}>{r.label || ROUND_LABELS[r.type] || r.type}</option>
+                  {(drive?.rounds || []).map((r) => (
+                    <option key={r.type} value={r.type}>
+                      {r.label || ROUND_LABELS[r.type] || r.type}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -708,22 +2018,34 @@ export default function HRDashboard() {
               <label
                 htmlFor="hr-upload-file"
                 style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  gap: 10, padding: '36px 24px', borderRadius: 14,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  padding: '36px 24px',
+                  borderRadius: 14,
                   border: `2px dashed ${uploadFile ? '#6366F1' : '#E2E8F0'}`,
                   background: uploadFile ? '#EEF2FF' : '#F8FAFC',
-                  cursor: 'pointer', transition: 'all 0.2s',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
                 }}
               >
                 <FileSpreadsheet size={32} color={uploadFile ? '#6366F1' : '#CBD5E1'} />
                 {uploadFile ? (
                   <>
-                    <p style={{ margin: 0, fontWeight: 700, color: '#6366F1', fontSize: 14 }}>{uploadFile.name}</p>
-                    <p style={{ margin: 0, color: '#94A3B8', fontSize: 12 }}>{(uploadFile.size / 1024).toFixed(1)} KB</p>
+                    <p style={{ margin: 0, fontWeight: 700, color: '#6366F1', fontSize: 14 }}>
+                      {uploadFile.name}
+                    </p>
+                    <p style={{ margin: 0, color: '#94A3B8', fontSize: 12 }}>
+                      {(uploadFile.size / 1024).toFixed(1)} KB
+                    </p>
                   </>
                 ) : (
                   <>
-                    <p style={{ margin: 0, fontWeight: 600, color: '#475569', fontSize: 14 }}>Drop your XLSX / CSV here</p>
+                    <p style={{ margin: 0, fontWeight: 600, color: '#475569', fontSize: 14 }}>
+                      Drop your XLSX / CSV here
+                    </p>
                     <p style={{ margin: 0, color: '#94A3B8', fontSize: 12 }}>or click to browse</p>
                   </>
                 )}
@@ -732,7 +2054,10 @@ export default function HRDashboard() {
                   type="file"
                   accept=".xlsx,.xls,.csv"
                   style={{ display: 'none' }}
-                  onChange={e => { setUploadFile(e.target.files?.[0] || null); setUploadResult(null); }}
+                  onChange={(e) => {
+                    setUploadFile(e.target.files?.[0] || null);
+                    setUploadResult(null);
+                  }}
                 />
               </label>
 
@@ -740,51 +2065,162 @@ export default function HRDashboard() {
                 onClick={handleUpload}
                 disabled={!uploadFile || uploading}
                 style={{
-                  marginTop: 16, width: '100%', padding: '13px',
-                  borderRadius: 12, border: 'none', cursor: uploadFile ? 'pointer' : 'not-allowed',
+                  marginTop: 16,
+                  width: '100%',
+                  padding: '13px',
+                  borderRadius: 12,
+                  border: 'none',
+                  cursor: uploadFile ? 'pointer' : 'not-allowed',
                   background: uploadFile ? 'linear-gradient(135deg, #6366F1, #8B5CF6)' : '#E2E8F0',
                   color: uploadFile ? 'white' : '#94A3B8',
-                  fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  fontWeight: 700,
+                  fontSize: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
                 }}
               >
-                {uploading ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Processing…</> : <><Upload size={16} /> Submit Results</>}
+                {uploading ? (
+                  <>
+                    <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />{' '}
+                    Processing…
+                  </>
+                ) : (
+                  <>
+                    <Upload size={16} /> Submit Results
+                  </>
+                )}
               </button>
             </div>
 
             {/* Upload Result */}
             {uploadResult && (
-              <div style={{ background: 'white', borderRadius: 16, padding: 24, border: '1px solid #E2E8F0', boxShadow: '0 4px 24px rgba(0,0,0,0.04)' }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 16px' }}>Upload Result</h3>
+              <div
+                style={{
+                  background: 'white',
+                  borderRadius: 16,
+                  padding: 24,
+                  border: '1px solid #E2E8F0',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.04)',
+                }}
+              >
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0F172A', margin: '0 0 16px' }}>
+                  Upload Result
+                </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div style={{ background: '#ECFDF5', borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div
+                    style={{
+                      background: '#ECFDF5',
+                      borderRadius: 12,
+                      padding: '14px 18px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
                     <CheckCircle size={20} color="#10B981" />
                     <div>
-                      <p style={{ margin: 0, fontSize: 11, color: '#059669', fontWeight: 600, textTransform: 'uppercase' }}>Advanced</p>
-                      <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#065F46' }}>{uploadResult.passed}</p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 11,
+                          color: '#059669',
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Advanced
+                      </p>
+                      <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#065F46' }}>
+                        {uploadResult.passed}
+                      </p>
                     </div>
                   </div>
-                  <div style={{ background: '#FEF2F2', borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div
+                    style={{
+                      background: '#FEF2F2',
+                      borderRadius: 12,
+                      padding: '14px 18px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
                     <XCircle size={20} color="#EF4444" />
                     <div>
-                      <p style={{ margin: 0, fontSize: 11, color: '#DC2626', fontWeight: 600, textTransform: 'uppercase' }}>Rejected</p>
-                      <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#991B1B' }}>{uploadResult.failed}</p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 11,
+                          color: '#DC2626',
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Rejected
+                      </p>
+                      <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#991B1B' }}>
+                        {uploadResult.failed}
+                      </p>
                     </div>
                   </div>
                 </div>
                 {uploadResult.nextRound && uploadResult.nextRound !== 'final' && (
-                  <div style={{ marginTop: 12, background: '#EEF2FF', borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div
+                    style={{
+                      marginTop: 12,
+                      background: '#EEF2FF',
+                      borderRadius: 10,
+                      padding: '10px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
                     <ChevronRight size={14} color="#6366F1" />
                     <p style={{ margin: 0, fontSize: 13, color: '#4F46E5', fontWeight: 600 }}>
-                      Advanced students moved to: <strong>{ROUND_LABELS[uploadResult.nextRound] || uploadResult.nextRound}</strong>
+                      Advanced students moved to:{' '}
+                      <strong>
+                        {ROUND_LABELS[uploadResult.nextRound] || uploadResult.nextRound}
+                      </strong>
                     </p>
                   </div>
                 )}
                 {uploadResult.notFound?.length > 0 && (
                   <div style={{ marginTop: 12 }}>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: '#94A3B8', margin: '0 0 6px', textTransform: 'uppercase' }}>Unmatched entries ({uploadResult.notFound.length})</p>
-                    <div style={{ background: '#FFF7ED', borderRadius: 10, padding: '10px 14px', maxHeight: 120, overflowY: 'auto' }}>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: '#94A3B8',
+                        margin: '0 0 6px',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Unmatched entries ({uploadResult.notFound.length})
+                    </p>
+                    <div
+                      style={{
+                        background: '#FFF7ED',
+                        borderRadius: 10,
+                        padding: '10px 14px',
+                        maxHeight: 120,
+                        overflowY: 'auto',
+                      }}
+                    >
                       {uploadResult.notFound.map((u: string, i: number) => (
-                        <p key={i} style={{ margin: 0, fontSize: 12, color: '#92400E', fontFamily: 'monospace' }}>{u}</p>
+                        <p
+                          key={i}
+                          style={{
+                            margin: 0,
+                            fontSize: 12,
+                            color: '#92400E',
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {u}
+                        </p>
                       ))}
                     </div>
                   </div>

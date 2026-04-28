@@ -1,11 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ArrowLeft, ArrowRight, Check, X, Plus, CheckCircle, GraduationCap, BookOpen, Award, GripVertical, Calendar, Clock, MapPin } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  X,
+  Plus,
+  CheckCircle,
+  GraduationCap,
+  BookOpen,
+  Award,
+  GripVertical,
+  Calendar,
+  Clock,
+  MapPin,
+  Sparkles,
+} from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
@@ -18,7 +38,12 @@ const AVAILABLE_ROUNDS = [
   { type: 'aptitude', label: 'Aptitude Test', icon: '📝', desc: 'Written/online test' },
   { type: 'coding', label: 'Coding Round', icon: '💻', desc: 'Programming challenge' },
   { type: 'gd', label: 'Group Discussion', icon: '👥', desc: 'Group activity' },
-  { type: 'technical_interview', label: 'Technical Interview', icon: '⚙️', desc: 'Tech Q&A with panel' },
+  {
+    type: 'technical_interview',
+    label: 'Technical Interview',
+    icon: '⚙️',
+    desc: 'Tech Q&A with panel',
+  },
   { type: 'hr_interview', label: 'HR Interview', icon: '🤝', desc: 'Final HR round' },
 ];
 
@@ -41,20 +66,52 @@ interface SelectedRound {
 }
 
 /* ── Sortable Round Item ── */
-function SortableRound({ round, onRemove }: { round: SelectedRound; onRemove: (id: string) => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: round.id });
+function SortableRound({
+  round,
+  onRemove,
+}: {
+  round: SelectedRound;
+  onRemove: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: round.id,
+  });
   return (
-    <div ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
-      className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 mb-2 shadow-sm">
-      <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">{round.order}</div>
-      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 flex-shrink-0"><GripVertical size={18}/></div>
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+      className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 mb-2 shadow-sm"
+    >
+      <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">
+        {round.order}
+      </div>
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 flex-shrink-0"
+      >
+        <GripVertical size={18} />
+      </div>
       <span className="text-lg">{round.icon}</span>
       <div className="flex-1">
         <div className="text-sm font-medium text-slate-800">{round.label}</div>
-        {round.isCustom && <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded font-medium">Custom</span>}
+        {round.isCustom && (
+          <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded font-medium">
+            Custom
+          </span>
+        )}
       </div>
-      <button type="button" onClick={() => onRemove(round.id)} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><X size={15}/></button>
+      <button
+        type="button"
+        onClick={() => onRemove(round.id)}
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+      >
+        <X size={15} />
+      </button>
     </div>
   );
 }
@@ -66,7 +123,7 @@ export default function NewDriveWizard() {
   const [locInput, setLocInput] = useState('');
 
   const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState('');  
+  const [tagInput, setTagInput] = useState('');
   const [eligibility, setEligibility] = useState({
     cgpa: { minimum: 6.5, ruleType: 'strict' },
     branches: [...BRANCH_OPTIONS],
@@ -76,15 +133,20 @@ export default function NewDriveWizard() {
     minTenthMarks: 60,
     minTwelfthOrDiplomaMarks: 60,
     allowActiveBacklogs: false,
-    maxBacklogs: 0
+    maxBacklogs: 0,
   });
 
   const [requestedFields, setRequestedFields] = useState({
-    github: false, linkedin: false, portfolio: false, resumeText: false
+    github: false,
+    linkedin: false,
+    portfolio: false,
+    resumeText: false,
   });
 
   const [applicationWindow, setApplicationWindow] = useState({
-    startDate: '', endDate: '', extensionReason: ''
+    startDate: '',
+    endDate: '',
+    extensionReason: '',
   });
 
   const [aiSkillPrompt, setAiSkillPrompt] = useState('');
@@ -98,14 +160,165 @@ export default function NewDriveWizard() {
   const [eventSetup, setEventSetup] = useState({
     eventDate: '',
     reportTime: '',
-    roundRooms: {} as Record<string, {name: string, capacity: number}[]>
+    roundRooms: {} as Record<string, { name: string; capacity: number }[]>,
   });
 
   const [conflictWarning, setConflictWarning] = useState<any[] | null>(null);
+  const [jdParsing, setJdParsing] = useState(false);
+  const jdInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Draft Auto-Save ────────────────────────────────────────────────────────
+  const [draftBanner, setDraftBanner] = useState<'checking' | 'found' | 'none'>('checking');
+  const [draftSaving, setDraftSaving] = useState(false);
+  const draftDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Collect the full form snapshot for saving / restoring
+  const buildSnapshot = () => ({
+    step,
+    rhf: getValues(),
+    locations,
+    tags,
+    eligibility,
+    customBranches,
+    requestedFields,
+    applicationWindow,
+    aiSkillPrompt,
+    selectedRounds,
+    eventSetup,
+  });
+
+  const applySnapshot = (snap: any) => {
+    if (!snap) return;
+    if (snap.step) setStep(snap.step);
+    if (snap.rhf) Object.entries(snap.rhf).forEach(([k, v]) => setValue(k as any, v as any));
+    if (snap.locations) setLocations(snap.locations);
+    if (snap.tags) setTags(snap.tags);
+    if (snap.eligibility) setEligibility(snap.eligibility);
+    if (snap.customBranches) setCustomBranches(snap.customBranches);
+    if (snap.requestedFields) setRequestedFields(snap.requestedFields);
+    if (snap.applicationWindow) setApplicationWindow(snap.applicationWindow);
+    if (snap.aiSkillPrompt) setAiSkillPrompt(snap.aiSkillPrompt);
+    if (snap.selectedRounds) setSelectedRounds(snap.selectedRounds);
+    if (snap.eventSetup) setEventSetup(snap.eventSetup);
+  };
+
+  // On mount — check Redis for an existing draft
+  useEffect(() => {
+    api
+      .get('/drives/draft')
+      .then((res: any) => {
+        if (res.success && res.data) {
+          setDraftBanner('found');
+        } else {
+          setDraftBanner('none');
+        }
+      })
+      .catch(() => setDraftBanner('none'));
+  }, []);
+
+  const resumeDraft = async () => {
+    try {
+      const res = (await api.get('/drives/draft')) as any;
+      if (res.success && res.data) {
+        applySnapshot(res.data);
+        toast.success('Draft restored!');
+      }
+    } catch {
+      toast.error('Could not restore draft.');
+    }
+    setDraftBanner('none');
+  };
+
+  const discardDraft = async () => {
+    await api.delete('/drives/draft').catch(() => {});
+    setDraftBanner('none');
+  };
+
+  // Debounced auto-save — fires 2s after ANY state change
+  useEffect(() => {
+    if (draftBanner === 'checking') return; // don't overwrite draft before we've checked
+    if (draftDebounceRef.current) clearTimeout(draftDebounceRef.current);
+    draftDebounceRef.current = setTimeout(async () => {
+      setDraftSaving(true);
+      try {
+        await api.post('/drives/draft', buildSnapshot());
+      } catch {
+        /* silent — auto-save failures should never block the user */
+      } finally {
+        setDraftSaving(false);
+      }
+    }, 2000);
+    return () => {
+      if (draftDebounceRef.current) clearTimeout(draftDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    step,
+    locations,
+    tags,
+    eligibility,
+    customBranches,
+    requestedFields,
+    applicationWindow,
+    aiSkillPrompt,
+    selectedRounds,
+    eventSetup,
+  ]);
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /* ── JD PDF Auto-Fill ── */
+  const parseJDFromFile = async (file: File) => {
+    if (!file || file.type !== 'application/pdf') {
+      toast.error('Please select a PDF file.');
+      return;
+    }
+    setJdParsing(true);
+    const t = toast.loading('🧠 AI is reading the JD...');
+    try {
+      const form = new FormData();
+      form.append('jd', file);
+      const res = (await api.post('/drives/parse-jd', form)) as any;
+      if (res.success && res.data) {
+        const d = res.data;
+        if (d.companyName) setValue('companyName', d.companyName);
+        if (d.jobRole) setValue('jobRole', d.jobRole);
+        if (d.ctc) setValue('ctc', d.ctc);
+        if (d.location && d.location !== 'Pan India') {
+          setLocations(
+            d.location
+              .split(',')
+              .map((l: string) => l.trim())
+              .filter(Boolean),
+          );
+        }
+        if (Array.isArray(d.allowedBranches) && d.allowedBranches.length > 0) {
+          const known = d.allowedBranches.filter((b: string) => BRANCH_OPTIONS.includes(b));
+          const custom = d.allowedBranches.filter((b: string) => !BRANCH_OPTIONS.includes(b));
+          setEligibility((prev) => ({ ...prev, branches: known }));
+          if (custom.length > 0) setCustomBranches(custom);
+        }
+        if (d.cutoffCgpa > 0) {
+          setEligibility((prev) => ({ ...prev, cgpa: { ...prev.cgpa, minimum: d.cutoffCgpa } }));
+        }
+        if (Array.isArray(d.requiredSkills) && d.requiredSkills.length > 0) {
+          setAiSkillPrompt(d.requiredSkills.join(', '));
+        }
+        toast.success('✅ Form auto-filled! Review and adjust as needed.', { id: t });
+      } else {
+        toast.error(res.error || 'Extraction failed.', { id: t });
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'AI extraction failed. Fill manually.', { id: t });
+    } finally {
+      setJdParsing(false);
+      if (jdInputRef.current) jdInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     if (eventSetup.eventDate && step === 4) {
-      api.get(`/drives/schedule/check-conflict?date=${eventSetup.eventDate}`)
+      api
+        .get(`/drives/schedule/check-conflict?date=${eventSetup.eventDate}`)
         .then((res: any) => {
           if (res.data?.data?.hasConflict) {
             setConflictWarning(res.data.data.conflictingDrives);
@@ -121,9 +334,15 @@ export default function NewDriveWizard() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const { register, formState: { errors }, trigger, getValues, setValue } = useForm({
+  const {
+    register,
+    formState: { errors },
+    trigger,
+    getValues,
+    setValue,
+  } = useForm({
     resolver: zodResolver(DriveSchema),
-    defaultValues: { companyName: '', jobRole: '', ctc: '', formOpenDate: '', formCloseDate: '' }
+    defaultValues: { companyName: '', jobRole: '', ctc: '', formOpenDate: '', formCloseDate: '' },
   });
 
   /* ── Apply Template ── */
@@ -131,20 +350,29 @@ export default function NewDriveWizard() {
     if (t.companyName) setValue('companyName', t.companyName);
     if (t.jobRole) setValue('jobRole', t.jobRole);
     if (t.ctc) setValue('ctc', t.ctc);
-    if (t.locations?.length) setLocations(Array.isArray(t.locations) ? t.locations : t.locations.split(',').map((l: string) => l.trim()));
-    if (t.eligibility) setEligibility(prev => ({ ...prev, ...t.eligibility }));
+    if (t.locations?.length)
+      setLocations(
+        Array.isArray(t.locations)
+          ? t.locations
+          : t.locations.split(',').map((l: string) => l.trim()),
+      );
+    if (t.eligibility) setEligibility((prev) => ({ ...prev, ...t.eligibility }));
     if (t.rounds?.length) {
       const roundMap: Record<string, { icon: string; label: string }> = {};
-      AVAILABLE_ROUNDS.forEach(r => { roundMap[r.type] = { icon: r.icon, label: r.label }; });
-      setSelectedRounds(t.rounds.map((r: any, i: number) => ({
-        id: `${r.type}-tmpl-${i}`,
-        type: r.type,
-        label: r.label || roundMap[r.type]?.label || r.type,
-        icon: roundMap[r.type]?.icon || '⭐',
-        order: i + 1,
-        status: 'pending',
-        isCustom: r.isCustom || false,
-      })));
+      AVAILABLE_ROUNDS.forEach((r) => {
+        roundMap[r.type] = { icon: r.icon, label: r.label };
+      });
+      setSelectedRounds(
+        t.rounds.map((r: any, i: number) => ({
+          id: `${r.type}-tmpl-${i}`,
+          type: r.type,
+          label: r.label || roundMap[r.type]?.label || r.type,
+          icon: roundMap[r.type]?.icon || '⭐',
+          order: i + 1,
+          status: 'pending',
+          isCustom: r.isCustom || false,
+        })),
+      );
     }
   };
 
@@ -152,11 +380,17 @@ export default function NewDriveWizard() {
   const handleNext = async () => {
     if (step === 1) {
       const valid = await trigger();
-      if (locations.length === 0) { toast.error("Please add at least one location"); return; }
+      if (locations.length === 0) {
+        toast.error('Please add at least one location');
+        return;
+      }
       if (valid) setStep(2);
     } else if (step === 2) {
       const allBranches = [...eligibility.branches, ...customBranches];
-      if (allBranches.length === 0) { toast.error("Select at least one branch"); return; }
+      if (allBranches.length === 0) {
+        toast.error('Select at least one branch');
+        return;
+      }
       setStep(3);
     } else if (step === 3) {
       // Form Builder toggles — no validation required
@@ -165,12 +399,16 @@ export default function NewDriveWizard() {
       // Time-Lock — validate date order if both set
       if (applicationWindow.startDate && applicationWindow.endDate) {
         if (new Date(applicationWindow.startDate) >= new Date(applicationWindow.endDate)) {
-          toast.error('Start date must be before end date'); return;
+          toast.error('Start date must be before end date');
+          return;
         }
       }
       setStep(5);
     } else if (step === 5) {
-      if (selectedRounds.length === 0) { toast.error("Select at least one round"); return; }
+      if (selectedRounds.length === 0) {
+        toast.error('Select at least one round');
+        return;
+      }
       setStep(6);
     } else if (step === 6) {
       setStep(7);
@@ -199,50 +437,58 @@ export default function NewDriveWizard() {
   };
 
   const removeTag = (tagToRemove: string) => {
-    setTags(tags.filter(t => t !== tagToRemove));
+    setTags(tags.filter((t) => t !== tagToRemove));
   };
 
   /* ── Round helpers ── */
-  const isRoundSelected = (type: string) => selectedRounds.some(r => r.type === type);
+  const isRoundSelected = (type: string) => selectedRounds.some((r) => r.type === type);
 
-  const addRound = (round: typeof AVAILABLE_ROUNDS[0]) => {
+  const addRound = (round: (typeof AVAILABLE_ROUNDS)[0]) => {
     if (isRoundSelected(round.type)) return;
-    setSelectedRounds(prev => [...prev, {
-      id: `${round.type}-${Date.now()}`,
-      type: round.type,
-      label: round.label,
-      icon: round.icon,
-      order: prev.length + 1,
-      status: 'pending',
-      isCustom: false
-    }]);
+    setSelectedRounds((prev) => [
+      ...prev,
+      {
+        id: `${round.type}-${Date.now()}`,
+        type: round.type,
+        label: round.label,
+        icon: round.icon,
+        order: prev.length + 1,
+        status: 'pending',
+        isCustom: false,
+      },
+    ]);
   };
 
   const addCustomRound = () => {
     const label = customRoundInput.trim();
     if (!label) return;
-    setSelectedRounds(prev => [...prev, {
-      id: `custom-${Date.now()}`,
-      type: `custom_${label.toLowerCase().replace(/\s+/g, '_')}`,
-      label,
-      icon: '⭐',
-      order: prev.length + 1,
-      status: 'pending',
-      isCustom: true
-    }]);
+    setSelectedRounds((prev) => [
+      ...prev,
+      {
+        id: `custom-${Date.now()}`,
+        type: `custom_${label.toLowerCase().replace(/\s+/g, '_')}`,
+        label,
+        icon: '⭐',
+        order: prev.length + 1,
+        status: 'pending',
+        isCustom: true,
+      },
+    ]);
     setCustomRoundInput('');
   };
 
   const removeRound = (id: string) => {
-    setSelectedRounds(prev => prev.filter(r => r.id !== id).map((r, i) => ({ ...r, order: i + 1 })));
+    setSelectedRounds((prev) =>
+      prev.filter((r) => r.id !== id).map((r, i) => ({ ...r, order: i + 1 })),
+    );
   };
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
     if (active.id !== over?.id) {
-      setSelectedRounds(rounds => {
-        const oldIndex = rounds.findIndex(r => r.id === active.id);
-        const newIndex = rounds.findIndex(r => r.id === over.id);
+      setSelectedRounds((rounds) => {
+        const oldIndex = rounds.findIndex((r) => r.id === active.id);
+        const newIndex = rounds.findIndex((r) => r.id === over.id);
         return arrayMove(rounds, oldIndex, newIndex).map((r, i) => ({ ...r, order: i + 1 }));
       });
     }
@@ -257,24 +503,27 @@ export default function NewDriveWizard() {
       setCustomBranchInput('');
       return;
     }
-    setCustomBranches(prev => [...prev, branch]);
+    setCustomBranches((prev) => [...prev, branch]);
     setCustomBranchInput('');
   };
 
   const removeCustomBranch = (branch: string) => {
-    setCustomBranches(prev => prev.filter(b => b !== branch));
+    setCustomBranches((prev) => prev.filter((b) => b !== branch));
   };
 
   /* ── Room Mapping Helpers ── */
   const addRoomToRound = (roundId: string) => {
-    setEventSetup(prev => ({
+    setEventSetup((prev) => ({
       ...prev,
-      roundRooms: { ...prev.roundRooms, [roundId]: [...(prev.roundRooms[roundId] || []), { name: '', capacity: 60 }] }
+      roundRooms: {
+        ...prev.roundRooms,
+        [roundId]: [...(prev.roundRooms[roundId] || []), { name: '', capacity: 60 }],
+      },
     }));
   };
 
   const updateRoom = (roundId: string, index: number, field: string, value: any) => {
-    setEventSetup(prev => {
+    setEventSetup((prev) => {
       const rooms = [...(prev.roundRooms[roundId] || [])];
       rooms[index] = { ...rooms[index], [field]: value };
       return { ...prev, roundRooms: { ...prev.roundRooms, [roundId]: rooms } };
@@ -282,7 +531,7 @@ export default function NewDriveWizard() {
   };
 
   const removeRoom = (roundId: string, index: number) => {
-    setEventSetup(prev => {
+    setEventSetup((prev) => {
       const rooms = [...(prev.roundRooms[roundId] || [])];
       rooms.splice(index, 1);
       return { ...prev, roundRooms: { ...prev.roundRooms, [roundId]: rooms } };
@@ -309,33 +558,35 @@ export default function NewDriveWizard() {
           minTenthMarks: eligibility.minTenthMarks,
           minTwelfthOrDiplomaMarks: eligibility.minTwelfthOrDiplomaMarks,
           allowActiveBacklogs: eligibility.allowActiveBacklogs,
-          maxBacklogs: eligibility.maxBacklogs
+          maxBacklogs: eligibility.maxBacklogs,
         },
         requestedFields,
         applicationWindow: {
-          startDate:  applicationWindow.startDate  || null,
-          endDate:    applicationWindow.endDate    || null,
-          extensionReason: applicationWindow.extensionReason || null
+          startDate: applicationWindow.startDate || null,
+          endDate: applicationWindow.endDate || null,
+          extensionReason: applicationWindow.extensionReason || null,
         },
         aiSkillPrompt,
-        rounds: selectedRounds.map(r => ({
+        rounds: selectedRounds.map((r) => ({
           type: r.type,
           label: r.label,
           order: r.order,
           status: 'pending',
-          isCustom: r.isCustom
+          isCustom: r.isCustom,
         })),
         tags,
         eventDate: eventSetup.eventDate || null,
         reportTime: eventSetup.reportTime || null,
         mappedRooms: eventSetup.roundRooms,
         formOpenDate: getValues('formOpenDate') || null,
-        formCloseDate: getValues('formCloseDate') || null
+        formCloseDate: getValues('formCloseDate') || null,
       };
       const res = await api.post('/drives', payload);
       toast.dismiss(loadingToast);
       if ((res as any).success) {
         const newDriveId = (res as any).data._id;
+        // Clear the draft from Redis — drive is now persisted in MongoDB
+        api.delete('/drives/draft').catch(() => {});
         toast.success('Drive created! Now set up your application form.');
         // Deep-link directly to the Form Builder tab so admin doesn't have to navigate
         navigate(`/admin/drives/${newDriveId}?tab=Form%20Builder`);
@@ -345,7 +596,15 @@ export default function NewDriveWizard() {
     }
   };
 
-  const stepLabels = ['INFO', 'ELIGIBILITY', 'FORM FIELDS', 'TIME-LOCK', 'ROUNDS', 'EVENT SETUP', 'CONFIRM'];
+  const stepLabels = [
+    'INFO',
+    'ELIGIBILITY',
+    'FORM FIELDS',
+    'TIME-LOCK',
+    'ROUNDS',
+    'EVENT SETUP',
+    'CONFIRM',
+  ];
   const allBranches = [...eligibility.branches, ...customBranches];
 
   return (
@@ -354,40 +613,90 @@ export default function NewDriveWizard() {
       <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[100px] -translate-x-1/2 -translate-y-1/2 pointer-events-none -z-10"></div>
       <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[120px] translate-x-1/3 translate-y-1/3 pointer-events-none -z-10"></div>
 
+      {/* ── Resume Draft Banner ── */}
+      {draftBanner === 'found' && (
+        <div className="mb-6 flex items-center gap-4 px-5 py-4 bg-amber-50 border border-amber-200 rounded-2xl shadow-sm animate-in slide-in-from-top-2 duration-300">
+          <span className="text-2xl">📋</span>
+          <div className="flex-1">
+            <p className="font-bold text-amber-900 text-sm">You have an unsaved draft</p>
+            <p className="text-amber-700 text-xs mt-0.5">
+              Your previous session was auto-saved. Resume where you left off?
+            </p>
+          </div>
+          <button
+            id="draft-resume-btn"
+            onClick={resumeDraft}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl transition-colors"
+          >
+            Resume
+          </button>
+          <button
+            id="draft-discard-btn"
+            onClick={discardDraft}
+            className="px-4 py-2 bg-white border border-amber-200 hover:bg-amber-50 text-amber-700 text-sm font-medium rounded-xl transition-colors"
+          >
+            Start Fresh
+          </button>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="flex items-center justify-center gap-4 mb-10 text-center">
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Create Placement Drive</h1>
-        <DriveTemplateManager
-          mode="pick"
-          onApply={applyTemplate}
-        />
+      <div className="flex items-center justify-center gap-4 mb-10 text-center relative">
+        <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+          Create Placement Drive
+        </h1>
+        <DriveTemplateManager mode="pick" onApply={applyTemplate} />
+        {/* Auto-save indicator */}
+        {draftBanner === 'none' && (
+          <div className="absolute right-0 flex items-center gap-1.5 text-xs text-slate-400">
+            <div
+              className={`w-2 h-2 rounded-full ${draftSaving ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}
+            />
+            <span>{draftSaving ? 'Saving...' : 'Auto-saved'}</span>
+          </div>
+        )}
       </div>
 
       {/* Visual Progress Stepper */}
       <div className="flex items-center justify-between mb-12 max-w-3xl mx-auto relative px-4 md:px-8">
         {/* Connecting Line Track */}
         <div className="absolute left-[10%] right-[10%] top-6 h-1.5 bg-slate-200/50 -z-10 rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-700 ease-in-out" style={{ width: `${((step - 1) / (stepLabels.length - 1)) * 100}%` }}></div>
+          <div
+            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-700 ease-in-out"
+            style={{ width: `${((step - 1) / (stepLabels.length - 1)) * 100}%` }}
+          ></div>
         </div>
-        
+
         {stepLabels.map((label, i) => {
           const isCompleted = i + 1 < step;
           const isCurrent = i + 1 === step;
-          
+
           return (
             <div key={label} className="flex flex-col items-center relative group z-10">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black mb-3 transition-all duration-500 ease-out ${
-                isCompleted 
-                  ? 'bg-gradient-to-br from-emerald-400 to-emerald-500 text-white shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-100 ring-offset-2' 
-                  : isCurrent 
-                  ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-xl shadow-indigo-600/40 scale-110 ring-4 ring-indigo-100' 
-                  : 'bg-white text-slate-400 border-2 border-slate-200/80 shadow-sm'
-              }`}>
-                {isCompleted ? <Check size={20} className="animate-in zoom-in duration-300" strokeWidth={3}/> : i + 1}
+              <div
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black mb-3 transition-all duration-500 ease-out ${
+                  isCompleted
+                    ? 'bg-gradient-to-br from-emerald-400 to-emerald-500 text-white shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-100 ring-offset-2'
+                    : isCurrent
+                      ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-xl shadow-indigo-600/40 scale-110 ring-4 ring-indigo-100'
+                      : 'bg-white text-slate-400 border-2 border-slate-200/80 shadow-sm'
+                }`}
+              >
+                {isCompleted ? (
+                  <Check size={20} className="animate-in zoom-in duration-300" strokeWidth={3} />
+                ) : (
+                  i + 1
+                )}
               </div>
-              <span className={`text-[10px] font-extrabold tracking-widest uppercase transition-colors duration-300 ${
-                isCurrent ? 'text-indigo-700 font-black' : isCompleted ? 'text-slate-600' : 'text-slate-400'
-              }`}>
+              <span
+                className={`text-[10px] font-extrabold tracking-widest uppercase transition-colors duration-300 ${
+                  isCurrent
+                    ? 'text-indigo-700 font-black'
+                    : isCompleted
+                      ? 'text-slate-600'
+                      : 'text-slate-400'
+                }`}
+              >
                 {label}
               </span>
             </div>
@@ -396,57 +705,145 @@ export default function NewDriveWizard() {
       </div>
 
       <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-slate-200/60 shadow-[0_8px_40px_rgb(0,0,0,0.04)] p-8 md:p-12 mb-8 relative overflow-hidden">
-        
         {/* Subtle inner top glare */}
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white to-transparent opacity-60"></div>
 
         {/* ═══ STEP 1 — INFO ═══ */}
         {step === 1 && (
-          <form className="max-w-2xl mx-auto animate-in fade-in slide-in-from-right-4 duration-500" onSubmit={e => e.preventDefault()}>
-            <h2 className="text-2xl font-black text-slate-800 mb-8 tracking-tight">Company Details</h2>
+          <form
+            className="max-w-2xl mx-auto animate-in fade-in slide-in-from-right-4 duration-500"
+            onSubmit={(e) => e.preventDefault()}
+          >
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight">Company Details</h2>
+              {/* ── AI JD Parser Button ── */}
+              <div>
+                <input
+                  ref={jdInputRef}
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) parseJDFromFile(f);
+                  }}
+                />
+                <button
+                  type="button"
+                  id="jd-parse-btn"
+                  disabled={jdParsing}
+                  onClick={() => jdInputRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-bold shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105 active:scale-95 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {jdParsing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Parsing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={15} className="animate-pulse" />
+                      <span>Auto-fill from JD PDF</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Company Name</label>
-                <input {...register('companyName')} placeholder="e.g. Google, Microsoft..." className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"/>
-                {errors.companyName && <p className="text-red-500 text-xs mt-1">{errors.companyName.message}</p>}
+                <input
+                  {...register('companyName')}
+                  placeholder="e.g. Google, Microsoft..."
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"
+                />
+                {errors.companyName && (
+                  <p className="text-red-500 text-xs mt-1">{errors.companyName.message}</p>
+                )}
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Job Role / Position</label>
-                <input {...register('jobRole')} placeholder="e.g. Software Engineer, Data Analyst..." className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"/>
-                {errors.jobRole && <p className="text-red-500 text-xs mt-1">{errors.jobRole.message}</p>}
+                <label className="block text-sm font-bold text-slate-700 mb-2">
+                  Job Role / Position
+                </label>
+                <input
+                  {...register('jobRole')}
+                  placeholder="e.g. Software Engineer, Data Analyst..."
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"
+                />
+                {errors.jobRole && (
+                  <p className="text-red-500 text-xs mt-1">{errors.jobRole.message}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">CTC Package</label>
-                <input {...register('ctc')} placeholder="e.g. 12 LPA, 8-10 LPA..." className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"/>
+                <input
+                  {...register('ctc')}
+                  placeholder="e.g. 12 LPA, 8-10 LPA..."
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"
+                />
                 {errors.ctc && <p className="text-red-500 text-xs mt-1">{errors.ctc.message}</p>}
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Job Locations</label>
-                <input value={locInput} onChange={e => setLocInput(e.target.value)} onKeyDown={handleKeyDownLocation} placeholder="Type location and press Enter" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"/>
+                <input
+                  value={locInput}
+                  onChange={(e) => setLocInput(e.target.value)}
+                  onKeyDown={handleKeyDownLocation}
+                  placeholder="Type location and press Enter"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"
+                />
                 <div className="flex flex-wrap gap-2 mt-3">
-                  {locations.map(loc => (
-                    <span key={loc} className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-bold px-3 py-1.5 rounded-full">
+                  {locations.map((loc) => (
+                    <span
+                      key={loc}
+                      className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-bold px-3 py-1.5 rounded-full"
+                    >
                       {loc}
-                      <button type="button" onClick={() => setLocations(locations.filter(l => l !== loc))}><X size={14} className="text-indigo-400 hover:text-indigo-700"/></button>
+                      <button
+                        type="button"
+                        onClick={() => setLocations(locations.filter((l) => l !== loc))}
+                      >
+                        <X size={14} className="text-indigo-400 hover:text-indigo-700" />
+                      </button>
                     </span>
                   ))}
-                  {locations.length === 0 && <span className="text-xs text-slate-400 font-medium">No locations added yet</span>}
+                  {locations.length === 0 && (
+                    <span className="text-xs text-slate-400 font-medium">
+                      No locations added yet
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Drive Tags / Categories</label>
+                <label className="block text-sm font-bold text-slate-700 mb-2">
+                  Drive Tags / Categories
+                </label>
                 <div className="p-2 border border-slate-200 rounded-xl bg-white min-h-[50px] flex flex-wrap gap-2 items-center focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-50">
                   {tags.map((tag: string) => (
-                    <span key={tag} className="bg-indigo-50 text-indigo-700 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1">
-                      {tag} <button type="button" onClick={() => removeTag(tag)} className="hover:text-red-500"><X size={12}/></button>
+                    <span
+                      key={tag}
+                      className="bg-indigo-50 text-indigo-700 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1"
+                    >
+                      {tag}{' '}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="hover:text-red-500"
+                      >
+                        <X size={12} />
+                      </button>
                     </span>
                   ))}
-                  <input 
+                  <input
                     value={tagInput}
-                    onChange={e => setTagInput(e.target.value)}
+                    onChange={(e) => setTagInput(e.target.value)}
                     onKeyDown={handleAddTag}
-                    placeholder={tags.length === 0 ? "Type a tag (e.g. Dream, Phase-1) and press Enter" : "Add another tag"}
+                    placeholder={
+                      tags.length === 0
+                        ? 'Type a tag (e.g. Dream, Phase-1) and press Enter'
+                        : 'Add another tag'
+                    }
                     className="flex-1 min-w-[200px] outline-none text-sm px-2 py-1 bg-transparent text-slate-800 placeholder-slate-400"
                   />
                 </div>
@@ -455,12 +852,24 @@ export default function NewDriveWizard() {
               {/* Form Validity Period */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Registration Open Date</label>
-                  <input type="datetime-local" {...register('formOpenDate')} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"/>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    Registration Open Date
+                  </label>
+                  <input
+                    type="datetime-local"
+                    {...register('formOpenDate')}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Registration Close Date</label>
-                  <input type="datetime-local" {...register('formCloseDate')} className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"/>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    Registration Close Date
+                  </label>
+                  <input
+                    type="datetime-local"
+                    {...register('formCloseDate')}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 transition-colors"
+                  />
                 </div>
               </div>
             </div>
@@ -471,23 +880,59 @@ export default function NewDriveWizard() {
         {step === 2 && (
           <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
             <h2 className="text-2xl font-black text-slate-800 mb-2">Eligibility Criteria</h2>
-            <p className="text-slate-500 text-sm mb-8">Set minimum score requirements. Check the boxes to enable each criterion.</p>
+            <p className="text-slate-500 text-sm mb-8">
+              Set minimum score requirements. Check the boxes to enable each criterion.
+            </p>
 
             {/* Graduation CGPA */}
             <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-4">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center"><GraduationCap size={16} className="text-indigo-600"/></div>
-                <div><h3 className="font-semibold text-slate-800 text-sm">Graduation CGPA</h3><p className="text-slate-400 text-xs">Current degree / B.E / B.Tech</p></div>
-                <span className="ml-auto text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-medium">Required</span>
+                <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                  <GraduationCap size={16} className="text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-800 text-sm">Graduation CGPA</h3>
+                  <p className="text-slate-400 text-xs">Current degree / B.E / B.Tech</p>
+                </div>
+                <span className="ml-auto text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-medium">
+                  Required
+                </span>
               </div>
               <div className="flex items-center gap-4">
                 <span className="text-slate-500 text-sm w-8">5.0</span>
-                <input type="range" min="5" max="10" step="0.1" value={eligibility.cgpa.minimum} onChange={e => setEligibility({...eligibility, cgpa: { ...eligibility.cgpa, minimum: parseFloat(e.target.value)}})} className="flex-1 accent-indigo-600 h-2 cursor-pointer"/>
+                <input
+                  type="range"
+                  min="5"
+                  max="10"
+                  step="0.1"
+                  value={eligibility.cgpa.minimum}
+                  onChange={(e) =>
+                    setEligibility({
+                      ...eligibility,
+                      cgpa: { ...eligibility.cgpa, minimum: parseFloat(e.target.value) },
+                    })
+                  }
+                  className="flex-1 accent-indigo-600 h-2 cursor-pointer"
+                />
                 <span className="text-slate-500 text-sm w-8">10.0</span>
               </div>
               <div className="flex items-center justify-between mt-3">
-                <div className="text-left"><span className="text-2xl font-bold text-indigo-600">{eligibility.cgpa.minimum.toFixed(1)}</span><span className="text-slate-400 text-sm"> / 10.0 minimum</span></div>
-                <select value={eligibility.cgpa.ruleType} onChange={e => setEligibility({...eligibility, cgpa: { ...eligibility.cgpa, ruleType: e.target.value}})} className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-indigo-400">
+                <div className="text-left">
+                  <span className="text-2xl font-bold text-indigo-600">
+                    {eligibility.cgpa.minimum.toFixed(1)}
+                  </span>
+                  <span className="text-slate-400 text-sm"> / 10.0 minimum</span>
+                </div>
+                <select
+                  value={eligibility.cgpa.ruleType}
+                  onChange={(e) =>
+                    setEligibility({
+                      ...eligibility,
+                      cgpa: { ...eligibility.cgpa, ruleType: e.target.value },
+                    })
+                  }
+                  className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-indigo-400"
+                >
                   <option value="strict">Strict (Block submission)</option>
                   <option value="relaxed">Relaxed (Flag internally)</option>
                   <option value="info">Info Only (No minimum)</option>
@@ -496,105 +941,342 @@ export default function NewDriveWizard() {
             </div>
 
             {/* 10th Standard */}
-            <div className={`bg-white rounded-2xl border-2 transition-all mb-4 ${eligibility.tenth.required ? 'border-indigo-300 shadow-sm shadow-indigo-50' : 'border-slate-200'}`}>
-              <div className="flex items-center gap-3 p-5 cursor-pointer" onClick={() => setEligibility({...eligibility, tenth: {...eligibility.tenth, required: !eligibility.tenth.required}})}>
-                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${eligibility.tenth.required ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>{eligibility.tenth.required && <Check size={12} className="text-white" strokeWidth={3}/>}</div>
-                <div className="flex items-center gap-2 flex-1">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><BookOpen size={16} className="text-blue-600"/></div>
-                  <div><h3 className="font-semibold text-slate-800 text-sm">10th Standard</h3><p className="text-slate-400 text-xs">SSC / Matriculation percentage</p></div>
+            <div
+              className={`bg-white rounded-2xl border-2 transition-all mb-4 ${eligibility.tenth.required ? 'border-indigo-300 shadow-sm shadow-indigo-50' : 'border-slate-200'}`}
+            >
+              <div
+                className="flex items-center gap-3 p-5 cursor-pointer"
+                onClick={() =>
+                  setEligibility({
+                    ...eligibility,
+                    tenth: { ...eligibility.tenth, required: !eligibility.tenth.required },
+                  })
+                }
+              >
+                <div
+                  className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${eligibility.tenth.required ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}
+                >
+                  {eligibility.tenth.required && (
+                    <Check size={12} className="text-white" strokeWidth={3} />
+                  )}
                 </div>
-                {eligibility.tenth.required && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">Enabled</span>}
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <BookOpen size={16} className="text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-800 text-sm">10th Standard</h3>
+                    <p className="text-slate-400 text-xs">SSC / Matriculation percentage</p>
+                  </div>
+                </div>
+                {eligibility.tenth.required && (
+                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">
+                    Enabled
+                  </span>
+                )}
               </div>
               {eligibility.tenth.required && (
                 <div className="px-5 pb-5 border-t border-slate-100 pt-4">
-                  <label className="text-sm font-medium text-slate-700 block mb-3">Minimum Percentage Required</label>
+                  <label className="text-sm font-medium text-slate-700 block mb-3">
+                    Minimum Percentage Required
+                  </label>
                   <div className="flex items-center gap-4">
                     <span className="text-slate-500 text-sm w-6">0%</span>
-                    <input type="range" min="0" max="100" step="1" value={eligibility.tenth.minPercentage} onChange={e => setEligibility({...eligibility, tenth: {...eligibility.tenth, minPercentage: parseInt(e.target.value)}})} className="flex-1 accent-blue-600 h-2 cursor-pointer"/>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={eligibility.tenth.minPercentage}
+                      onChange={(e) =>
+                        setEligibility({
+                          ...eligibility,
+                          tenth: { ...eligibility.tenth, minPercentage: parseInt(e.target.value) },
+                        })
+                      }
+                      className="flex-1 accent-blue-600 h-2 cursor-pointer"
+                    />
                     <span className="text-slate-500 text-sm w-10">100%</span>
                   </div>
                   <div className="flex items-center justify-between mt-3">
-                    <div className="text-left"><span className="text-2xl font-bold text-blue-600">{eligibility.tenth.minPercentage}%</span><span className="text-slate-400 text-sm"> minimum</span></div>
-                    <select value={eligibility.tenth.ruleType} onChange={e => setEligibility({...eligibility, tenth: { ...eligibility.tenth, ruleType: e.target.value}})} className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-blue-400">
+                    <div className="text-left">
+                      <span className="text-2xl font-bold text-blue-600">
+                        {eligibility.tenth.minPercentage}%
+                      </span>
+                      <span className="text-slate-400 text-sm"> minimum</span>
+                    </div>
+                    <select
+                      value={eligibility.tenth.ruleType}
+                      onChange={(e) =>
+                        setEligibility({
+                          ...eligibility,
+                          tenth: { ...eligibility.tenth, ruleType: e.target.value },
+                        })
+                      }
+                      className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-blue-400"
+                    >
                       <option value="strict">Strict Check</option>
                       <option value="relaxed">Relaxed Check</option>
                       <option value="info">Info Only</option>
                     </select>
                   </div>
-                  <div className="mt-3 flex items-center gap-3"><div className="flex-1 h-px bg-slate-200"/><span className="text-xs text-slate-400">or type directly</span><div className="flex-1 h-px bg-slate-200"/></div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex-1 h-px bg-slate-200" />
+                    <span className="text-xs text-slate-400">or type directly</span>
+                    <div className="flex-1 h-px bg-slate-200" />
+                  </div>
                   <div className="mt-3 relative">
-                    <input type="number" min="0" max="100" value={eligibility.tenth.minPercentage} onChange={e => setEligibility({...eligibility, tenth: {...eligibility.tenth, minPercentage: Math.min(100, Math.max(0, parseInt(e.target.value) || 0))}})} className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50"/>
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">%</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={eligibility.tenth.minPercentage}
+                      onChange={(e) =>
+                        setEligibility({
+                          ...eligibility,
+                          tenth: {
+                            ...eligibility.tenth,
+                            minPercentage: Math.min(
+                              100,
+                              Math.max(0, parseInt(e.target.value) || 0),
+                            ),
+                          },
+                        })
+                      }
+                      className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">
+                      %
+                    </span>
                   </div>
                 </div>
               )}
             </div>
 
             {/* 12th Standard */}
-            <div className={`bg-white rounded-2xl border-2 transition-all mb-4 ${eligibility.twelfth.required ? 'border-indigo-300 shadow-sm shadow-indigo-50' : 'border-slate-200'}`}>
-              <div className="flex items-center gap-3 p-5 cursor-pointer" onClick={() => setEligibility({...eligibility, twelfth: {...eligibility.twelfth, required: !eligibility.twelfth.required}})}>
-                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${eligibility.twelfth.required ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>{eligibility.twelfth.required && <Check size={12} className="text-white" strokeWidth={3}/>}</div>
-                <div className="flex items-center gap-2 flex-1">
-                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center"><BookOpen size={16} className="text-purple-600"/></div>
-                  <div><h3 className="font-semibold text-slate-800 text-sm">12th Standard</h3><p className="text-slate-400 text-xs">HSC / PUC / Intermediate percentage</p></div>
+            <div
+              className={`bg-white rounded-2xl border-2 transition-all mb-4 ${eligibility.twelfth.required ? 'border-indigo-300 shadow-sm shadow-indigo-50' : 'border-slate-200'}`}
+            >
+              <div
+                className="flex items-center gap-3 p-5 cursor-pointer"
+                onClick={() =>
+                  setEligibility({
+                    ...eligibility,
+                    twelfth: { ...eligibility.twelfth, required: !eligibility.twelfth.required },
+                  })
+                }
+              >
+                <div
+                  className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${eligibility.twelfth.required ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}
+                >
+                  {eligibility.twelfth.required && (
+                    <Check size={12} className="text-white" strokeWidth={3} />
+                  )}
                 </div>
-                {eligibility.twelfth.required && <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-medium">Enabled</span>}
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <BookOpen size={16} className="text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-800 text-sm">12th Standard</h3>
+                    <p className="text-slate-400 text-xs">HSC / PUC / Intermediate percentage</p>
+                  </div>
+                </div>
+                {eligibility.twelfth.required && (
+                  <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-medium">
+                    Enabled
+                  </span>
+                )}
               </div>
               {eligibility.twelfth.required && (
                 <div className="px-5 pb-5 border-t border-slate-100 pt-4">
-                  <label className="text-sm font-medium text-slate-700 block mb-3">Minimum Percentage Required</label>
+                  <label className="text-sm font-medium text-slate-700 block mb-3">
+                    Minimum Percentage Required
+                  </label>
                   <div className="flex items-center gap-4">
                     <span className="text-slate-500 text-sm w-6">0%</span>
-                    <input type="range" min="0" max="100" step="1" value={eligibility.twelfth.minPercentage} onChange={e => setEligibility({...eligibility, twelfth: {...eligibility.twelfth, minPercentage: parseInt(e.target.value)}})} className="flex-1 accent-purple-600 h-2 cursor-pointer"/>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={eligibility.twelfth.minPercentage}
+                      onChange={(e) =>
+                        setEligibility({
+                          ...eligibility,
+                          twelfth: {
+                            ...eligibility.twelfth,
+                            minPercentage: parseInt(e.target.value),
+                          },
+                        })
+                      }
+                      className="flex-1 accent-purple-600 h-2 cursor-pointer"
+                    />
                     <span className="text-slate-500 text-sm w-10">100%</span>
                   </div>
                   <div className="flex items-center justify-between mt-3">
-                    <div className="text-left"><span className="text-2xl font-bold text-purple-600">{eligibility.twelfth.minPercentage}%</span><span className="text-slate-400 text-sm"> minimum</span></div>
-                    <select value={eligibility.twelfth.ruleType} onChange={e => setEligibility({...eligibility, twelfth: { ...eligibility.twelfth, ruleType: e.target.value}})} className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-purple-400">
+                    <div className="text-left">
+                      <span className="text-2xl font-bold text-purple-600">
+                        {eligibility.twelfth.minPercentage}%
+                      </span>
+                      <span className="text-slate-400 text-sm"> minimum</span>
+                    </div>
+                    <select
+                      value={eligibility.twelfth.ruleType}
+                      onChange={(e) =>
+                        setEligibility({
+                          ...eligibility,
+                          twelfth: { ...eligibility.twelfth, ruleType: e.target.value },
+                        })
+                      }
+                      className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-purple-400"
+                    >
                       <option value="strict">Strict Check</option>
                       <option value="relaxed">Relaxed Check</option>
                       <option value="info">Info Only</option>
                     </select>
                   </div>
-                  <div className="mt-3 flex items-center gap-3"><div className="flex-1 h-px bg-slate-200"/><span className="text-xs text-slate-400">or type directly</span><div className="flex-1 h-px bg-slate-200"/></div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex-1 h-px bg-slate-200" />
+                    <span className="text-xs text-slate-400">or type directly</span>
+                    <div className="flex-1 h-px bg-slate-200" />
+                  </div>
                   <div className="mt-3 relative">
-                    <input type="number" min="0" max="100" value={eligibility.twelfth.minPercentage} onChange={e => setEligibility({...eligibility, twelfth: {...eligibility.twelfth, minPercentage: Math.min(100, Math.max(0, parseInt(e.target.value) || 0))}})} className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-50"/>
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">%</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={eligibility.twelfth.minPercentage}
+                      onChange={(e) =>
+                        setEligibility({
+                          ...eligibility,
+                          twelfth: {
+                            ...eligibility.twelfth,
+                            minPercentage: Math.min(
+                              100,
+                              Math.max(0, parseInt(e.target.value) || 0),
+                            ),
+                          },
+                        })
+                      }
+                      className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-10 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-50"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">
+                      %
+                    </span>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Diploma */}
-            <div className={`bg-white rounded-2xl border-2 transition-all mb-6 ${eligibility.diploma.required ? 'border-indigo-300 shadow-sm shadow-indigo-50' : 'border-slate-200'}`}>
-              <div className="flex items-center gap-3 p-5 cursor-pointer" onClick={() => setEligibility({...eligibility, diploma: {...eligibility.diploma, required: !eligibility.diploma.required}})}>
-                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${eligibility.diploma.required ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>{eligibility.diploma.required && <Check size={12} className="text-white" strokeWidth={3}/>}</div>
-                <div className="flex items-center gap-2 flex-1">
-                  <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center"><Award size={16} className="text-amber-600"/></div>
-                  <div><h3 className="font-semibold text-slate-800 text-sm">Diploma</h3><p className="text-slate-400 text-xs">Polytechnic / Diploma CGPA (for lateral entry students)</p></div>
+            <div
+              className={`bg-white rounded-2xl border-2 transition-all mb-6 ${eligibility.diploma.required ? 'border-indigo-300 shadow-sm shadow-indigo-50' : 'border-slate-200'}`}
+            >
+              <div
+                className="flex items-center gap-3 p-5 cursor-pointer"
+                onClick={() =>
+                  setEligibility({
+                    ...eligibility,
+                    diploma: { ...eligibility.diploma, required: !eligibility.diploma.required },
+                  })
+                }
+              >
+                <div
+                  className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${eligibility.diploma.required ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}
+                >
+                  {eligibility.diploma.required && (
+                    <Check size={12} className="text-white" strokeWidth={3} />
+                  )}
                 </div>
-                {eligibility.diploma.required && <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-medium">Enabled</span>}
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                    <Award size={16} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-800 text-sm">Diploma</h3>
+                    <p className="text-slate-400 text-xs">
+                      Polytechnic / Diploma CGPA (for lateral entry students)
+                    </p>
+                  </div>
+                </div>
+                {eligibility.diploma.required && (
+                  <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-medium">
+                    Enabled
+                  </span>
+                )}
               </div>
               {eligibility.diploma.required && (
                 <div className="px-5 pb-5 border-t border-slate-100 pt-4">
-                  <label className="text-sm font-medium text-slate-700 block mb-3">Minimum CGPA Required</label>
+                  <label className="text-sm font-medium text-slate-700 block mb-3">
+                    Minimum CGPA Required
+                  </label>
                   <div className="flex items-center gap-4">
                     <span className="text-slate-500 text-sm w-6">0</span>
-                    <input type="range" min="0" max="10" step="0.1" value={eligibility.diploma.minCGPA} onChange={e => setEligibility({...eligibility, diploma: {...eligibility.diploma, minCGPA: parseFloat(e.target.value)}})} className="flex-1 accent-amber-500 h-2 cursor-pointer"/>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      step="0.1"
+                      value={eligibility.diploma.minCGPA}
+                      onChange={(e) =>
+                        setEligibility({
+                          ...eligibility,
+                          diploma: { ...eligibility.diploma, minCGPA: parseFloat(e.target.value) },
+                        })
+                      }
+                      className="flex-1 accent-amber-500 h-2 cursor-pointer"
+                    />
                     <span className="text-slate-500 text-sm w-8">10.0</span>
                   </div>
                   <div className="flex items-center justify-between mt-3">
-                    <div className="text-left"><span className="text-2xl font-bold text-amber-600">{eligibility.diploma.minCGPA.toFixed(1)}</span><span className="text-slate-400 text-sm"> / 10.0 minimum</span></div>
-                    <select value={eligibility.diploma.ruleType} onChange={e => setEligibility({...eligibility, diploma: { ...eligibility.diploma, ruleType: e.target.value}})} className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-amber-400">
+                    <div className="text-left">
+                      <span className="text-2xl font-bold text-amber-600">
+                        {eligibility.diploma.minCGPA.toFixed(1)}
+                      </span>
+                      <span className="text-slate-400 text-sm"> / 10.0 minimum</span>
+                    </div>
+                    <select
+                      value={eligibility.diploma.ruleType}
+                      onChange={(e) =>
+                        setEligibility({
+                          ...eligibility,
+                          diploma: { ...eligibility.diploma, ruleType: e.target.value },
+                        })
+                      }
+                      className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 focus:outline-none focus:border-amber-400"
+                    >
                       <option value="strict">Strict Check</option>
                       <option value="relaxed">Relaxed Check</option>
                       <option value="info">Info Only</option>
                     </select>
                   </div>
-                  <div className="mt-3 flex items-center gap-3"><div className="flex-1 h-px bg-slate-200"/><span className="text-xs text-slate-400">or type directly</span><div className="flex-1 h-px bg-slate-200"/></div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="flex-1 h-px bg-slate-200" />
+                    <span className="text-xs text-slate-400">or type directly</span>
+                    <div className="flex-1 h-px bg-slate-200" />
+                  </div>
                   <div className="mt-3 relative">
-                    <input type="number" min="0" max="10" step="0.1" value={eligibility.diploma.minCGPA} onChange={e => setEligibility({...eligibility, diploma: {...eligibility.diploma, minCGPA: Math.min(10, Math.max(0, parseFloat(e.target.value) || 0))}})} className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-16 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50"/>
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">CGPA</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.1"
+                      value={eligibility.diploma.minCGPA}
+                      onChange={(e) =>
+                        setEligibility({
+                          ...eligibility,
+                          diploma: {
+                            ...eligibility.diploma,
+                            minCGPA: Math.min(10, Math.max(0, parseFloat(e.target.value) || 0)),
+                          },
+                        })
+                      }
+                      className="w-full border border-slate-200 rounded-xl px-4 py-3 pr-16 text-slate-800 bg-white text-sm font-medium focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">
+                      CGPA
+                    </span>
                   </div>
                 </div>
               )}
@@ -605,10 +1287,13 @@ export default function NewDriveWizard() {
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 mb-6 items-start">
                 <span className="text-amber-500 mt-0.5">ℹ️</span>
                 <div>
-                  <h4 className="text-sm font-bold text-amber-800">12th OR Diploma (Lateral Entry) Rule</h4>
+                  <h4 className="text-sm font-bold text-amber-800">
+                    12th OR Diploma (Lateral Entry) Rule
+                  </h4>
                   <p className="text-xs text-amber-700 mt-0.5">
-                    On the student registration form, candidates will be asked if they completed 12th Standard <b>OR</b> a Diploma. 
-                    They only need to satisfy one of the two criteria requirements based on their educational background.
+                    On the student registration form, candidates will be asked if they completed
+                    12th Standard <b>OR</b> a Diploma. They only need to satisfy one of the two
+                    criteria requirements based on their educational background.
                   </p>
                 </div>
               </div>
@@ -618,20 +1303,43 @@ export default function NewDriveWizard() {
             <div>
               <div className="flex justify-between items-center mb-4">
                 <label className="block text-sm font-bold text-slate-700">Eligible Branches</label>
-                <button onClick={() => setEligibility({...eligibility, branches: eligibility.branches.length === BRANCH_OPTIONS.length ? [] : [...BRANCH_OPTIONS]})} className="text-indigo-600 text-sm font-bold hover:underline">
-                  {eligibility.branches.length === BRANCH_OPTIONS.length ? 'Deselect All' : 'Select All'}
+                <button
+                  onClick={() =>
+                    setEligibility({
+                      ...eligibility,
+                      branches:
+                        eligibility.branches.length === BRANCH_OPTIONS.length
+                          ? []
+                          : [...BRANCH_OPTIONS],
+                    })
+                  }
+                  className="text-indigo-600 text-sm font-bold hover:underline"
+                >
+                  {eligibility.branches.length === BRANCH_OPTIONS.length
+                    ? 'Deselect All'
+                    : 'Select All'}
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                {BRANCH_OPTIONS.map(branch => {
+                {BRANCH_OPTIONS.map((branch) => {
                   const isSelected = eligibility.branches.includes(branch);
                   return (
-                    <div key={branch} onClick={() => setEligibility({ ...eligibility, branches: isSelected ? eligibility.branches.filter(b => b !== branch) : [...eligibility.branches, branch] })}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between font-bold ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-800' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                    <div
+                      key={branch}
+                      onClick={() =>
+                        setEligibility({
+                          ...eligibility,
+                          branches: isSelected
+                            ? eligibility.branches.filter((b) => b !== branch)
+                            : [...eligibility.branches, branch],
+                        })
+                      }
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between font-bold ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-800' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                    >
                       {branch}
                       {isSelected && <CheckCircle size={18} className="text-indigo-600" />}
                     </div>
-                  )
+                  );
                 })}
               </div>
 
@@ -639,23 +1347,51 @@ export default function NewDriveWizard() {
               <div className="mt-4 border-t border-slate-100 pt-4">
                 <p className="text-sm font-medium text-slate-700 mb-2">Add Other Branch</p>
                 <div className="flex gap-2">
-                  <input value={customBranchInput} onChange={e => setCustomBranchInput(e.target.value.toUpperCase())}
-                    onKeyDown={e => { if (e.key === 'Enter' && customBranchInput.trim()) { e.preventDefault(); addCustomBranch(); } }}
-                    placeholder="Type branch name e.g. AIML, DS..." maxLength={20}
-                    className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 uppercase"/>
-                  <button type="button" onClick={addCustomBranch} disabled={!customBranchInput.trim()} className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">Add</button>
+                  <input
+                    value={customBranchInput}
+                    onChange={(e) => setCustomBranchInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && customBranchInput.trim()) {
+                        e.preventDefault();
+                        addCustomBranch();
+                      }
+                    }}
+                    placeholder="Type branch name e.g. AIML, DS..."
+                    maxLength={20}
+                    className="flex-1 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={addCustomBranch}
+                    disabled={!customBranchInput.trim()}
+                    className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+                  >
+                    Add
+                  </button>
                 </div>
                 {customBranches.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3">
-                    {customBranches.map(branch => (
-                      <div key={branch} className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full">
+                    {customBranches.map((branch) => (
+                      <div
+                        key={branch}
+                        className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full"
+                      >
                         {branch}
-                        <button type="button" onClick={() => removeCustomBranch(branch)} className="text-indigo-400 hover:text-indigo-700 ml-0.5"><X size={13}/></button>
+                        <button
+                          type="button"
+                          onClick={() => removeCustomBranch(branch)}
+                          className="text-indigo-400 hover:text-indigo-700 ml-0.5"
+                        >
+                          <X size={13} />
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
-                <p className="text-xs text-slate-400 mt-2">Press Enter or click Add. Custom branches will be included alongside the selected ones above.</p>
+                <p className="text-xs text-slate-400 mt-2">
+                  Press Enter or click Add. Custom branches will be included alongside the selected
+                  ones above.
+                </p>
               </div>
             </div>
           </div>
@@ -665,33 +1401,72 @@ export default function NewDriveWizard() {
         {step === 3 && (
           <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
             <h2 className="text-2xl font-black text-slate-800 mb-1">Application Form Fields</h2>
-            <p className="text-slate-500 text-sm mb-8">Toggle the optional profile fields you want students to fill in. Standard fields (Name, USN, CGPA, Email) are always included.</p>
+            <p className="text-slate-500 text-sm mb-8">
+              Toggle the optional profile fields you want students to fill in. Standard fields
+              (Name, USN, CGPA, Email) are always included.
+            </p>
 
             {/* Optional Toggles */}
             <div className="space-y-3 mb-8">
-              {([
-                { key: 'github',     label: 'GitHub Profile',    desc: 'Great for technical / dev roles', icon: '⚙️', color: 'indigo' },
-                { key: 'linkedin',   label: 'LinkedIn Profile',  desc: 'Professional presence & endorsements', icon: '💼', color: 'blue' },
-                { key: 'portfolio',  label: 'Portfolio / Website', desc: 'Design, content & product roles', icon: '🌐', color: 'purple' },
-                { key: 'resumeText', label: 'Resume Paste-In',   desc: 'AI will extract skills from raw text', icon: '🤖', color: 'emerald' },
-              ] as const).map(({ key, label, desc, icon, color }) => {
+              {(
+                [
+                  {
+                    key: 'github',
+                    label: 'GitHub Profile',
+                    desc: 'Great for technical / dev roles',
+                    icon: '⚙️',
+                    color: 'indigo',
+                  },
+                  {
+                    key: 'linkedin',
+                    label: 'LinkedIn Profile',
+                    desc: 'Professional presence & endorsements',
+                    icon: '💼',
+                    color: 'blue',
+                  },
+                  {
+                    key: 'portfolio',
+                    label: 'Portfolio / Website',
+                    desc: 'Design, content & product roles',
+                    icon: '🌐',
+                    color: 'purple',
+                  },
+                  {
+                    key: 'resumeText',
+                    label: 'Resume Paste-In',
+                    desc: 'AI will extract skills from raw text',
+                    icon: '🤖',
+                    color: 'emerald',
+                  },
+                ] as const
+              ).map(({ key, label, desc, icon, color }) => {
                 const active = requestedFields[key];
                 return (
                   <div
                     key={key}
-                    onClick={() => setRequestedFields(prev => ({ ...prev, [key]: !prev[key] }))}
+                    onClick={() => setRequestedFields((prev) => ({ ...prev, [key]: !prev[key] }))}
                     className={`flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all ${
-                      active ? 'border-indigo-400 bg-indigo-50/60 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
+                      active
+                        ? 'border-indigo-400 bg-indigo-50/60 shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
                     }`}
                   >
                     <span className="text-2xl select-none">{icon}</span>
                     <div className="flex-1">
-                      <p className={`font-bold text-sm ${ active ? 'text-indigo-900' : 'text-slate-800'}`}>{label}</p>
+                      <p
+                        className={`font-bold text-sm ${active ? 'text-indigo-900' : 'text-slate-800'}`}
+                      >
+                        {label}
+                      </p>
                       <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
                     </div>
                     {/* Pill toggle */}
-                    <div className={`relative w-12 h-6 rounded-full transition-colors ${ active ? 'bg-indigo-600' : 'bg-slate-200' }`}>
-                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${ active ? 'left-7' : 'left-1' }`} />
+                    <div
+                      className={`relative w-12 h-6 rounded-full transition-colors ${active ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <div
+                        className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${active ? 'left-7' : 'left-1'}`}
+                      />
                     </div>
                   </div>
                 );
@@ -704,11 +1479,14 @@ export default function NewDriveWizard() {
                 <span className="text-lg">🧠</span>
                 <h3 className="font-bold text-indigo-900 text-sm">AI Evaluation Hint (Optional)</h3>
               </div>
-              <p className="text-xs text-indigo-700 mb-3">Describe the top 3 technical skills this role demands. The AI ATS parser will weigh resumes against these when scoring candidates.</p>
+              <p className="text-xs text-indigo-700 mb-3">
+                Describe the top 3 technical skills this role demands. The AI ATS parser will weigh
+                resumes against these when scoring candidates.
+              </p>
               <textarea
                 rows={3}
                 value={aiSkillPrompt}
-                onChange={e => setAiSkillPrompt(e.target.value)}
+                onChange={(e) => setAiSkillPrompt(e.target.value)}
                 placeholder="e.g. React, System Design, SQL query optimisation"
                 className="w-full border border-indigo-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 resize-none"
               />
@@ -720,30 +1498,35 @@ export default function NewDriveWizard() {
         {step === 4 && (
           <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
             <h2 className="text-2xl font-black text-slate-800 mb-1">Application Time-Lock</h2>
-            <p className="text-slate-500 text-sm mb-8">Set a strict server-enforced window. Students cannot view OR submit the form outside these dates — not even with a direct link.</p>
+            <p className="text-slate-500 text-sm mb-8">
+              Set a strict server-enforced window. Students cannot view OR submit the form outside
+              these dates — not even with a direct link.
+            </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-1.5">
-                  <Calendar size={14} className="text-indigo-500"/>
+                  <Calendar size={14} className="text-indigo-500" />
                   Applications Open
                 </label>
                 <input
                   type="datetime-local"
                   value={applicationWindow.startDate}
-                  onChange={e => setApplicationWindow(p => ({ ...p, startDate: e.target.value }))}
+                  onChange={(e) =>
+                    setApplicationWindow((p) => ({ ...p, startDate: e.target.value }))
+                  }
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
                 />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-1.5">
-                  <Clock size={14} className="text-red-500"/>
+                  <Clock size={14} className="text-red-500" />
                   Applications Close
                 </label>
                 <input
                   type="datetime-local"
                   value={applicationWindow.endDate}
-                  onChange={e => setApplicationWindow(p => ({ ...p, endDate: e.target.value }))}
+                  onChange={(e) => setApplicationWindow((p) => ({ ...p, endDate: e.target.value }))}
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
                 />
               </div>
@@ -757,8 +1540,7 @@ export default function NewDriveWizard() {
                   <p className="text-sm font-bold text-green-800">Window Set</p>
                   <p className="text-xs text-green-700 mt-0.5">
                     Open: {new Date(applicationWindow.startDate).toLocaleString()}
-                    &nbsp;→&nbsp;
-                    Close: {new Date(applicationWindow.endDate).toLocaleString()}
+                    &nbsp;→&nbsp; Close: {new Date(applicationWindow.endDate).toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -766,12 +1548,19 @@ export default function NewDriveWizard() {
 
             {/* Extension reason */}
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Extension Reason <span className="text-slate-400 font-normal">(optional)</span></label>
-              <p className="text-xs text-slate-500 mb-2">If you extend the deadline in future, this message will be shown to students on the apply page.</p>
+              <label className="block text-sm font-bold text-slate-700 mb-2">
+                Extension Reason <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                If you extend the deadline in future, this message will be shown to students on the
+                apply page.
+              </p>
               <input
                 type="text"
                 value={applicationWindow.extensionReason}
-                onChange={e => setApplicationWindow(p => ({ ...p, extensionReason: e.target.value }))}
+                onChange={(e) =>
+                  setApplicationWindow((p) => ({ ...p, extensionReason: e.target.value }))
+                }
                 placeholder="e.g. Deadline extended due to server maintenance on April 30th"
                 className="w-full border border-slate-200 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-400 bg-white text-sm focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
               />
@@ -780,7 +1569,8 @@ export default function NewDriveWizard() {
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-5 flex items-start gap-3">
               <span className="text-amber-500 mt-0.5 text-sm">⚠️</span>
               <p className="text-xs text-amber-700">
-                <strong>Skip this step</strong> if you want to manage open/close manually from the Drive Detail page. Leaving dates empty disables the time-lock.
+                <strong>Skip this step</strong> if you want to manage open/close manually from the
+                Drive Detail page. Leaving dates empty disables the time-lock.
               </p>
             </div>
           </div>
@@ -790,7 +1580,9 @@ export default function NewDriveWizard() {
         {step === 5 && (
           <div className="max-w-4xl mx-auto animate-in slide-in-from-right-4 duration-300">
             <h2 className="text-2xl font-black text-slate-800 mb-2">Select Rounds</h2>
-            <p className="text-slate-500 mb-8 font-medium">Choose rounds and drag to set the order.</p>
+            <p className="text-slate-500 mb-8 font-medium">
+              Choose rounds and drag to set the order.
+            </p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* LEFT — Available Rounds */}
@@ -800,17 +1592,26 @@ export default function NewDriveWizard() {
                   <span className="text-xs text-slate-400">Click to add →</span>
                 </div>
                 <div className="space-y-0">
-                  {AVAILABLE_ROUNDS.map(round => (
-                    <div key={round.type} onClick={() => addRound(round)}
+                  {AVAILABLE_ROUNDS.map((round) => (
+                    <div
+                      key={round.type}
+                      onClick={() => addRound(round)}
                       className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all mb-2 ${
-                        isRoundSelected(round.type) ? 'border-indigo-200 bg-indigo-50 opacity-50 cursor-not-allowed' : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50'
-                      }`}>
+                        isRoundSelected(round.type)
+                          ? 'border-indigo-200 bg-indigo-50 opacity-50 cursor-not-allowed'
+                          : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50'
+                      }`}
+                    >
                       <span className="text-xl">{round.icon}</span>
                       <div className="flex-1">
                         <div className="text-sm font-medium text-slate-800">{round.label}</div>
                         <div className="text-xs text-slate-400">{round.desc}</div>
                       </div>
-                      {isRoundSelected(round.type) ? <Check size={16} className="text-indigo-400"/> : <Plus size={16} className="text-slate-400"/>}
+                      {isRoundSelected(round.type) ? (
+                        <Check size={16} className="text-indigo-400" />
+                      ) : (
+                        <Plus size={16} className="text-slate-400" />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -819,12 +1620,26 @@ export default function NewDriveWizard() {
                 <div className="mt-3 border-t border-slate-200 pt-3">
                   <p className="text-xs text-slate-500 mb-2 font-medium">Add Custom Round</p>
                   <div className="flex gap-2">
-                    <input value={customRoundInput} onChange={e => setCustomRoundInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomRound(); } }}
+                    <input
+                      value={customRoundInput}
+                      onChange={(e) => setCustomRoundInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addCustomRound();
+                        }
+                      }}
                       placeholder="e.g. Case Study, Assignment..."
-                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:border-indigo-400"/>
-                    <button type="button" onClick={addCustomRound} disabled={!customRoundInput.trim()}
-                      className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40 hover:bg-indigo-700">Add</button>
+                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:border-indigo-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={addCustomRound}
+                      disabled={!customRoundInput.trim()}
+                      className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-40 hover:bg-indigo-700"
+                    >
+                      Add
+                    </button>
                   </div>
                 </div>
               </div>
@@ -843,10 +1658,17 @@ export default function NewDriveWizard() {
                     <p className="text-slate-300 text-xs mt-1">Drag to set the order</p>
                   </div>
                 ) : (
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                    <SortableContext items={selectedRounds.map(r => r.id)} strategy={verticalListSortingStrategy}>
-                      {selectedRounds.map(round => (
-                        <SortableRound key={round.id} round={round} onRemove={removeRound}/>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={selectedRounds.map((r) => r.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {selectedRounds.map((round) => (
+                        <SortableRound key={round.id} round={round} onRemove={removeRound} />
                       ))}
                     </SortableContext>
                   </DndContext>
@@ -860,80 +1682,162 @@ export default function NewDriveWizard() {
         {step === 6 && (
           <div className="max-w-2xl mx-auto animate-in slide-in-from-right-4 duration-300">
             <h2 className="text-2xl font-black text-slate-800 mb-2">Event Setup</h2>
-            <p className="text-slate-500 mb-8 font-medium">Set the initial event date, report time, and primary seminar/test hall configuration.</p>
-            
+            <p className="text-slate-500 mb-8 font-medium">
+              Set the initial event date, report time, and primary seminar/test hall configuration.
+            </p>
+
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Event Date (Optional)</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    Event Date (Optional)
+                  </label>
                   <div className="relative">
-                    <input type="date" value={eventSetup.eventDate} onChange={e => setEventSetup({...eventSetup, eventDate: e.target.value})} className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50" />
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                      type="date"
+                      value={eventSetup.eventDate}
+                      onChange={(e) => setEventSetup({ ...eventSetup, eventDate: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                    />
+                    <Calendar
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      size={18}
+                    />
                   </div>
                   {conflictWarning && conflictWarning.length > 0 && (
                     <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3 animate-in fade-in slide-in-from-top-2">
-                       <span className="text-amber-500 mt-0.5">⚠️</span>
-                       <div>
-                         <h4 className="text-sm font-bold text-amber-800">Schedule Overlap Detected!</h4>
-                         <p className="text-xs text-amber-700 mt-0.5">There is already {conflictWarning.length} drive(s) scheduled on this date:</p>
-                         <ul className="text-xs text-amber-900 font-medium list-disc list-inside mt-1">
-                           {conflictWarning.map((d, i) => <li key={i}>{d.companyName} ({d.jobRole})</li>)}
-                         </ul>
-                       </div>
+                      <span className="text-amber-500 mt-0.5">⚠️</span>
+                      <div>
+                        <h4 className="text-sm font-bold text-amber-800">
+                          Schedule Overlap Detected!
+                        </h4>
+                        <p className="text-xs text-amber-700 mt-0.5">
+                          There is already {conflictWarning.length} drive(s) scheduled on this date:
+                        </p>
+                        <ul className="text-xs text-amber-900 font-medium list-disc list-inside mt-1">
+                          {conflictWarning.map((d, i) => (
+                            <li key={i}>
+                              {d.companyName} ({d.jobRole})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Reporting Time (Optional)</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    Reporting Time (Optional)
+                  </label>
                   <div className="relative">
-                    <input type="time" value={eventSetup.reportTime} onChange={e => setEventSetup({...eventSetup, reportTime: e.target.value})} className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50" />
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                      type="time"
+                      value={eventSetup.reportTime}
+                      onChange={(e) => setEventSetup({ ...eventSetup, reportTime: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-slate-800 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50"
+                    />
+                    <Clock
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      size={18}
+                    />
                   </div>
                 </div>
               </div>
+            </div>
 
+            <div className="pt-6 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="block text-sm font-bold text-slate-700">Infrastructure Mapping</h3>
+                  <p className="text-xs text-slate-500">
+                    Pre-create the rooms / labs for your selected rounds.
+                  </p>
+                </div>
               </div>
 
-              <div className="pt-6 border-t border-slate-200">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="block text-sm font-bold text-slate-700">Infrastructure Mapping</h3>
-                    <p className="text-xs text-slate-500">Pre-create the rooms / labs for your selected rounds.</p>
-                  </div>
-                </div>
+              {selectedRounds.length === 0 && (
+                <p className="text-sm text-slate-400 italic">
+                  Go back to step 3 and select rounds first.
+                </p>
+              )}
 
-                {selectedRounds.length === 0 && <p className="text-sm text-slate-400 italic">Go back to step 3 and select rounds first.</p>}
-                
-                <div className="space-y-6">
-                  {selectedRounds.map(round => {
-                    const rooms = eventSetup.roundRooms[round.id] || [];
-                    return (
-                      <div key={round.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2">
-                          <span className="font-bold text-slate-800 flex items-center gap-2">{round.icon} {round.label} Rooms</span>
-                          <button onClick={() => addRoomToRound(round.id)} className="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"><Plus size={14}/> Add Room (e.g. Lab 1)</button>
-                        </div>
-                        {rooms.length === 0 ? (
-                          <div className="text-center py-3 text-xs text-slate-400 italic">No specific rooms configured for this round. You can allocate them on event day.</div>
-                        ) : (
-                          <div className="space-y-3">
-                            {rooms.map((room, idx) => (
-                              <div key={idx} className="flex items-center gap-3 bg-white p-2 border border-slate-200 rounded-lg">
-                                <div className="flex-1 relative">
-                                  <input type="text" placeholder="Room Name (e.g. Lab A)" value={room.name} onChange={e => updateRoom(round.id, idx, 'name', e.target.value)} className="w-full border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-400"/>
-                                  <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                                </div>
-                                <div className="w-32 relative">
-                                  <input type="number" min="1" placeholder="Capacity" value={room.capacity || ''} onChange={e => updateRoom(round.id, idx, 'capacity', parseInt(e.target.value) || 0)} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"/>
-                                </div>
-                                <button type="button" onClick={() => removeRoom(round.id, idx)} className="w-8 h-8 flex items-center justify-center rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors"><X size={14}/></button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+              <div className="space-y-6">
+                {selectedRounds.map((round) => {
+                  const rooms = eventSetup.roundRooms[round.id] || [];
+                  return (
+                    <div
+                      key={round.id}
+                      className="bg-slate-50 border border-slate-200 rounded-xl p-4"
+                    >
+                      <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2">
+                        <span className="font-bold text-slate-800 flex items-center gap-2">
+                          {round.icon} {round.label} Rooms
+                        </span>
+                        <button
+                          onClick={() => addRoomToRound(round.id)}
+                          className="text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"
+                        >
+                          <Plus size={14} /> Add Room (e.g. Lab 1)
+                        </button>
                       </div>
-                    );
-                  })}
+                      {rooms.length === 0 ? (
+                        <div className="text-center py-3 text-xs text-slate-400 italic">
+                          No specific rooms configured for this round. You can allocate them on
+                          event day.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {rooms.map((room, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-3 bg-white p-2 border border-slate-200 rounded-lg"
+                            >
+                              <div className="flex-1 relative">
+                                <input
+                                  type="text"
+                                  placeholder="Room Name (e.g. Lab A)"
+                                  value={room.name}
+                                  onChange={(e) =>
+                                    updateRoom(round.id, idx, 'name', e.target.value)
+                                  }
+                                  className="w-full border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
+                                />
+                                <MapPin
+                                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                                  size={14}
+                                />
+                              </div>
+                              <div className="w-32 relative">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  placeholder="Capacity"
+                                  value={room.capacity || ''}
+                                  onChange={(e) =>
+                                    updateRoom(
+                                      round.id,
+                                      idx,
+                                      'capacity',
+                                      parseInt(e.target.value) || 0,
+                                    )
+                                  }
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeRoom(round.id, idx)}
+                                className="w-8 h-8 flex items-center justify-center rounded-md bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -947,50 +1851,160 @@ export default function NewDriveWizard() {
                 <Check size={32} strokeWidth={3} />
               </div>
               <h2 className="text-2xl font-black text-slate-800">Confirm Drive Details</h2>
-              <p className="text-slate-500 font-medium mt-1">Please review everything before finalizing.</p>
+              <p className="text-slate-500 font-medium mt-1">
+                Please review everything before finalizing.
+              </p>
             </div>
 
             <div className="space-y-4">
               {/* Company Details */}
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Company Details</h3>
+                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">
+                  Company Details
+                </h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><span className="text-xs font-bold text-slate-400 uppercase">Company</span><p className="font-bold text-slate-800 text-lg">{getValues('companyName')}</p></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase">Role</span><p className="font-bold text-slate-800 text-lg">{getValues('jobRole')}</p></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase">CTC</span><p className="font-bold text-slate-800 text-lg">{getValues('ctc')} LPA</p></div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Company</span>
+                    <p className="font-bold text-slate-800 text-lg">{getValues('companyName')}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 uppercase">Role</span>
+                    <p className="font-bold text-slate-800 text-lg">{getValues('jobRole')}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 uppercase">CTC</span>
+                    <p className="font-bold text-slate-800 text-lg">{getValues('ctc')} LPA</p>
+                  </div>
                   <div className="col-span-2 mt-2">
-                    <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">Locations</span>
-                    <div className="flex gap-2 flex-wrap">{locations.map(l => <span key={l} className="bg-white border border-slate-200 px-3 py-1 rounded-lg text-sm font-bold text-slate-700">{l}</span>)}</div>
+                    <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">
+                      Locations
+                    </span>
+                    <div className="flex gap-2 flex-wrap">
+                      {locations.map((l) => (
+                        <span
+                          key={l}
+                          className="bg-white border border-slate-200 px-3 py-1 rounded-lg text-sm font-bold text-slate-700"
+                        >
+                          {l}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Eligibility */}
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Eligibility</h3>
+                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">
+                  Eligibility
+                </h3>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>Min CGPA</span><span className="font-medium text-slate-800">{eligibility.cgpa.minimum.toFixed(1)} / 10.0 <span className="text-xs text-slate-400 capitalize">({eligibility.cgpa.ruleType})</span></span></div>
-                  {eligibility.tenth.required && <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>10th Percentage</span><span className="font-medium text-slate-800">{eligibility.tenth.ruleType === 'info' ? 'Info Only' : `≥ ${eligibility.tenth.minPercentage}%`} <span className="text-xs text-slate-400 capitalize">({eligibility.tenth.ruleType})</span></span></div>}
-                  {eligibility.twelfth.required && <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>12th Percentage</span><span className="font-medium text-slate-800">{eligibility.twelfth.ruleType === 'info' ? 'Info Only' : `≥ ${eligibility.twelfth.minPercentage}%`} <span className="text-xs text-slate-400 capitalize">({eligibility.twelfth.ruleType})</span></span></div>}
-                  {eligibility.diploma.required && <div className="flex justify-between text-sm"><span className="text-slate-500 flex items-center gap-1"><Check size={12} className="text-green-500"/>Diploma CGPA</span><span className="font-medium text-slate-800">{eligibility.diploma.ruleType === 'info' ? 'Info Only' : `≥ ${eligibility.diploma.minCGPA.toFixed(1)}`} <span className="text-xs text-slate-400 capitalize">({eligibility.diploma.ruleType})</span></span></div>}
-                  {!eligibility.tenth.required && !eligibility.twelfth.required && !eligibility.diploma.required && <div className="text-xs text-slate-400 italic">No 10th/12th/Diploma requirement set</div>}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500 flex items-center gap-1">
+                      <Check size={12} className="text-green-500" />
+                      Min CGPA
+                    </span>
+                    <span className="font-medium text-slate-800">
+                      {eligibility.cgpa.minimum.toFixed(1)} / 10.0{' '}
+                      <span className="text-xs text-slate-400 capitalize">
+                        ({eligibility.cgpa.ruleType})
+                      </span>
+                    </span>
+                  </div>
+                  {eligibility.tenth.required && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <Check size={12} className="text-green-500" />
+                        10th Percentage
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {eligibility.tenth.ruleType === 'info'
+                          ? 'Info Only'
+                          : `≥ ${eligibility.tenth.minPercentage}%`}{' '}
+                        <span className="text-xs text-slate-400 capitalize">
+                          ({eligibility.tenth.ruleType})
+                        </span>
+                      </span>
+                    </div>
+                  )}
+                  {eligibility.twelfth.required && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <Check size={12} className="text-green-500" />
+                        12th Percentage
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {eligibility.twelfth.ruleType === 'info'
+                          ? 'Info Only'
+                          : `≥ ${eligibility.twelfth.minPercentage}%`}{' '}
+                        <span className="text-xs text-slate-400 capitalize">
+                          ({eligibility.twelfth.ruleType})
+                        </span>
+                      </span>
+                    </div>
+                  )}
+                  {eligibility.diploma.required && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <Check size={12} className="text-green-500" />
+                        Diploma CGPA
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {eligibility.diploma.ruleType === 'info'
+                          ? 'Info Only'
+                          : `≥ ${eligibility.diploma.minCGPA.toFixed(1)}`}{' '}
+                        <span className="text-xs text-slate-400 capitalize">
+                          ({eligibility.diploma.ruleType})
+                        </span>
+                      </span>
+                    </div>
+                  )}
+                  {!eligibility.tenth.required &&
+                    !eligibility.twelfth.required &&
+                    !eligibility.diploma.required && (
+                      <div className="text-xs text-slate-400 italic">
+                        No 10th/12th/Diploma requirement set
+                      </div>
+                    )}
                   <div className="mt-3 pt-3 border-t border-slate-200">
-                    <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">Branches</span>
-                    <div className="flex gap-1 flex-wrap">{allBranches.map(b => <span key={b} className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-bold">{b}</span>)}</div>
+                    <span className="text-xs font-bold text-slate-400 uppercase mb-1 block">
+                      Branches
+                    </span>
+                    <div className="flex gap-1 flex-wrap">
+                      {allBranches.map((b) => (
+                        <span
+                          key={b}
+                          className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-bold"
+                        >
+                          {b}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Selected Rounds */}
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Selected Rounds</h3>
+                <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">
+                  Selected Rounds
+                </h3>
                 <div className="space-y-2">
-                  {selectedRounds.map(r => (
-                    <div key={r.id} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">{r.order}</span>
+                  {selectedRounds.map((r) => (
+                    <div
+                      key={r.id}
+                      className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm"
+                    >
+                      <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">
+                        {r.order}
+                      </span>
                       <span className="text-lg">{r.icon}</span>
                       <span className="font-bold text-slate-700 flex-1">{r.label}</span>
-                      {r.isCustom && <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded font-medium">Custom</span>}
+                      {r.isCustom && (
+                        <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded font-medium">
+                          Custom
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -999,10 +2013,33 @@ export default function NewDriveWizard() {
               {/* Event Details */}
               {(eventSetup.eventDate || Object.keys(eventSetup.roundRooms).length > 0) && (
                 <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                  <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Event Setup</h3>
+                  <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">
+                    Event Setup
+                  </h3>
                   <div className="grid grid-cols-2 gap-4">
-                    {eventSetup.eventDate && <div><span className="text-xs font-bold text-slate-400 uppercase">Date & Time</span><p className="font-bold text-slate-800 text-lg">{eventSetup.eventDate} <span className="text-sm font-medium text-slate-500">{eventSetup.reportTime}</span></p></div>}
-                    {Object.keys(eventSetup.roundRooms).length > 0 && <div><span className="text-xs font-bold text-slate-400 uppercase">Infrastructure</span><p className="font-bold text-slate-800 text-lg">{Object.values(eventSetup.roundRooms).flat().length} Rooms Mapped</p></div>}
+                    {eventSetup.eventDate && (
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase">
+                          Date & Time
+                        </span>
+                        <p className="font-bold text-slate-800 text-lg">
+                          {eventSetup.eventDate}{' '}
+                          <span className="text-sm font-medium text-slate-500">
+                            {eventSetup.reportTime}
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                    {Object.keys(eventSetup.roundRooms).length > 0 && (
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase">
+                          Infrastructure
+                        </span>
+                        <p className="font-bold text-slate-800 text-lg">
+                          {Object.values(eventSetup.roundRooms).flat().length} Rooms Mapped
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1014,18 +2051,44 @@ export default function NewDriveWizard() {
       {/* Footer Navigation */}
       <div className="flex justify-between items-center mt-2 px-2 max-w-3xl mx-auto relative z-10">
         {step > 1 ? (
-          <button onClick={() => setStep(step - 1)} className="px-6 py-3.5 rounded-xl font-bold text-slate-600 bg-white/80 backdrop-blur-sm border-2 border-slate-200/60 hover:bg-white hover:border-slate-300 shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 group">
-            <ArrowLeft size={18} strokeWidth={3} className="text-slate-400 group-hover:text-slate-600 group-hover:-translate-x-1 transition-all"/> Back
-          </button>
-        ) : <div aria-hidden="true"></div>}
-        
-        {step < 7 ? (
-          <button onClick={handleNext} className="px-8 py-3.5 rounded-xl font-bold text-white bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/40 active:scale-95 hover:-translate-y-0.5 transition-all flex items-center gap-2 group">
-            Next Step <ArrowRight size={18} strokeWidth={3} className="group-hover:translate-x-1 transition-transform"/>
+          <button
+            onClick={() => setStep(step - 1)}
+            className="px-6 py-3.5 rounded-xl font-bold text-slate-600 bg-white/80 backdrop-blur-sm border-2 border-slate-200/60 hover:bg-white hover:border-slate-300 shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center gap-2 group"
+          >
+            <ArrowLeft
+              size={18}
+              strokeWidth={3}
+              className="text-slate-400 group-hover:text-slate-600 group-hover:-translate-x-1 transition-all"
+            />{' '}
+            Back
           </button>
         ) : (
-          <button onClick={submitDrive} className="px-8 py-3.5 rounded-xl font-bold text-white bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-xl shadow-emerald-500/30 hover:shadow-emerald-500/40 active:scale-95 hover:-translate-y-0.5 transition-all flex items-center gap-2 group">
-            <Check size={18} strokeWidth={3} className="group-hover:scale-110 transition-transform"/> Create Placement Drive
+          <div aria-hidden="true"></div>
+        )}
+
+        {step < 7 ? (
+          <button
+            onClick={handleNext}
+            className="px-8 py-3.5 rounded-xl font-bold text-white bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/40 active:scale-95 hover:-translate-y-0.5 transition-all flex items-center gap-2 group"
+          >
+            Next Step{' '}
+            <ArrowRight
+              size={18}
+              strokeWidth={3}
+              className="group-hover:translate-x-1 transition-transform"
+            />
+          </button>
+        ) : (
+          <button
+            onClick={submitDrive}
+            className="px-8 py-3.5 rounded-xl font-bold text-white bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-xl shadow-emerald-500/30 hover:shadow-emerald-500/40 active:scale-95 hover:-translate-y-0.5 transition-all flex items-center gap-2 group"
+          >
+            <Check
+              size={18}
+              strokeWidth={3}
+              className="group-hover:scale-110 transition-transform"
+            />{' '}
+            Create Placement Drive
           </button>
         )}
       </div>

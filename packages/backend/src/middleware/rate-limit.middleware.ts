@@ -19,16 +19,20 @@ export const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: makeStore(),
-  message: { success: false, error: 'Too many requests from this IP, please try again after 15 minutes' },
+  message: {
+    success: false,
+    error: 'Too many requests from this IP, please try again after 15 minutes',
+  },
 });
-
 
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 10000,
   standardHeaders: true,
   legacyHeaders: false,
   store: makeStore(),
-  message: { success: false, error: 'Too many login attempts from this IP, please try again after 15 minutes' },
+  message: {
+    success: false,
+    error: 'Too many login attempts from this IP, please try again after 15 minutes',
+  },
 });
-

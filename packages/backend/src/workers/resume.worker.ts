@@ -2,6 +2,7 @@ import { Queue, Worker, Job } from 'bullmq';
 import { redisClient } from '../config/redis';
 import { StudentProfileModel } from '../models/student-profile.model';
 import { llmInvoke, OllamaUnavailableError } from '../utils/llm';
+import { VectorService } from '../services/vector.service';
 
 export const resumeParsingQueue = new Queue('resumeParsingQueue', { connection: redisClient });
 
@@ -9,7 +10,9 @@ export const resumeParsingWorker = new Worker(
   'resumeParsingQueue',
   async (job: Job) => {
     const { usn, rawText } = job.data as { usn: string; rawText: string };
-    console.log(`[Resume Worker] Starting ATS extraction — USN: ${usn} | Attempt: ${job.attemptsMade + 1}`);
+    console.log(
+      `[Resume Worker] Starting ATS extraction — USN: ${usn} | Attempt: ${job.attemptsMade + 1}`,
+    );
 
     const profile = await StudentProfileModel.findOne({ usn });
     if (!profile) throw new Error(`[Resume Worker] Student profile not found for USN: ${usn}`);
@@ -30,7 +33,7 @@ export const resumeParsingWorker = new Worker(
       clearTimeout(timeoutHandle);
       if (err instanceof OllamaUnavailableError) {
         console.warn(`[Resume Worker] Ollama not ready yet for ${usn}. BullMQ will retry.`);
-        throw err; 
+        throw err;
       }
       if ((err as any)?.name === 'AbortError') {
         throw new Error(`[Resume Worker] LLM timeout after ${TIMEOUT_MS}ms for USN ${usn}`);
@@ -51,23 +54,34 @@ export const resumeParsingWorker = new Worker(
     }
 
     const normalised = {
-      skills:    Array.isArray(parsedData.skills)    ? parsedData.skills    : [],
+      skills: Array.isArray(parsedData.skills) ? parsedData.skills : [],
       education: Array.isArray(parsedData.education) ? parsedData.education : [],
-      projects:  Array.isArray(parsedData.projects)  ? parsedData.projects  : [],
+      projects: Array.isArray(parsedData.projects) ? parsedData.projects : [],
     };
 
     await StudentProfileModel.findByIdAndUpdate(profile._id, {
       $set: {
+        skills: normalised.skills,
+        education: normalised.education,
+        projects: normalised.projects,
         parsingStatus: 'completed',
-        parsedResume:  normalised,
+        parsedAt: new Date(),
       },
     });
+
+    // ── Qdrant Vector Upsert ────────────────────────────────────────────────
+    await VectorService.upsertResume(profile._id.toString(), profile.usn, rawText);
 
     console.log(`[Resume Worker] ✅ Completed ATS extraction for ${usn}`);
     return { success: true, usn };
   },
   {
     connection: redisClient,
+    // ── GPU Concurrency ────────────────────────────────────────────────────────
+    // RTX 5060 has 8 GB VRAM. gemma2:2b uses ~2.2 GB loaded, leaving ~5.8 GB
+    // headroom. 5 concurrent jobs saturate the GPU without OOM-killing the model.
+    // Each resume parses in ~2-3s on GPU vs ~25s on CPU → 5x throughput.
+    concurrency: 5,
     settings: {
       backoffStrategy: (attemptsMade: number) => {
         const delays = [0, 10_000, 30_000, 60_000];
@@ -89,9 +103,9 @@ export async function enqueueResumeParsing(usn: string, rawText: string) {
     'extract-json-from-resume',
     { usn, rawText },
     {
-      attempts:      4,
+      attempts: 4,
       removeOnComplete: true,
-      removeOnFail:  false,
+      removeOnFail: false,
       backoff: { type: 'custom' },
     },
   );

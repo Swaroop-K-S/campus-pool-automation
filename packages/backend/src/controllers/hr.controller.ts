@@ -6,6 +6,7 @@ import { DriveModel, ApplicationModel, RoomModel } from '../models';
 import { UserModel } from '../models/user.model';
 import { asyncHandler } from '../utils/async-handler';
 import { getIO } from '../socket';
+import { VectorService } from '../services/vector.service';
 
 // Multer: memory storage for parsing uploaded pass-list files
 export const hrUpload = multer({
@@ -34,7 +35,9 @@ export const getHRDashboard = asyncHandler(async (req: Request, res: Response) =
   const driveId = getHRDriveId(req);
 
   const drive = await DriveModel.findById(driveId)
-    .select('companyName jobRole ctc locations eventDate reportTime venueDetails rounds status isPaused schedule')
+    .select(
+      'companyName jobRole ctc locations eventDate reportTime venueDetails rounds status isPaused schedule',
+    )
     .lean();
   if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
 
@@ -72,7 +75,9 @@ export const getHRStudents = asyncHandler(async (req: Request, res: Response) =>
 
   const [applications, total] = await Promise.all([
     ApplicationModel.find(filter)
-      .select('status currentRound driveStudentId referenceNumber data attendedAt submittedAt assignedRoomId')
+      .select(
+        'status currentRound driveStudentId referenceNumber data attendedAt submittedAt assignedRoomId',
+      )
       .populate('assignedRoomId', 'name floor round')
       .sort({ submittedAt: -1 })
       .skip((page - 1) * limit)
@@ -115,15 +120,19 @@ export const uploadHRRoundResults = asyncHandler(async (req: Request, res: Respo
   const passedUSNs: string[] = [];
   const passedEmails: string[] = [];
 
-  rows.forEach(row => {
-    Object.keys(row).forEach(k => {
+  rows.forEach((row) => {
+    Object.keys(row).forEach((k) => {
       const nk = normalizeKey(k);
       if (['usn', 'rollno', 'regno', 'registrationnumber'].includes(nk)) {
-        const val = String(row[k] || '').toUpperCase().trim();
+        const val = String(row[k] || '')
+          .toUpperCase()
+          .trim();
         if (val) passedUSNs.push(val);
       }
       if (['email', 'emailid', 'emailaddress'].includes(nk)) {
-        const val = String(row[k] || '').toLowerCase().trim();
+        const val = String(row[k] || '')
+          .toLowerCase()
+          .trim();
         if (val) passedEmails.push(val);
       }
     });
@@ -137,11 +146,11 @@ export const uploadHRRoundResults = asyncHandler(async (req: Request, res: Respo
   }
 
   // Find students currently in this drive + this round
-  const roundStudents = await ApplicationModel.find({
+  const roundStudents = (await ApplicationModel.find({
     driveId,
     currentRound: roundType,
     status: { $nin: ['rejected', 'selected'] },
-  }).lean() as any[];
+  }).lean()) as any[];
 
   const passed: string[] = [];
   const failed: string[] = [];
@@ -154,8 +163,7 @@ export const uploadHRRoundResults = asyncHandler(async (req: Request, res: Respo
     const appEmail = (d.email || d.Email || '').toString().toLowerCase().trim();
 
     const isPass =
-      (appUSN && passedUSNs.includes(appUSN)) ||
-      (appEmail && passedEmails.includes(appEmail));
+      (appUSN && passedUSNs.includes(appUSN)) || (appEmail && passedEmails.includes(appEmail));
 
     if (isPass) {
       passed.push(app._id.toString());
@@ -165,14 +173,18 @@ export const uploadHRRoundResults = asyncHandler(async (req: Request, res: Respo
   }
 
   // Detect unmatched rows in the file
-  passedUSNs.forEach(usn => {
-    if (!roundStudents.some(a => (a.data?.usn || a.data?.USN || '').toString().toUpperCase() === usn)) {
+  passedUSNs.forEach((usn) => {
+    if (
+      !roundStudents.some(
+        (a) => (a.data?.usn || a.data?.USN || '').toString().toUpperCase() === usn,
+      )
+    ) {
       notFound.push(usn);
     }
   });
 
   // Determine next round for passing students
-  const currentIdx = drive.rounds.findIndex(r => r.type === roundType);
+  const currentIdx = drive.rounds.findIndex((r) => r.type === roundType);
   const nextRound = drive.rounds[currentIdx + 1];
 
   // Bulk updates
@@ -184,12 +196,9 @@ export const uploadHRRoundResults = asyncHandler(async (req: Request, res: Respo
           status: nextRound ? 'shortlisted' : 'selected',
           currentRound: nextRound ? nextRound.type : 'completed',
         },
-      }
+      },
     ),
-    ApplicationModel.updateMany(
-      { _id: { $in: failed } },
-      { $set: { status: 'rejected' } }
-    ),
+    ApplicationModel.updateMany({ _id: { $in: failed } }, { $set: { status: 'rejected' } }),
   ]);
 
   // Broadcast to all connected clients
@@ -199,7 +208,9 @@ export const uploadHRRoundResults = asyncHandler(async (req: Request, res: Respo
       passed: passed.length,
       failed: failed.length,
     });
-  } catch { /* non-fatal */ }
+  } catch {
+    /* non-fatal */
+  }
 
   res.json({
     success: true,
@@ -239,14 +250,19 @@ export const createHRAccount = asyncHandler(async (req: Request, res: Response) 
   const { name, email, password, driveId } = req.body;
 
   if (!name || !email || !password || !driveId) {
-    return res.status(400).json({ success: false, error: 'name, email, password, and driveId are required' });
+    return res
+      .status(400)
+      .json({ success: false, error: 'name, email, password, and driveId are required' });
   }
 
   const drive = await DriveModel.findById(driveId).lean();
   if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
 
   const exists = await UserModel.findOne({ email }).lean();
-  if (exists) return res.status(409).json({ success: false, error: 'An account with this email already exists' });
+  if (exists)
+    return res
+      .status(409)
+      .json({ success: false, error: 'An account with this email already exists' });
 
   const passwordHash = await bcrypt.hash(password, 10);
 
@@ -273,3 +289,222 @@ export const createHRAccount = asyncHandler(async (req: Request, res: Response) 
   });
 });
 
+// ── POST /api/v1/hr/next-candidate ─────────────────────────────────────
+// The Algorithmic Load Balancer endpoint
+export const getNextCandidate = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = getHRDriveId(req);
+  const roomId = req.user?.roomId; // Assume HR token or session has their current room context
+  // If HR doesn't have a strict room assigned in token, we might need them to pass it, but let's assume they pass it in body for now
+  const targetRoomId = req.body.roomId || roomId;
+
+  if (!targetRoomId) {
+    return res
+      .status(400)
+      .json({ success: false, error: 'Room ID is required to summon candidate' });
+  }
+
+  const drive = await DriveModel.findById(driveId).lean();
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  // 1. Generate JD Text
+  const jdText = `Company: ${drive.companyName}. Role: ${drive.jobRole}. CTC: ${drive.ctc}. Locations: ${drive.locations?.join(', ') || 'Pan India'}. Branches allowed: ${drive.eligibility?.branches?.join(', ') || 'Any'}`;
+
+  // 2. Query Vector ATS for top 500 matches
+  const rankedResults = await VectorService.searchCandidates(jdText, 500);
+
+  // 3. Find available, checked-in students for this drive
+  const availableApps = await ApplicationModel.find({
+    driveId,
+    attendedAt: { $exists: true, $ne: null }, // Physically in the building
+    assignedRoomId: null, // Not currently in an interview
+    status: { $nin: ['rejected', 'selected'] }, // Still in the running
+  })
+    .select('_id data currentRound')
+    .lean();
+
+  if (availableApps.length === 0) {
+    return res
+      .status(404)
+      .json({ success: false, error: 'No available checked-in candidates found.' });
+  }
+
+  // 4. Map available applications by normalized USN
+  const appMap = new Map<string, any>();
+  for (const app of availableApps) {
+    const usn = (app.data?.usn || app.data?.USN || app.data?.roll_no || '')
+      .toString()
+      .toLowerCase()
+      .trim();
+    if (usn) appMap.set(usn, app);
+  }
+
+  // 5. Find the highest ranked available candidate
+  let bestApp = null;
+  let matchScore = 0;
+
+  for (const rank of rankedResults) {
+    const usn = (rank.usn || '').toLowerCase().trim();
+    if (appMap.has(usn)) {
+      bestApp = appMap.get(usn);
+      matchScore = rank.score;
+      break; // Found the #1 available match!
+    }
+  }
+
+  // Fallback: If vector results don't cover available apps, just pick the first available one (e.g. queue order)
+  if (!bestApp) {
+    bestApp = availableApps[0];
+    matchScore = 0; // Unknown semantic match
+  }
+
+  // 6. Update Application state and start latency stopwatch
+  await ApplicationModel.updateOne(
+    { _id: bestApp._id },
+    { $set: { assignedRoomId: targetRoomId, summonedAt: new Date() } },
+  );
+
+  // 7. Get Room details to send to student
+  const room = await RoomModel.findById(targetRoomId).select('name').lean();
+  const roomName = room?.name || 'Interview Room';
+
+  // 8. Fire WebSocket Event to Student's Phone
+  const io = getIO();
+  io.to(`app:${bestApp._id.toString()}`).emit('student:summoned', { roomName });
+
+  // 9. Twilio / PWA Push Fallback
+  try {
+    const appData = bestApp.data as Record<string, any>;
+    const phoneKey = Object.keys(appData).find(
+      (k) => k.toLowerCase().includes('phone') || k.toLowerCase().includes('mobile'),
+    );
+    if (phoneKey && appData[phoneKey]) {
+      const phoneStr = appData[phoneKey].toString();
+      const finalPhone = phoneStr.startsWith('+') ? phoneStr : `+91${phoneStr}`;
+      const { sendSMS } = await import('../services/twilio.service');
+      // Firing SMS in background, don't await blocking
+      sendSMS(
+        finalPhone,
+        `CampusPool AI: You have been selected! Please head to Room ${roomName} immediately for your interview.`,
+      ).catch(console.error);
+    }
+  } catch (err) {
+    console.error('Failed to dispatch SMS fallback', err);
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      applicationId: bestApp._id,
+      name: bestApp.data?.name || bestApp.data?.fullName || bestApp.data?.full_name || 'Unknown',
+      usn: bestApp.data?.usn || bestApp.data?.USN || 'Unknown',
+      matchScore: Math.round(matchScore * 100),
+      roomName,
+      // Pass along the parsed resume/vector context if available in data
+      candidateContext: bestApp.data,
+    },
+  });
+
+  // Refresh God View Telemetry immediately so room card turns yellow
+  io.to(`drive:${driveId}:admin`).emit('drive:telemetry_updated');
+});
+
+// ── POST /api/v1/hr/interview-result ───────────────────────────────────
+// The Interrogation Engine: Receives rubric scores and decision
+export const submitInterviewResult = asyncHandler(async (req: Request, res: Response) => {
+  const driveId = getHRDriveId(req);
+  const { applicationId, scores, feedback, decision } = req.body;
+
+  if (!applicationId || !decision) {
+    return res
+      .status(400)
+      .json({ success: false, error: 'applicationId and decision are required' });
+  }
+
+  const app = await ApplicationModel.findOne({ _id: applicationId, driveId }).lean();
+  if (!app) {
+    return res.status(404).json({ success: false, error: 'Application not found' });
+  }
+
+  const drive = await DriveModel.findById(driveId).lean();
+  if (!drive) return res.status(404).json({ success: false, error: 'Drive not found' });
+
+  // 1. Determine next round if advancing
+  let nextRoundType = app.currentRound;
+  let newStatus = app.status;
+
+  if (decision === 'reject') {
+    newStatus = 'rejected';
+  } else if (decision === 'hire') {
+    newStatus = 'selected';
+  } else if (decision === 'advance') {
+    newStatus = 'shortlisted';
+    // Find the current round index
+    const currentIdx = drive.rounds.findIndex((r) => r.type === app.currentRound);
+    const nextRound = drive.rounds[currentIdx + 1];
+    if (nextRound) {
+      nextRoundType = nextRound.type;
+    } else {
+      // No more rounds, implicitly select
+      newStatus = 'selected';
+    }
+  } else {
+    return res.status(400).json({ success: false, error: 'Invalid decision' });
+  }
+
+  // 2. Prepare Data Payload (injecting the rubric scores)
+  const currentData = (app.data as Record<string, any>) || {};
+
+  // Calculate duration from summonedAt stop-watch
+  const durationMinutes = app.summonedAt
+    ? Math.max(1, Math.round((Date.now() - new Date(app.summonedAt).getTime()) / 60000))
+    : 0;
+
+  const newInterviewLog = {
+    date: new Date(),
+    panelist: req.user?.name || 'HR Panelist',
+    round: app.currentRound,
+    durationMinutes,
+    scores,
+    feedback,
+    decision,
+  };
+
+  // Append to interview history
+  const interviewHistory = currentData.interviewHistory || [];
+  interviewHistory.push(newInterviewLog);
+  const updatedData = { ...currentData, interviewHistory };
+
+  // 3. Update the database
+  await ApplicationModel.updateOne(
+    { _id: applicationId },
+    {
+      $set: {
+        status: newStatus,
+        currentRound: nextRoundType,
+        assignedRoomId: null, // Critical: Frees up the student and room!
+        summonedAt: null, // Critical: Stops the stopwatch
+        data: updatedData,
+      },
+    },
+  );
+
+  // 4. Fire WebSockets
+  const io = getIO();
+  if (newStatus === 'selected') {
+    io.to(`app:${applicationId}`).emit('student:selected', { applicationId });
+  } else {
+    io.to(`app:${applicationId}`).emit('student:status_changed', {
+      status: newStatus,
+      message:
+        newStatus === 'rejected'
+          ? 'Thank you for participating.'
+          : 'You have advanced to the next round!',
+    });
+  }
+
+  // Refresh God View Telemetry
+  io.to(`drive:${driveId}:admin`).emit('drive:telemetry_updated');
+  io.to(`drive:${driveId}`).emit('drive:shortlist_updated'); // Generic refresh trigger
+
+  res.status(200).json({ success: true, message: 'Interview result logged successfully' });
+});

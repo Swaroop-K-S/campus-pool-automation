@@ -1,23 +1,63 @@
 import { Router } from 'express';
-import { getDrives, createDrive, getDriveById, updateDrive, activateDrive, cloneDrive, archiveDrive, scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted, finalizeDrive, updateSettings, toggleDrivePause, purgeNoShows, getAuditLogs, checkConflict, matchCandidates, getDriveFunnel, dispatchHRs } from '../controllers/drive.controller';
+import {
+  getDrives,
+  createDrive,
+  getDriveById,
+  updateDrive,
+  activateDrive,
+  cloneDrive,
+  archiveDrive,
+  scheduleForm,
+  extendForm,
+  closeForm,
+  reopenForm,
+  deleteDrive,
+  startEventDay,
+  markCompleted,
+  finalizeDrive,
+  updateSettings,
+  toggleDrivePause,
+  purgeNoShows,
+  getAuditLogs,
+  checkConflict,
+  matchCandidates,
+  getDriveFunnel,
+  dispatchHRs,
+  parseJD,
+  getDriveTelemetry,
+} from '../controllers/drive.controller';
+import { getDraft, saveDraft, deleteDraft } from '../controllers/drive-draft.controller';
 import { generateNOC, generateOfferLetter } from '../controllers/noc.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { authorizeRoles } from '../middleware/rbac.middleware';
 import shortlistRoutes from './shortlist.routes';
 import eventRoutes from './event.routes';
 import assignmentRoutes from './assignment.routes';
+import multer from 'multer';
+
+const jdUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+}).single('jd');
 
 const router = Router();
 
 router.use(authenticate);
 
-router.route('/')
-  .get(getDrives)
-  .post(authorizeRoles('admin', 'superadmin'), createDrive);
+// ── JD PDF Parser (must be before /:driveId to avoid param shadowing) ─────────
+router.post('/parse-jd', authorizeRoles('admin', 'superadmin'), jdUpload, parseJD);
+
+// ── Draft auto-save (must be before /:driveId to avoid param shadowing) ──────
+router.get('/draft', authorizeRoles('admin', 'superadmin'), getDraft);
+router.post('/draft', authorizeRoles('admin', 'superadmin'), saveDraft);
+router.delete('/draft', authorizeRoles('admin', 'superadmin'), deleteDraft);
+
+router.route('/').get(getDrives).post(authorizeRoles('admin', 'superadmin'), createDrive);
 
 router.get('/schedule/check-conflict', authorizeRoles('admin', 'superadmin'), checkConflict);
 
-router.route('/:driveId')
+router
+  .route('/:driveId')
   .get(getDriveById)
   .put(authorizeRoles('admin', 'superadmin'), updateDrive)
   .delete(authorizeRoles('admin', 'superadmin'), deleteDrive);
@@ -37,7 +77,7 @@ router.get('/:driveId/offer/:appId', authorizeRoles('admin', 'superadmin'), gene
 router.get('/:driveId/match', authorizeRoles('admin', 'superadmin'), matchCandidates);
 router.get('/:driveId/funnel', authorizeRoles('admin', 'superadmin'), getDriveFunnel);
 router.post('/:driveId/dispatch-hrs', authorizeRoles('admin', 'superadmin'), dispatchHRs);
-
+router.get('/:driveId/telemetry', authorizeRoles('admin', 'superadmin'), getDriveTelemetry);
 // The original file had a duplicate import for these, consolidating them into the first import.
 // import { scheduleForm, extendForm, closeForm, reopenForm, deleteDrive, startEventDay, markCompleted } from '../controllers/drive.controller';
 router.patch('/:driveId/form/schedule', authorizeRoles('admin', 'superadmin'), scheduleForm);

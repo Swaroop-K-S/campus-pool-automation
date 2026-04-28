@@ -8,6 +8,8 @@ export interface AuthPayload {
   email: string;
   role: string;
   driveId?: string; // Set for company_hr users scoped to a single drive
+  roomId?: string;
+  name?: string;
 }
 
 declare global {

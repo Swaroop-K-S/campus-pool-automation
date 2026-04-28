@@ -1,4 +1,4 @@
-version: '3.8'
+# version: '3.8'  # obsolete — removed
 
 services:
   mongodb:
@@ -37,10 +37,15 @@ services:
       - REDIS_URL=redis://redis:6379
       - JWT_ACCESS_SECRET=campuspool-docker-compose-secret-key-32chars
       - LOCAL_AI_URL=http://ollama:11434/api/generate
+      - FRONTEND_URL=http://localhost
+      - BACKEND_URL=http://localhost:8080
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
     depends_on:
       - mongodb
       - redis
       - ollama
+      - qdrant
     networks:
       - campuspool_net
     restart: unless-stopped
@@ -58,7 +63,19 @@ services:
       - campuspool_net
     restart: unless-stopped
 
-  # ── Local AI (Ollama) ──────────────────────────────────────────────────────
+  # ── Qdrant Vector Database ────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: campuspool-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - campuspool_net
+    restart: unless-stopped
+
+  # ── Local AI (Ollama) — GPU-accelerated ───────────────────────────────────
   ollama:
     image: ollama/ollama:latest
     container_name: campuspool-ollama
@@ -69,11 +86,20 @@ services:
     networks:
       - campuspool_net
     restart: unless-stopped
-    # Pull the model automatically on first boot.
-    # gemma2:2b is ~1.6 GB — fits comfortably on CPU-only Docker hosts.
-    # Once downloaded it lives in the ollama_data volume (no re-download on restart).
+    # ── NVIDIA GPU Passthrough (RTX 5060 Laptop — 8 GB VRAM) ─────────────────
+    # Docker Desktop on Windows + WSL2 bridges the NVIDIA driver automatically.
+    # No nvidia-container-toolkit install required on the host.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # Pull gemma2:2b and nomic-embed-text on first boot. Weights live in ollama_data volume —
+    # no re-download on restart. GPU inference: ~2-3s vs ~25s on CPU.
     entrypoint: ["/bin/sh", "-c",
-      "ollama serve & sleep 5 && ollama pull gemma2:2b && wait"
+      "ollama serve & sleep 5 && ollama pull gemma2:2b && ollama pull nomic-embed-text && wait"
     ]
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:11434/api/tags"]
@@ -86,6 +112,7 @@ volumes:
   mongodb_data:
   redis_data:
   ollama_data:             # persists the downloaded model weights
+  qdrant_data:             # persists the vector embeddings
 
 networks:
   campuspool_net:

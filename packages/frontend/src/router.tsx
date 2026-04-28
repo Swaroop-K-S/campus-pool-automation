@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import LoginPage from './pages/auth/login';
+import AuthSuccessPage from './pages/auth/auth-success';
 import { ProtectedRoute } from './components/shared/protected-route';
 import AdminLayout from './components/shared/AdminLayout';
 
@@ -33,8 +34,10 @@ const ErrorBoundary = () => (
       <div className="text-4xl mb-4">⚠️</div>
       <h2 className="text-xl font-bold text-slate-800 mb-2">Something went wrong</h2>
       <p className="text-slate-500 mb-4">An unexpected error occurred.</p>
-      <button onClick={() => window.location.href = '/'}
-        className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-500">
+      <button
+        onClick={() => (window.location.href = '/')}
+        className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-500"
+      >
         Return to Home
       </button>
     </div>
@@ -44,42 +47,61 @@ const ErrorBoundary = () => (
 export const router = createBrowserRouter([
   // Public pages (no auth)
   { path: '/apply/:formToken', element: <PublicApplyPage />, errorElement: <ErrorBoundary /> },
-  { path: '/event/:driveId/qr-display', element: <QRDisplayPage />, errorElement: <ErrorBoundary /> },
+  {
+    path: '/event/:driveId/qr-display',
+    element: <QRDisplayPage />,
+    errorElement: <ErrorBoundary />,
+  },
   { path: '/event/:driveId/verify', element: <VerifyPage />, errorElement: <ErrorBoundary /> },
-  { path: '/event/:driveId/welcome/:appId', element: <WelcomePage />, errorElement: <ErrorBoundary /> },
-  { path: '/event/:driveId/my-status', element: <StatusLookupPage />, errorElement: <ErrorBoundary /> },
-  { path: '/event/:driveId/projector', element: <ProjectorPage />, errorElement: <ErrorBoundary /> },
+  {
+    path: '/event/:driveId/welcome/:appId',
+    element: <WelcomePage />,
+    errorElement: <ErrorBoundary />,
+  },
+  {
+    path: '/event/:driveId/my-status',
+    element: <StatusLookupPage />,
+    errorElement: <ErrorBoundary />,
+  },
+  {
+    path: '/event/:driveId/projector',
+    element: <ProjectorPage />,
+    errorElement: <ErrorBoundary />,
+  },
   { path: '/invigilator/:token', element: <InvigilatorPortal />, errorElement: <ErrorBoundary /> },
   { path: '/passport', element: <PassportPage />, errorElement: <ErrorBoundary /> },
   { path: '/hr', element: <HRDashboard />, errorElement: <ErrorBoundary /> },
   { path: '/login', element: <LoginPage />, errorElement: <ErrorBoundary /> },
+  { path: '/auth-success', element: <AuthSuccessPage />, errorElement: <ErrorBoundary /> },
 
   // All admin pages (single authenticated layout)
   {
     path: '/admin',
     element: <ProtectedRoute />,
-    children: [{
-      path: '',
-      element: <AdminLayout />,
-      children: [
-        { path: 'dashboard', element: <AdminDashboardPage /> },
-        { path: 'drives/new', element: <NewDriveWizard /> },
-        { path: 'drives/:driveId', element: <DriveDetailPage /> },
-        { path: 'drives/:driveId/room-assignment', element: <RoomAssignmentPage /> },
-        { path: 'drives/:driveId/rounds', element: <RoundManagementPage /> },
-        { path: 'drives/:driveId/rooms/:roomId/print', element: <PrintManifestPage /> },
-        { path: 'analytics', element: <AnalyticsPage /> },
-        { path: 'settings', element: <SettingsPage /> },
-        { path: 'students', element: <StudentsPage /> },
-      ]
-    }]
+    children: [
+      {
+        path: '',
+        element: <AdminLayout />,
+        children: [
+          { path: 'dashboard', element: <AdminDashboardPage /> },
+          { path: 'drives/new', element: <NewDriveWizard /> },
+          { path: 'drives/:driveId', element: <DriveDetailPage /> },
+          { path: 'drives/:driveId/room-assignment', element: <RoomAssignmentPage /> },
+          { path: 'drives/:driveId/rounds', element: <RoundManagementPage /> },
+          { path: 'drives/:driveId/rooms/:roomId/print', element: <PrintManifestPage /> },
+          { path: 'analytics', element: <AnalyticsPage /> },
+          { path: 'settings', element: <SettingsPage /> },
+          { path: 'students', element: <StudentsPage /> },
+        ],
+      },
+    ],
   },
 
   // Full-screen pages (outside AdminLayout — no sidebar)
   {
     path: '/admin',
     element: <ProtectedRoute />,
-    children: [{ path: 'drives/:driveId/command-center', element: <EventCommandCenter /> }]
+    children: [{ path: 'drives/:driveId/command-center', element: <EventCommandCenter /> }],
   },
 
   // Root redirect
