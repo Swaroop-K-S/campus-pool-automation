@@ -71,4 +71,8 @@ async def process_student_shortlist(file_content: bytes, drive_id: str):
     
     # 4. (Future) Trigger NotificationService to send Call Letters
     
-    return {"status": "success", "processed_count": len(students_to_insert)}
+    return {
+        "status": "success",
+        "students_added": len(students_to_insert),
+        "message": f"{len(students_to_insert)} students shortlisted successfully."
+    }

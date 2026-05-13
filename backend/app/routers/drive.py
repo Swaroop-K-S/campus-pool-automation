@@ -160,3 +160,68 @@ async def allocate_rooms(drive_id: str):
     engine = LogisticsEngine(drive_id)
     await engine.allocate_students_to_round(str(rounds[0].id))
     return {"status": "success", "message": f"Allocated students to {rounds[0].name}"}
+
+
+# ---------------------------------------------------------------------------
+# Drive Lifecycle
+# ---------------------------------------------------------------------------
+
+@router.post("/{drive_id}/activate")
+async def activate_drive(drive_id: str):
+    """Move drive from draft → active (opens student registration)"""
+    drive = await DriveModel.get(drive_id)
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+    if drive.status != "draft":
+        raise HTTPException(status_code=400, detail=f"Drive is already '{drive.status}', cannot activate")
+    await drive.set({"status": "active"})
+    return {**drive.model_dump(), "id": str(drive.id)}
+
+
+@router.post("/{drive_id}/start-event-day")
+async def start_event_day(drive_id: str):
+    """Move drive from active → event_day (enables QR check-in)"""
+    drive = await DriveModel.get(drive_id)
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+    if drive.status != "active":
+        raise HTTPException(status_code=400, detail=f"Drive must be 'active' before starting event day")
+
+    from app.models.student import StudentModel
+    shortlisted = await StudentModel.find({"drive_id": drive_id, "status": "shortlisted"}).count()
+    if shortlisted == 0:
+        raise HTTPException(status_code=400, detail="No shortlisted students. Upload a shortlist first.")
+
+    import secrets
+    await drive.set({"status": "event_day", "current_qr_secret": secrets.token_hex(16)})
+    return {**drive.model_dump(), "id": str(drive.id)}
+
+
+@router.post("/{drive_id}/complete")
+async def complete_drive(drive_id: str):
+    """Mark drive as completed"""
+    drive = await DriveModel.get(drive_id)
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+    await drive.set({"status": "completed"})
+    return {**drive.model_dump(), "id": str(drive.id)}
+
+
+# ---------------------------------------------------------------------------
+# Stats (for Admin Overview)
+# ---------------------------------------------------------------------------
+
+@router.get("/stats/summary")
+async def get_stats_summary():
+    """Return aggregate counts for the Admin Overview dashboard"""
+    from app.models.student import StudentModel
+    all_drives = await DriveModel.find_all().to_list()
+    active = [d for d in all_drives if d.status in ("active", "event_day")]
+    total_students = await StudentModel.find_all().count()
+    return {
+        "total_drives": len(all_drives),
+        "active_drives": len(active),
+        "total_students": total_students,
+        "system_status": "online"
+    }
+

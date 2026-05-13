@@ -11,7 +11,7 @@ export default function GodViewTab() {
     setIsRunningEngine(true);
     try {
       // Trigger the "Butter" logistics engine
-      const res = await fetch(`/api/drives/${id}/allocate-rooms`, { method: 'POST' });
+      const res = await fetch(`/api/v1/drives/${id}/allocate-rooms`, { method: 'POST' });
       if (res.ok) {
         setAllocationComplete(true);
       }

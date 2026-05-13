@@ -1,4 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Building2, Users, Activity, Loader2 } from 'lucide-react';
 
 import StudentHub from './pages/StudentHub/StudentHub';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
@@ -7,24 +9,53 @@ import DriveDetail from './pages/AdminDashboard/DriveDetail/DriveDetail';
 import DrivesList from './pages/AdminDashboard/DrivesList';
 import AdminLogin from './pages/Auth/AdminLogin';
 
-// Placeholder for the overview page inside the dashboard
+interface Stats { total_drives: number; active_drives: number; total_students: number; system_status: string; }
+
 function AdminOverview() {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/v1/drives/stats/summary')
+      .then(r => r.json())
+      .then(d => { setStats(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const cards = [
+    { label: 'Active Drives',    value: loading ? '—' : stats?.active_drives ?? 0,   icon: <Activity size={22} className="text-primary" />,  border: 'border-b-primary' },
+    { label: 'Total Students',   value: loading ? '—' : stats?.total_students ?? 0,  icon: <Users size={22} className="text-emerald-600" />,  border: 'border-b-emerald-500' },
+    { label: 'Total Drives',     value: loading ? '—' : stats?.total_drives ?? 0,    icon: <Building2 size={22} className="text-primary" />,  border: 'border-b-primary' },
+  ];
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="bg-card text-card-foreground p-6 rounded-xl shadow-md border border-border border-b-[3px] border-b-primary hover:shadow-lg transition-shadow transition-transform hover:-translate-y-1">
-        <h2 className="text-muted-foreground font-medium mb-1">Active Drives</h2>
-        <p className="text-4xl font-bold">1</p>
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-foreground">Admin Overview</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">Live data from MongoDB</p>
       </div>
-      <div className="bg-card text-card-foreground p-6 rounded-xl shadow-md border border-border border-b-[3px] border-b-primary hover:shadow-lg transition-shadow transition-transform hover:-translate-y-1">
-        <h2 className="text-muted-foreground font-medium mb-1">Total Students</h2>
-        <p className="text-4xl font-bold">450</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {cards.map(card => (
+          <div key={card.label} className={`bg-card text-card-foreground p-6 rounded-xl shadow-md border border-border border-b-[3px] ${card.border} hover:shadow-lg hover:-translate-y-1 transition-all`}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-muted-foreground font-medium text-sm">{card.label}</h2>
+              <div className="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center">{card.icon}</div>
+            </div>
+            {loading
+              ? <Loader2 size={24} className="animate-spin text-muted-foreground" />
+              : <p className="text-4xl font-black text-foreground">{card.value}</p>
+            }
+          </div>
+        ))}
       </div>
-      <div className="bg-card text-card-foreground p-6 rounded-xl shadow-md border border-border border-b-[3px] border-b-primary hover:shadow-lg transition-shadow transition-transform hover:-translate-y-1">
-        <h2 className="text-muted-foreground font-medium mb-1">System Status</h2>
-        <div className="flex items-center">
-          <div className="w-3 h-3 bg-emerald-500 rounded-full mr-2"></div>
-          <p className="text-xl font-semibold">Online</p>
-        </div>
+
+      {/* System status */}
+      <div className="mt-6 bg-card border border-border rounded-xl p-5 flex items-center gap-3 shadow-sm">
+        <div className={`w-3 h-3 rounded-full ${stats?.system_status === 'online' ? 'bg-emerald-500' : 'bg-muted-foreground'} animate-pulse`} />
+        <span className="text-sm font-medium text-foreground">
+          System {stats?.system_status === 'online' ? 'Online' : 'Checking...'}
+        </span>
+        <span className="ml-auto text-xs text-muted-foreground">MongoDB Atlas • FastAPI • Vite</span>
       </div>
     </div>
   );
