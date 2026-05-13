@@ -32,27 +32,3 @@ export const LOCATIONS: string[] = [
   'Paris, France','Zurich, Switzerland','Stockholm, Sweden',
 ];
 
-// ── What to Bring — Placement Drive Essentials ──
-export const BRING_ITEMS: string[] = [
-  'Updated Resume (3 copies)',
-  'College ID Card (Original)',
-  'Aadhar Card (Original + Photocopy)',
-  'PAN Card',
-  '2 Passport-size Photos',
-  'Pen (Blue & Black)',
-  'Notebook / Notepad',
-  'Laptop + Charger',
-  'Original Marksheets (All Semesters)',
-  'Degree Certificate / Provisional Certificate',
-  'Transfer Certificate (TC)',
-  'Migration Certificate',
-  'Offer Letter Printout (if applicable)',
-  'Caste Certificate (if applicable)',
-  'Domicile Certificate (if applicable)',
-  'College Bonafide Certificate',
-  'Water Bottle',
-  'Valid Student Bus/Train Pass',
-  'Mobile Phone (Charged)',
-  'Power Bank',
-  'Formal Attire (Dress Code: Formals)',
-];

@@ -20,7 +20,6 @@ class CreateDriveRequest(BaseModel):
     drive_date: Optional[datetime] = None
     reporting_time: Optional[str] = None
     venue_maps_link: Optional[str] = ""
-    what_to_bring: Optional[List[str]] = []
     form_start_date: Optional[datetime] = None
     form_end_date: Optional[datetime] = None
     qr_type: str = "static"
@@ -33,7 +32,6 @@ class UpdateDriveRequest(BaseModel):
     drive_date: Optional[datetime] = None
     reporting_time: Optional[str] = None
     venue_maps_link: Optional[str] = None
-    what_to_bring: Optional[List[str]] = None
     form_start_date: Optional[datetime] = None
     form_end_date: Optional[datetime] = None
     qr_type: Optional[str] = None
@@ -50,7 +48,6 @@ async def create_drive(payload: CreateDriveRequest):
         drive_date=payload.drive_date,
         reporting_time=payload.reporting_time,
         venue_maps_link=payload.venue_maps_link or "",
-        what_to_bring=payload.what_to_bring or [],
         form_start_date=payload.form_start_date,
         form_end_date=payload.form_end_date,
         qr_type=payload.qr_type,

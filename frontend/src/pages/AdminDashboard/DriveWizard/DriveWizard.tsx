@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronRight, Loader2 } from 'lucide-react';
 import { MultiSelect } from '../../../components/MultiSelect';
-import { LOCATIONS, BRING_ITEMS } from '../../../data/driveOptions';
+import { LOCATIONS } from '../../../data/driveOptions';
 
 interface FormData {
   // Step 1 — Company Details
@@ -12,7 +12,6 @@ interface FormData {
   reporting_time: string;
   locations: string[];
   venue_maps_link: string;
-  what_to_bring: string[];
   // Step 2 — Registration window
   form_start_date: string;
   form_end_date: string;
@@ -43,7 +42,6 @@ export default function DriveWizard() {
     reporting_time: '',
     locations: [],
     venue_maps_link: '',
-    what_to_bring: [],
     form_start_date: '',
     form_end_date: '',
     rounds: [
@@ -105,7 +103,6 @@ export default function DriveWizard() {
         drive_date: form.drive_date ? new Date(form.drive_date).toISOString() : null,
         reporting_time: form.reporting_time || null,
         venue_maps_link: form.venue_maps_link || '',
-        what_to_bring: form.what_to_bring,
         form_start_date: form.form_start_date ? new Date(form.form_start_date).toISOString() : null,
         form_end_date: form.form_end_date ? new Date(form.form_end_date).toISOString() : null,
         qr_type: form.qr_type,
@@ -227,15 +224,6 @@ export default function DriveWizard() {
                 <div className="col-span-2">
                   <label className={labelCls}>Venue Maps Link</label>
                   <input type="url" className={inputCls} placeholder="https://maps.google.com/..." value={form.venue_maps_link} onChange={e => set('venue_maps_link', e.target.value)} />
-                </div>
-                <div className="col-span-2">
-                  <label className={labelCls}>What to Bring</label>
-                  <MultiSelect
-                    options={BRING_ITEMS}
-                    selected={form.what_to_bring}
-                    onChange={val => set('what_to_bring', val)}
-                    placeholder="Select items students must carry…"
-                  />
                 </div>
               </div>
             </div>

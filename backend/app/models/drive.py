@@ -21,7 +21,6 @@ class DriveModel(Document):
     drive_date: Optional[datetime] = None
     reporting_time: Optional[str] = None
     venue_maps_link: Optional[str] = ""
-    what_to_bring: Optional[List[str]] = Field(default_factory=list)
 
     # Form registration window
     form_start_date: Optional[datetime] = None
