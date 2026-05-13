@@ -25,7 +25,7 @@ export function MultiSelect({ options, selected, onChange, placeholder }: MultiS
   const toggle = (item: string) => onChange(selected.includes(item) ? selected.filter(s => s !== item) : [...selected, item]);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={`relative ${open ? 'z-50' : ''}`}>
       {/* Selected tags */}
       <div
         className="min-h-[42px] w-full bg-background border border-border rounded-lg px-3 py-2 flex flex-wrap gap-1.5 cursor-pointer focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all"
