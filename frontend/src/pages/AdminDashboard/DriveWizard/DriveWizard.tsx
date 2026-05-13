@@ -39,7 +39,7 @@ export default function DriveWizard() {
     company_name: '',
     drive_date: '',
     package_offered: '',
-    reporting_time: '',
+    reporting_time: '09:00',
     locations: [],
     venue_maps_link: '',
     form_start_date: '',
