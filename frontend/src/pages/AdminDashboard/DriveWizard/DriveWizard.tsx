@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronRight, Loader2 } from 'lucide-react';
+import { MultiSelect } from '../../../components/MultiSelect';
+import { LOCATIONS, BRING_ITEMS } from '../../../data/driveOptions';
 
 interface FormData {
   // Step 1 — Company Details
@@ -8,9 +10,9 @@ interface FormData {
   drive_date: string;
   package_offered: string;
   reporting_time: string;
-  locations: string;
+  locations: string[];
   venue_maps_link: string;
-  what_to_bring: string;
+  what_to_bring: string[];
   // Step 2 — Registration window
   form_start_date: string;
   form_end_date: string;
@@ -39,9 +41,9 @@ export default function DriveWizard() {
     drive_date: '',
     package_offered: '',
     reporting_time: '',
-    locations: '',
+    locations: [],
     venue_maps_link: '',
-    what_to_bring: '',
+    what_to_bring: [],
     form_start_date: '',
     form_end_date: '',
     rounds: [
@@ -99,11 +101,11 @@ export default function DriveWizard() {
       const payload = {
         company_name: form.company_name,
         package_offered: form.package_offered || null,
-        locations: form.locations ? form.locations.split(',').map(l => l.trim()).filter(Boolean) : [],
+        locations: form.locations,
         drive_date: form.drive_date ? new Date(form.drive_date).toISOString() : null,
         reporting_time: form.reporting_time || null,
         venue_maps_link: form.venue_maps_link || '',
-        what_to_bring: form.what_to_bring ? form.what_to_bring.split(',').map(w => w.trim()).filter(Boolean) : [],
+        what_to_bring: form.what_to_bring,
         form_start_date: form.form_start_date ? new Date(form.form_start_date).toISOString() : null,
         form_end_date: form.form_end_date ? new Date(form.form_end_date).toISOString() : null,
         qr_type: form.qr_type,
@@ -214,16 +216,26 @@ export default function DriveWizard() {
                   <input type="time" className={inputCls} value={form.reporting_time} onChange={e => set('reporting_time', e.target.value)} />
                 </div>
                 <div className="col-span-2">
-                  <label className={labelCls}>Locations <span className="text-muted-foreground font-normal">(comma-separated)</span></label>
-                  <input type="text" className={inputCls} placeholder="e.g. Bangalore, Hyderabad" value={form.locations} onChange={e => set('locations', e.target.value)} />
+                  <label className={labelCls}>Locations</label>
+                  <MultiSelect
+                    options={LOCATIONS}
+                    selected={form.locations}
+                    onChange={val => set('locations', val)}
+                    placeholder="Search and select cities / countries…"
+                  />
                 </div>
                 <div className="col-span-2">
                   <label className={labelCls}>Venue Maps Link</label>
                   <input type="url" className={inputCls} placeholder="https://maps.google.com/..." value={form.venue_maps_link} onChange={e => set('venue_maps_link', e.target.value)} />
                 </div>
                 <div className="col-span-2">
-                  <label className={labelCls}>What to Bring <span className="text-muted-foreground font-normal">(comma-separated)</span></label>
-                  <input type="text" className={inputCls} placeholder="e.g. College ID, Resume, Pen" value={form.what_to_bring} onChange={e => set('what_to_bring', e.target.value)} />
+                  <label className={labelCls}>What to Bring</label>
+                  <MultiSelect
+                    options={BRING_ITEMS}
+                    selected={form.what_to_bring}
+                    onChange={val => set('what_to_bring', val)}
+                    placeholder="Select items students must carry…"
+                  />
                 </div>
               </div>
             </div>

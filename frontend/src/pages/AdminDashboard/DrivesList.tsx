@@ -13,8 +13,8 @@ interface Drive {
 }
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  draft:     { label: 'Draft',     className: 'bg-secondary text-muted-foreground border border-border' },
-  active:    { label: 'Active',    className: 'bg-emerald-100 text-emerald-700 border border-emerald-200' },
+  draft: { label: 'Draft', className: 'bg-secondary text-muted-foreground border border-border' },
+  active: { label: 'Active', className: 'bg-emerald-100 text-emerald-700 border border-emerald-200' },
   event_day: { label: 'Event Day', className: 'bg-amber-100 text-amber-700 border border-amber-200' },
   completed: { label: 'Completed', className: 'bg-primary/10 text-primary border border-primary/20' },
 };
