@@ -6,7 +6,6 @@ export default function StudentHub() {
   const [activeTab, setActiveTab] = useState('roadmap');
   const [isSummoned, setIsSummoned] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
-  const [isCheckingIn, setIsCheckingIn] = useState(false);
   
   // Fake summon after 5 seconds to demonstrate Hall Pass
   useEffect(() => {
@@ -31,7 +30,6 @@ export default function StudentHub() {
       scanner.render(
         async (decodedText) => {
           setScanResult(decodedText);
-          setIsCheckingIn(true);
           try {
             await scanner.clear();
           } catch (e) {
@@ -39,12 +37,11 @@ export default function StudentHub() {
           }
           // Here we would call the backend API: POST /api/v1/students/check-in
           setTimeout(() => {
-            setIsCheckingIn(false);
             // After successful checkin, go back to roadmap
             setActiveTab('roadmap');
           }, 1500);
         },
-        (error) => {
+        (_error) => {
           // ignore continuous scanning errors
         }
       );

@@ -1,9 +1,10 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 import StudentHub from './pages/StudentHub/StudentHub';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import DriveWizard from './pages/AdminDashboard/DriveWizard/DriveWizard';
 import DriveDetail from './pages/AdminDashboard/DriveDetail/DriveDetail';
+import DrivesList from './pages/AdminDashboard/DrivesList';
 import AdminLogin from './pages/Auth/AdminLogin';
 
 // Placeholder for the overview page inside the dashboard
@@ -43,16 +44,7 @@ function App() {
           {/* Admin Routes with Dashboard Layout Wrapper */}
           <Route path="/admin" element={<AdminDashboard />}>
             <Route index element={<AdminOverview />} />
-            <Route path="drives" element={
-              <div>
-                 <div className="flex justify-end mb-6">
-                   <Link to="/admin/drives/new" className="bg-primary text-primary-foreground px-5 py-2.5 rounded-lg shadow-sm hover:bg-primary/90 font-bold transition-colors shadow-[0_0_15px_rgba(var(--color-primary),0.3)]">
-                     + Create New Drive
-                   </Link>
-                 </div>
-                 {/* Drive list goes here */}
-              </div>
-            } />
+            <Route path="drives" element={<DrivesList />} />
             <Route path="drives/new" element={<DriveWizard />} />
             <Route path="drives/:id" element={<DriveDetail />} />
             <Route path="students" element={<div>Students Panel (Coming Soon)</div>} />
