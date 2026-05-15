@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronRight, Loader2 } from 'lucide-react';
+import { Check, ChevronRight, Loader2, FileText, Settings, SkipForward, Copy, ExternalLink } from 'lucide-react';
 import { MultiSelect } from '../../../components/MultiSelect';
 import { LOCATIONS } from '../../../data/driveOptions';
 
@@ -11,7 +11,6 @@ interface FormData {
   package_offered: string;
   reporting_time: string;
   locations: string[];
-  venue_maps_link: string;
   // Step 2 — Registration window
   form_start_date: string;
   form_end_date: string;
@@ -19,6 +18,8 @@ interface FormData {
   rounds: { name: string; round_type: string; sequence: number }[];
   // Step 4 — QR type
   qr_type: 'static' | 'dynamic';
+  // Form Builder
+  form_type: 'template' | 'custom' | 'skip';
 }
 
 const ROUND_OPTIONS = [
@@ -41,7 +42,6 @@ export default function DriveWizard() {
     package_offered: '',
     reporting_time: '09:00',
     locations: [],
-    venue_maps_link: '',
     form_start_date: '',
     form_end_date: '',
     rounds: [
@@ -49,6 +49,7 @@ export default function DriveWizard() {
       { name: 'Online Aptitude Test',         round_type: 'aptitude', sequence: 2 },
     ],
     qr_type: 'static',
+    form_type: 'template',
   });
 
   const totalSteps = 4;
@@ -102,7 +103,6 @@ export default function DriveWizard() {
         locations: form.locations,
         drive_date: form.drive_date ? new Date(form.drive_date).toISOString() : null,
         reporting_time: form.reporting_time || null,
-        venue_maps_link: form.venue_maps_link || '',
         form_start_date: form.form_start_date ? new Date(form.form_start_date).toISOString() : null,
         form_end_date: form.form_end_date ? new Date(form.form_end_date).toISOString() : null,
         qr_type: form.qr_type,
@@ -133,6 +133,25 @@ export default function DriveWizard() {
             })
           )
         );
+      }
+
+      // Also create the form template if selected
+      if (form.form_type === 'template') {
+        const standardFields = [
+          { name: 'full_name', label: 'Full Name', type: 'text', required: true },
+          { name: 'email', label: 'Email Address', type: 'email', required: true },
+          { name: 'phone', label: 'Phone Number', type: 'tel', required: true },
+          { name: 'usn', label: 'USN / Roll Number', type: 'text', required: true },
+          { name: 'branch', label: 'Branch / Specialization', type: 'text', required: true },
+          { name: 'cgpa', label: 'CGPA', type: 'number', required: true },
+          { name: 'resume', label: 'Upload Resume (PDF)', type: 'file', required: true },
+          { name: 'photo', label: 'Upload Photo (JPG/PNG)', type: 'file', required: false },
+        ];
+        await fetch(`/api/v1/drives/${driveId}/form`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: standardFields }),
+        });
       }
 
       navigate(`/admin/drives/${driveId}`);
@@ -221,10 +240,6 @@ export default function DriveWizard() {
                     placeholder="Search and select cities / countries…"
                   />
                 </div>
-                <div className="col-span-2">
-                  <label className={labelCls}>Venue Maps Link</label>
-                  <input type="url" className={inputCls} placeholder="https://maps.google.com/..." value={form.venue_maps_link} onChange={e => set('venue_maps_link', e.target.value)} />
-                </div>
               </div>
             </div>
           )}
@@ -232,9 +247,10 @@ export default function DriveWizard() {
           {/* Step 2 — Registration Form */}
           {currentStep === 2 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-foreground">Registration Window</h2>
-              <p className="text-muted-foreground text-sm">Set the dates during which students can register for this drive.</p>
-              <div className="grid grid-cols-2 gap-5">
+              <h2 className="text-xl font-semibold text-foreground">Registration Configuration</h2>
+              <p className="text-muted-foreground text-sm">Configure the student registration window and form layout.</p>
+              
+              <div className="grid grid-cols-2 gap-5 mb-6">
                 <div>
                   <label className={labelCls}>Registration Opens</label>
                   <input type="datetime-local" className={inputCls} value={form.form_start_date} onChange={e => set('form_start_date', e.target.value)} />
@@ -242,6 +258,44 @@ export default function DriveWizard() {
                 <div>
                   <label className={labelCls}>Registration Closes</label>
                   <input type="datetime-local" className={inputCls} value={form.form_end_date} onChange={e => set('form_end_date', e.target.value)} />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Registration Form Setup</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                  <div 
+                    onClick={() => set('form_type', 'template')}
+                    className={`border rounded-xl p-4 cursor-pointer transition-all ${form.form_type === 'template' ? 'border-primary bg-primary/5 shadow-[0_0_15px_rgba(var(--color-primary),0.1)]' : 'border-border bg-card hover:border-primary/50'}`}
+                  >
+                    <div className="flex items-center mb-2">
+                      <FileText size={20} className={form.form_type === 'template' ? 'text-primary' : 'text-muted-foreground'} />
+                      <span className={`ml-2 font-semibold ${form.form_type === 'template' ? 'text-primary' : 'text-foreground'}`}>Standard Template</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Auto-generates fields for Name, CGPA, USN, Branch, Resume (PDF), and Photo.</p>
+                  </div>
+
+                  <div 
+                    onClick={() => set('form_type', 'custom')}
+                    className={`border rounded-xl p-4 cursor-pointer transition-all ${form.form_type === 'custom' ? 'border-primary bg-primary/5 shadow-[0_0_15px_rgba(var(--color-primary),0.1)]' : 'border-border bg-card hover:border-primary/50'}`}
+                  >
+                    <div className="flex items-center mb-2">
+                      <Settings size={20} className={form.form_type === 'custom' ? 'text-primary' : 'text-muted-foreground'} />
+                      <span className={`ml-2 font-semibold ${form.form_type === 'custom' ? 'text-primary' : 'text-foreground'}`}>Custom Form</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">You will be redirected to the Form Builder after Drive creation.</p>
+                  </div>
+
+                  <div 
+                    onClick={() => set('form_type', 'skip')}
+                    className={`border rounded-xl p-4 cursor-pointer transition-all ${form.form_type === 'skip' ? 'border-primary bg-primary/5 shadow-[0_0_15px_rgba(var(--color-primary),0.1)]' : 'border-border bg-card hover:border-primary/50'}`}
+                  >
+                    <div className="flex items-center mb-2">
+                      <SkipForward size={20} className={form.form_type === 'skip' ? 'text-primary' : 'text-muted-foreground'} />
+                      <span className={`ml-2 font-semibold ${form.form_type === 'skip' ? 'text-primary' : 'text-foreground'}`}>Skip For Now</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">No form will be created. You can build it later from the Drive Details page.</p>
+                  </div>
                 </div>
               </div>
             </div>

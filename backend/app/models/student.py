@@ -19,6 +19,9 @@ class StudentModel(Document):
     check_in_time: Optional[datetime] = None
     current_room_id: Optional[str] = None # Physical routing assignment
     
+    # Dynamic Form Data
+    custom_data: dict = Field(default_factory=dict) # Stores form responses like branch, cgpa, and file URLs
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:

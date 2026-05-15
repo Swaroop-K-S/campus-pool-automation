@@ -28,11 +28,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import auth, drive, checkin
+from app.routers import auth, drive, checkin, room, form, upload, student
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(drive.router, prefix="/api/v1")
 app.include_router(checkin.router, prefix="/api/v1")
+app.include_router(room.router, prefix="/api/v1")
+app.include_router(form.router, prefix="/api/v1")
+app.include_router(upload.router, prefix="/api/v1")
+app.include_router(student.router, prefix="/api/v1")
 
 @app.get("/api/v1/health")
 async def health_check():

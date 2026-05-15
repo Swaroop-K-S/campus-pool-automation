@@ -8,6 +8,7 @@ import DriveWizard from './pages/AdminDashboard/DriveWizard/DriveWizard';
 import DriveDetail from './pages/AdminDashboard/DriveDetail/DriveDetail';
 import DrivesList from './pages/AdminDashboard/DrivesList';
 import AdminLogin from './pages/Auth/AdminLogin';
+import StudentRegistration from './pages/Public/StudentRegistration';
 
 interface Stats { total_drives: number; active_drives: number; total_students: number; system_status: string; }
 
@@ -68,6 +69,7 @@ function App() {
         <Routes>
           {/* Public / Student Routes */}
           <Route path="/" element={<StudentHub />} />
+          <Route path="/register/:driveId" element={<StudentRegistration />} />
           
           {/* Admin Authentication */}
           <Route path="/admin/login" element={<AdminLogin />} />

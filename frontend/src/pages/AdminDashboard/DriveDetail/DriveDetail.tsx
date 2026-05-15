@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft, Play, Zap, CheckCircle2, Users, Map, Settings, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Play, Zap, CheckCircle2, Users, Map, Settings, Loader2, AlertCircle, FileText, Copy, Check } from 'lucide-react';
 import ShortlistTab from './ShortlistTab';
 import GodViewTab from './GodViewTab';
+import FormBuilderTab from './FormBuilderTab';
 
 interface Drive {
   id: string;
@@ -52,6 +53,7 @@ export default function DriveDetail() {
   const [loading, setLoading] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -142,6 +144,22 @@ export default function DriveDetail() {
 
           {/* Lifecycle Action Button */}
           <div className="flex gap-3 items-center">
+            {(drive.status === 'active' || drive.status === 'event_day') && (
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/register/${id}`;
+                  navigator.clipboard.writeText(url);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="px-4 py-2 bg-secondary text-secondary-foreground border border-border rounded-lg hover:bg-secondary/80 font-medium transition-colors text-sm flex items-center gap-2"
+                title="Copy Student Registration Link"
+              >
+                {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                {copied ? 'Copied Link' : 'Copy Registration Link'}
+              </button>
+            )}
+            
             <button className="px-4 py-2 bg-card border border-border text-foreground rounded-lg hover:bg-secondary font-medium transition-colors text-sm">
               Edit Details
             </button>
@@ -165,6 +183,7 @@ export default function DriveDetail() {
       <div className="flex border-b border-border mb-6">
         {[
           { key: 'shortlist', label: 'Shortlist (XLSX)', icon: <Users size={15} /> },
+          { key: 'form',      label: 'Registration Form', icon: <FileText size={15} /> },
           { key: 'godview',   label: 'Logistics (God View)', icon: <Map size={15} /> },
           { key: 'settings',  label: 'Settings',             icon: <Settings size={15} /> },
         ].map(tab => (
@@ -184,6 +203,7 @@ export default function DriveDetail() {
       {/* Tab Content */}
       <div className="flex-1 overflow-auto">
         {activeTab === 'shortlist' && <ShortlistTab />}
+        {activeTab === 'form'      && <FormBuilderTab />}
         {activeTab === 'godview'   && <GodViewTab />}
         {activeTab === 'settings'  && (
           <div className="p-8 text-center text-muted-foreground bg-card rounded-xl border border-border">

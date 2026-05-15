@@ -3,7 +3,7 @@ from typing import Optional
 
 class RoomModel(Document):
     drive_id: str
-    round_id: str # The round this room is allocated to
+    round_id: Optional[str] = None # The round this room is allocated to
     name: str # e.g., "Seminar Hall" or "Room 102"
     capacity: int # Number of seats
     block: Optional[str] = None # e.g., "C Block"
