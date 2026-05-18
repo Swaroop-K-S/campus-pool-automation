@@ -9,6 +9,8 @@ class FormField(BaseModel):
     type: str # text, number, select, file, email, tel
     required: bool = False
     options: Optional[List[str]] = None # For 'select' type, e.g. ["CSE", "ISE", "ECE"]
+    depends_on_field: Optional[str] = None # For conditional logic, the internal name of the parent field
+    depends_on_value: Optional[str] = None # The value the parent field must have for this field to show
 
 class FormSchemaModel(Document):
     drive_id: str

@@ -8,6 +8,8 @@ interface FormField {
   type: string;
   required: boolean;
   options?: string[];
+  depends_on_field?: string;
+  depends_on_value?: string;
 }
 
 interface Drive {
@@ -72,22 +74,52 @@ export default function StudentRegistration() {
     }
   };
 
+  const getOrderedFields = (rawFields: FormField[]): FormField[] => {
+    const result: FormField[] = [];
+    const added = new Set<string>();
+    for (const field of rawFields) {
+      if (added.has(field.name)) continue;
+      if (field.depends_on_field) continue;
+      result.push(field);
+      added.add(field.name);
+      for (const child of rawFields) {
+        if (child.depends_on_field === field.name && !added.has(child.name)) {
+          result.push(child);
+          added.add(child.name);
+        }
+      }
+    }
+    for (const field of rawFields) {
+      if (!added.has(field.name)) result.push(field);
+    }
+    return result;
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError('');
 
     try {
-      // 1. Upload all files to Cloudinary first
+      // 0. Determine which fields are actually visible (based on conditional logic)
+      const visibleFields = fields.filter(f => {
+        if (!f.depends_on_field) return true;
+        return formData[f.depends_on_field] === f.depends_on_value;
+      });
+      const visibleFieldNames = visibleFields.map(f => f.name);
+
+      // 1. Upload all files to Cloudinary first (only for visible fields)
       const fileUrls: Record<string, string> = {};
       
       for (const [name, file] of Object.entries(files)) {
-        const formData = new FormData();
-        formData.append('file', file);
+        if (!visibleFieldNames.includes(name)) continue; // Skip hidden file fields
+        
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', file);
         
         const uploadRes = await fetch('/api/v1/upload', {
           method: 'POST',
-          body: formData,
+          body: uploadFormData,
         });
         
         if (!uploadRes.ok) {
@@ -110,7 +142,7 @@ export default function StudentRegistration() {
       };
 
       for (const [key, value] of Object.entries(formData)) {
-        if (!standardKeys.includes(key)) {
+        if (!standardKeys.includes(key) && visibleFieldNames.includes(key)) {
           payload.custom_data[key] = value;
         }
       }
@@ -197,7 +229,16 @@ export default function StudentRegistration() {
               </div>
             )}
 
-            {fields.map((field) => (
+            {getOrderedFields(fields).map((field) => {
+              // Check conditional logic
+              if (field.depends_on_field) {
+                const parentValue = formData[field.depends_on_field];
+                if (parentValue !== field.depends_on_value) {
+                  return null; // Don't render this field
+                }
+              }
+
+              return (
               <div key={field.name} className="space-y-2">
                 <label className="block text-sm font-semibold text-foreground">
                   {field.label} {field.required && <span className="text-destructive">*</span>}
@@ -277,7 +318,8 @@ export default function StudentRegistration() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
 
             <div className="pt-6 border-t border-border">
               <button
