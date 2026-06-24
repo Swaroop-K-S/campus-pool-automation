@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, BackgroundTasks
 from typing import List, Optional
 from pydantic import BaseModel
 from app.models.drive import DriveModel, RoundModel
@@ -121,7 +121,7 @@ async def get_rounds(drive_id: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/{drive_id}/shortlist/upload")
-async def upload_shortlist(drive_id: str, file: UploadFile = File(...)):
+async def upload_shortlist(drive_id: str, background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """Upload XLSX file for shortlisting students"""
     drive = await DriveModel.get(drive_id)
     if not drive:
@@ -132,7 +132,7 @@ async def upload_shortlist(drive_id: str, file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload an Excel file.")
 
     contents = await file.read()
-    result = await process_student_shortlist(contents, drive_id)
+    result = await process_student_shortlist(contents, drive, background_tasks)
     return result
 
 

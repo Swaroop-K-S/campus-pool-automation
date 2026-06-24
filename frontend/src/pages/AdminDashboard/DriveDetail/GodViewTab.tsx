@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { PlayCircle, Users, CheckCircle, Clock, Plus, X } from 'lucide-react';
+import { PlayCircle, Users, CheckCircle, Clock, Plus, X, UploadCloud } from 'lucide-react';
 
 export default function GodViewTab() {
   const { id } = useParams();
@@ -9,7 +9,16 @@ export default function GodViewTab() {
   const [rooms, setRooms] = useState<any[]>([]);
   const [stats, setStats] = useState({ total_shortlisted: 0, checked_in: 0, pending_arrival: 0 });
   const [showAddRoom, setShowAddRoom] = useState(false);
-  const [newRoom, setNewRoom] = useState({ name: '', capacity: 60 });
+  const [newRoom, setNewRoom] = useState({ name: '', capacity: 60, purpose: 'General' });
+
+  const [showConfigurator, setShowConfigurator] = useState(false);
+  const [allocationConfig, setAllocationConfig] = useState({ student_status_filter: 'present', target_room_purpose: 'Group Discussion' });
+
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearConfig, setClearConfig] = useState({ target_room_purpose: 'Group Discussion' });
+
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const fetchStatsAndRooms = async () => {
     try {
@@ -29,18 +38,41 @@ export default function GodViewTab() {
     return () => clearInterval(interval);
   }, [id]);
 
-  const handleRunEngine = async () => {
+  const handleRunEngine = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsRunningEngine(true);
     try {
-      const res = await fetch(`/api/v1/drives/${id}/allocate-rooms`, { method: 'POST' });
+      const res = await fetch(`/api/v1/drives/${id}/allocate-rooms`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(allocationConfig),
+      });
       if (res.ok) {
         setAllocationComplete(true);
+        setShowConfigurator(false);
         fetchStatsAndRooms();
       }
     } catch (e) {
       console.error(e);
     } finally {
       setIsRunningEngine(false);
+    }
+  };
+
+  const handleClearRooms = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`/api/v1/drives/${id}/clear-rooms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clearConfig),
+      });
+      if (res.ok) {
+        setShowClearModal(false);
+        fetchStatsAndRooms();
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -55,11 +87,40 @@ export default function GodViewTab() {
       });
       if (res.ok) {
         setShowAddRoom(false);
-        setNewRoom({ name: '', capacity: 60 });
+        setNewRoom({ name: '', capacity: 60, purpose: 'General' });
         fetchStatsAndRooms();
       }
     } catch (e) {
       console.error("Failed to add room", e);
+    }
+  };
+
+  const handleRoomUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    
+    setIsUploading(true);
+    setUploadError('');
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const res = await fetch(`/api/v1/drives/${id}/rooms/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        fetchStatsAndRooms();
+      } else {
+        const data = await res.json();
+        setUploadError(data.detail || 'Upload failed');
+      }
+    } catch (e) {
+      setUploadError('Network error');
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -110,35 +171,38 @@ export default function GodViewTab() {
           </div>
           <div className="flex gap-3">
             <button
+              onClick={() => setShowClearModal(true)}
+              className="px-4 py-2.5 rounded-lg font-medium flex items-center transition-colors bg-destructive/10 text-destructive hover:bg-destructive/20 text-sm"
+            >
+              Clear Rooms
+            </button>
+            <label className={`px-4 py-2.5 rounded-lg font-medium flex items-center transition-colors text-sm cursor-pointer ${isUploading ? 'bg-secondary/50 text-muted-foreground' : 'bg-primary/20 text-primary hover:bg-primary/30'}`}>
+              <UploadCloud size={18} className="mr-2" />
+              {isUploading ? 'Uploading...' : 'Upload XLSX'}
+              <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleRoomUpload} disabled={isUploading} />
+            </label>
+            <button
               onClick={() => setShowAddRoom(true)}
-              className="px-4 py-2.5 rounded-lg font-medium flex items-center transition-colors bg-secondary/20 text-secondary-foreground hover:bg-secondary/30"
+              className="px-4 py-2.5 rounded-lg font-medium flex items-center transition-colors bg-secondary/20 text-secondary-foreground hover:bg-secondary/30 text-sm"
             >
               <Plus size={18} className="mr-2" />
               Add Room
             </button>
             <button 
-              onClick={handleRunEngine}
-              disabled={isRunningEngine || allocationComplete}
-              className={`px-5 py-2.5 rounded-lg font-medium flex items-center transition-colors shadow-sm ${
-                allocationComplete 
-                  ? 'bg-emerald-500/20 text-emerald-500 cursor-default'
-                  : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_15px_rgba(var(--color-primary),0.3)]'
-              }`}
+              onClick={() => setShowConfigurator(true)}
+              className="px-5 py-2.5 rounded-lg font-medium flex items-center transition-colors shadow-sm bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_15px_rgba(var(--color-primary),0.3)] text-sm"
             >
-              {allocationComplete ? (
-                <>
-                  <CheckCircle size={18} className="mr-2" />
-                  Allocation Complete
-                </>
-              ) : (
-                <>
-                  <PlayCircle size={18} className="mr-2" />
-                  {isRunningEngine ? 'Running Engine...' : 'Run Assignment Engine'}
-                </>
-              )}
+              <PlayCircle size={18} className="mr-2" />
+              Run Assignment Engine
             </button>
           </div>
         </div>
+
+        {uploadError && (
+          <div className="px-6 py-3 bg-destructive/10 text-destructive text-sm border-b border-destructive/20">
+            Error uploading rooms: {uploadError}
+          </div>
+        )}
 
         {/* Room Heatmap */}
         <div className="p-6">
@@ -151,9 +215,12 @@ export default function GodViewTab() {
                 const percentage = room.capacity > 0 ? (room.current_occupancy / room.capacity) * 100 : 0;
                 return (
                   <div key={room.id} className="border border-border rounded-lg p-4 bg-background shadow-sm hover:border-primary transition-colors">
-                    <div className="flex justify-between items-start mb-4">
-                      <span className="font-bold text-foreground">{room.name}</span>
-                      <span className="text-xs font-medium px-2 py-1 bg-card text-muted-foreground rounded border border-border">Cap: {room.capacity}</span>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <span className="font-bold text-foreground block">{room.name}</span>
+                        <span className="text-[10px] uppercase font-bold text-primary tracking-wider">{room.purpose || 'General'}</span>
+                      </div>
+                      <span className="text-xs font-medium px-2 py-1 bg-card text-muted-foreground rounded border border-border mt-1">Cap: {room.capacity}</span>
                     </div>
                     
                     <div className="w-full bg-card rounded-full h-2 mb-2 border border-border/50 overflow-hidden">
@@ -205,12 +272,123 @@ export default function GodViewTab() {
                   onChange={e => setNewRoom({...newRoom, capacity: parseInt(e.target.value) || 0})}
                 />
               </div>
+              <div>
+                <label className={labelCls}>Purpose / Usage</label>
+                <select
+                  className={inputCls}
+                  value={newRoom.purpose}
+                  onChange={e => setNewRoom({...newRoom, purpose: e.target.value})}
+                >
+                  <option value="General">General</option>
+                  <option value="Aptitude Test">Aptitude Test</option>
+                  <option value="Group Discussion">Group Discussion</option>
+                  <option value="Technical Interview">Technical Interview</option>
+                  <option value="HR Interview">HR Interview</option>
+                  <option value="Pre-Placement Talk">Pre-Placement Talk</option>
+                </select>
+              </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button type="button" onClick={() => setShowAddRoom(false)} className="px-4 py-2 font-medium text-muted-foreground hover:text-foreground">
                   Cancel
                 </button>
                 <button type="submit" className="px-4 py-2 font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90">
                   Save Room
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Assignment Configurator Modal */}
+      {showConfigurator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-card rounded-xl shadow-2xl border border-border w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-xl font-bold text-foreground">Advanced Assignment Engine</h2>
+              <button onClick={() => setShowConfigurator(false)} className="text-muted-foreground hover:text-foreground">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleRunEngine} className="space-y-4">
+              <div>
+                <label className={labelCls}>Target Student Group</label>
+                <select
+                  className={inputCls}
+                  value={allocationConfig.student_status_filter}
+                  onChange={e => setAllocationConfig({...allocationConfig, student_status_filter: e.target.value})}
+                >
+                  <option value="present">New Check-ins (present)</option>
+                  <option value="passed">Cleared Previous Round (passed)</option>
+                  <option value="shortlisted">Shortlisted</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Target Room Purpose</label>
+                <select
+                  className={inputCls}
+                  value={allocationConfig.target_room_purpose}
+                  onChange={e => setAllocationConfig({...allocationConfig, target_room_purpose: e.target.value})}
+                >
+                  <option value="General">General</option>
+                  <option value="Aptitude Test">Aptitude Test</option>
+                  <option value="Group Discussion">Group Discussion</option>
+                  <option value="Technical Interview">Technical Interview</option>
+                  <option value="HR Interview">HR Interview</option>
+                  <option value="Pre-Placement Talk">Pre-Placement Talk</option>
+                </select>
+              </div>
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-xs text-primary mt-2">
+                The engine will allocate matching students only into rooms that share this exact purpose.
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button type="button" onClick={() => setShowConfigurator(false)} className="px-4 py-2 font-medium text-muted-foreground hover:text-foreground">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isRunningEngine} className="px-4 py-2 font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 flex items-center gap-2">
+                  {isRunningEngine ? 'Running Engine...' : <><PlayCircle size={16} /> Execute Allocation</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Rooms Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-card rounded-xl shadow-2xl border border-destructive/50 w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-xl font-bold text-destructive">Clear Rooms</h2>
+              <button onClick={() => setShowClearModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleClearRooms} className="space-y-4">
+              <div>
+                <label className={labelCls}>Select Room Type to Clear</label>
+                <select
+                  className={inputCls}
+                  value={clearConfig.target_room_purpose}
+                  onChange={e => setClearConfig({...clearConfig, target_room_purpose: e.target.value})}
+                >
+                  <option value="General">General</option>
+                  <option value="Aptitude Test">Aptitude Test</option>
+                  <option value="Group Discussion">Group Discussion</option>
+                  <option value="Technical Interview">Technical Interview</option>
+                  <option value="HR Interview">HR Interview</option>
+                  <option value="Pre-Placement Talk">Pre-Placement Talk</option>
+                </select>
+              </div>
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 text-xs text-destructive mt-2">
+                This will reset the occupancy of all rooms with this purpose to 0 and remove all student assignments from them. This action cannot be undone.
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button type="button" onClick={() => setShowClearModal(false)} className="px-4 py-2 font-medium text-muted-foreground hover:text-foreground">
+                  Cancel
+                </button>
+                <button type="submit" className="px-4 py-2 font-medium bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 flex items-center gap-2">
+                  Clear Rooms
                 </button>
               </div>
             </form>

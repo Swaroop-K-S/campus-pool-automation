@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
 import { GoogleLogin, GoogleOAuthProvider } from '@react-oauth/google';
+import { useTranslation } from 'react-i18next';
 
-const GOOGLE_CLIENT_ID = '629966086748-me2doao23pmh9l59gnieojiutr0hvua7.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '808319308214-sjot8gd2vgb77t732o09pll9kvvnt2ci.apps.googleusercontent.com';
 
 function AdminLoginInner() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -74,23 +76,23 @@ function AdminLoginInner() {
             className="w-11 h-11 rounded-lg flex items-center justify-center font-black text-lg"
             style={{ background: '#c49a6c', color: '#0a1b3f' }}
           >
-            S
+            {t('s')}
           </div>
           <div>
-            <p className="text-white font-bold text-sm leading-none">Sapthagiri NPS</p>
-            <p className="text-xs leading-none mt-0.5" style={{ color: '#c49a6c' }}>University</p>
+            <p className="text-white font-bold text-sm leading-none">{t('sapthagiri_nps')}</p>
+            <p className="text-xs leading-none mt-0.5" style={{ color: '#c49a6c' }}>{t('university')}</p>
           </div>
         </div>
 
         {/* Hero text bottom-left */}
         <div className="relative z-10">
-          <p className="text-white/70 text-base mb-2 font-light">A Gateway of</p>
+          <p className="text-white/70 text-base mb-2 font-light">{t('gateway_of')}</p>
           <h1 className="text-5xl font-black text-white leading-tight mb-4">
-            Opportu<span style={{ color: '#c49a6c' }}>nities</span>
+            {t('opportu')}<span style={{ color: '#c49a6c' }}>{t('nities')}</span>
           </h1>
           <div className="w-14 h-1 rounded-full mb-5" style={{ background: '#c49a6c' }} />
           <p className="text-white/60 text-sm leading-relaxed max-w-sm">
-            CampusPool — the intelligent placement automation system powering Sapthagiri's recruitment drives.
+            {t('campuspool_desc')}
           </p>
 
           {/* Stats bar */}
@@ -124,10 +126,10 @@ function AdminLoginInner() {
               className="w-10 h-10 rounded-lg flex items-center justify-center font-black"
               style={{ background: '#0a1b3f', color: '#c49a6c' }}
             >
-              S
+              {t('s')}
             </div>
             <div>
-              <p className="font-bold text-sm" style={{ color: '#0a1b3f' }}>Sapthagiri NPS University</p>
+              <p className="font-bold text-sm" style={{ color: '#0a1b3f' }}>{t('sapthagiri_nps_university')}</p>
             </div>
           </div>
 
@@ -139,8 +141,8 @@ function AdminLoginInner() {
             >
               <ShieldCheck size={22} style={{ color: '#c49a6c' }} />
             </div>
-            <h2 className="text-3xl font-black mb-1" style={{ color: '#0a1b3f' }}>Welcome Back</h2>
-            <p className="text-sm" style={{ color: '#6b7280' }}>Sign in to the CampusPool Admin Portal</p>
+            <h2 className="text-3xl font-black mb-1" style={{ color: '#0a1b3f' }}>{t('welcome_back')}</h2>
+            <p className="text-sm" style={{ color: '#6b7280' }}>{t('signin_desc')}</p>
           </div>
 
           {/* Error banner */}
@@ -156,7 +158,7 @@ function AdminLoginInner() {
             {/* Email */}
             <div>
               <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: '#0a1b3f' }}>
-                Email Address
+                {t('email_address')}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -179,7 +181,7 @@ function AdminLoginInner() {
             {/* Password */}
             <div>
               <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider" style={{ color: '#0a1b3f' }}>
-                Password
+                {t('password')}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -206,7 +208,7 @@ function AdminLoginInner() {
                 Remember me
               </label>
               <a href="#" className="font-semibold hover:underline" style={{ color: '#c49a6c' }}>
-                Forgot password?
+                {t('forgot_password')}
               </a>
             </div>
 
@@ -233,7 +235,7 @@ function AdminLoginInner() {
               <div className="w-full border-t" style={{ borderColor: '#f3f4f6' }} />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-3 bg-white" style={{ color: '#9ca3af' }}>or continue with</span>
+              <span className="px-3 bg-white" style={{ color: '#9ca3af' }}>{t('or_continue_with')}</span>
             </div>
           </div>
 

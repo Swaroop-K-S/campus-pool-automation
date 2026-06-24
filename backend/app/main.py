@@ -28,7 +28,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import auth, drive, checkin, room, form, upload, student
+from fastapi.staticfiles import StaticFiles
+from app.routers import auth, drive, checkin, room, form, upload, student, calendar, settings, communications
+
+# Mount local uploads directory for PDFs and other files blocked by Cloudinary
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(drive.router, prefix="/api/v1")
@@ -37,6 +41,10 @@ app.include_router(room.router, prefix="/api/v1")
 app.include_router(form.router, prefix="/api/v1")
 app.include_router(upload.router, prefix="/api/v1")
 app.include_router(student.router, prefix="/api/v1")
+app.include_router(student.global_router, prefix="/api/v1")
+app.include_router(calendar.router, prefix="/api/v1")
+app.include_router(settings.router, prefix="/api/v1")
+app.include_router(communications.router, prefix="/api/v1")
 
 @app.get("/api/v1/health")
 async def health_check():
@@ -50,4 +58,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

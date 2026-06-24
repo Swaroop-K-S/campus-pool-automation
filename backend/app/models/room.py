@@ -6,6 +6,7 @@ class RoomModel(Document):
     round_id: Optional[str] = None # The round this room is allocated to
     name: str # e.g., "Seminar Hall" or "Room 102"
     capacity: int # Number of seats
+    purpose: str = "General" # e.g., "Group Discussion", "Aptitude Test"
     block: Optional[str] = None # e.g., "C Block"
     floor: Optional[str] = None # e.g., "1st Floor"
     

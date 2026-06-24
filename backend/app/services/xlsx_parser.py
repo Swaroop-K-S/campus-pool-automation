@@ -34,9 +34,12 @@ async def parse_xlsx_file(file_content: bytes) -> List[Dict]:
     return data
 
 from app.models.student import StudentModel
+from app.models.drive import DriveModel
+from fastapi import BackgroundTasks
 import uuid
+from app.services.notification_service import NotificationService
 
-async def process_student_shortlist(file_content: bytes, drive_id: str):
+async def process_student_shortlist(file_content: bytes, drive: DriveModel, background_tasks: BackgroundTasks):
     """
     Takes an XLSX of shortlisted students, parses it, 
     and updates their status in the database.
@@ -56,7 +59,7 @@ async def process_student_shortlist(file_content: bytes, drive_id: str):
         unique_id = str(row.get("USN", row.get("Roll Number", row.get("ID", str(uuid.uuid4())[:8]))))
         
         student = StudentModel(
-            drive_id=drive_id,
+            drive_id=str(drive.id),
             unique_id=unique_id,
             full_name=full_name,
             email=email,
@@ -69,10 +72,57 @@ async def process_student_shortlist(file_content: bytes, drive_id: str):
     if students_to_insert:
         await StudentModel.insert_many(students_to_insert)
     
-    # 4. (Future) Trigger NotificationService to send Call Letters
+    # 4. Trigger NotificationService to send Call Letters and WhatsApp
+    if students_to_insert:
+        background_tasks.add_task(NotificationService.process_shortlist_notifications, students_to_insert, drive)
     
     return {
         "status": "success",
         "students_added": len(students_to_insert),
         "message": f"{len(students_to_insert)} students shortlisted successfully."
+    }
+
+from app.models.room import RoomModel
+
+async def process_room_upload(file_content: bytes, drive_id: str):
+    """
+    Takes an XLSX of rooms, parses it, and inserts them into the database.
+    """
+    parsed_data = await parse_xlsx_file(file_content)
+    
+    rooms_to_insert = []
+    for row in parsed_data:
+        name = row.get("Room Name", row.get("Name", row.get("Room", "")))
+        if not name:
+            continue # Skip rows without a room name
+            
+        capacity = row.get("Capacity", row.get("Seats", 60))
+        try:
+            capacity = int(capacity)
+        except (ValueError, TypeError):
+            capacity = 60
+            
+        purpose = row.get("Purpose", row.get("Usage", "General"))
+        block = str(row.get("Block", "")) if row.get("Block") else None
+        floor = str(row.get("Floor", "")) if row.get("Floor") else None
+        
+        room = RoomModel(
+            drive_id=drive_id,
+            name=str(name),
+            capacity=capacity,
+            purpose=str(purpose),
+            block=block,
+            floor=floor,
+            current_occupancy=0,
+            is_locked=False
+        )
+        rooms_to_insert.append(room)
+        
+    if rooms_to_insert:
+        await RoomModel.insert_many(rooms_to_insert)
+        
+    return {
+        "status": "success",
+        "rooms_added": len(rooms_to_insert),
+        "message": f"Successfully parsed and added {len(rooms_to_insert)} rooms."
     }

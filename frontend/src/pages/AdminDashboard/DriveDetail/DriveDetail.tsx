@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft, Play, Zap, CheckCircle2, Users, Map, Settings, Loader2, AlertCircle, FileText, Copy, Check } from 'lucide-react';
+import { ChevronLeft, Play, Zap, CheckCircle2, Users, Map, Settings, Loader2, AlertCircle, FileText, Copy, Check, Calendar, MessageSquare } from 'lucide-react';
 import ShortlistTab from './ShortlistTab';
 import GodViewTab from './GodViewTab';
 import FormBuilderTab from './FormBuilderTab';
+import RegistrationsTab from './RegistrationsTab';
+import DriveSettingsTab from './DriveSettingsTab';
+import CommunicationsTab from './CommunicationsTab';
 
 interface Drive {
   id: string;
@@ -48,7 +51,7 @@ const STATUS_CONFIG: Record<string, { label: string; badge: string; nextAction: 
 
 export default function DriveDetail() {
   const { id } = useParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState('shortlist');
+  const [activeTab, setActiveTab] = useState('registrations');
   const [drive, setDrive] = useState<Drive | null>(null);
   const [loading, setLoading] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
@@ -112,38 +115,41 @@ export default function DriveDetail() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="bg-card border border-border border-b-[3px] border-b-primary px-8 py-6 mb-6 rounded-xl shadow-md">
-        <div className="flex items-center text-sm text-muted-foreground mb-4">
-          <Link to="/admin/drives" className="hover:text-primary transition-colors flex items-center gap-1">
-            <ChevronLeft size={16} /> All Drives
-          </Link>
-        </div>
-
-        {/* Error banner */}
-        {error && (
-          <div className="mb-4 flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
-            <AlertCircle size={16} /> {error}
-          </div>
-        )}
-
+      <div className="bg-card border border-border border-b-[3px] border-b-primary px-6 py-4 mb-4 rounded-xl shadow-sm">
         <div className="flex justify-between items-start">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-foreground">{drive.company_name}</h1>
-              <span className={`px-3 py-1 text-xs font-semibold rounded-full ${cfg.badge}`}>
+          <div className="flex flex-col">
+            <Link to="/admin/drives" className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 mb-1.5 w-max">
+              <ChevronLeft size={16} /> All Drives
+            </Link>
+            
+            {/* Error banner */}
+            {error && (
+              <div className="mb-3 flex items-center gap-2 p-2 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-xs font-medium">
+                <AlertCircle size={14} /> {error}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 mb-1.5">
+              <h1 className="text-2xl font-bold text-foreground leading-none">{drive.company_name}</h1>
+              <span className={`px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider rounded-md ${cfg.badge}`}>
                 {cfg.label}
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-              {driveDate && <span>📅 {driveDate}</span>}
-              {drive.package_offered && <span>💰 ₹{drive.package_offered} LPA</span>}
-              {drive.locations?.length > 0 && <span>📍 {drive.locations.join(', ')}</span>}
-              <span className="font-mono text-xs">ID: {id?.slice(0, 10)}…</span>
+            
+            <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-4">
+                {driveDate && <span className="flex items-center gap-1.5"><Calendar size={14} /> {driveDate}</span>}
+                {drive.package_offered && <span className="flex items-center gap-1.5">💰 ₹{drive.package_offered} LPA</span>}
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-xs">
+                {drive.locations?.length > 0 && <span className="flex items-center gap-1.5"><Map size={13} className="text-destructive/70" /> {drive.locations.join(', ')}</span>}
+                <span className="font-mono text-muted-foreground/60">ID: {id}</span>
+              </div>
             </div>
           </div>
 
-          {/* Lifecycle Action Button */}
-          <div className="flex gap-3 items-center">
+          {/* Lifecycle Action Buttons */}
+          <div className="flex gap-2.5 items-center mt-6">
             {(drive.status === 'active' || drive.status === 'event_day') && (
               <button
                 onClick={() => {
@@ -152,25 +158,26 @@ export default function DriveDetail() {
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
-                className="px-4 py-2 bg-secondary text-secondary-foreground border border-border rounded-lg hover:bg-secondary/80 font-medium transition-colors text-sm flex items-center gap-2"
+                className="px-3 py-1.5 bg-secondary/50 text-secondary-foreground border border-border rounded-lg hover:bg-secondary font-medium transition-colors text-xs flex items-center gap-1.5"
                 title="Copy Student Registration Link"
               >
-                {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-                {copied ? 'Copied Link' : 'Copy Registration Link'}
+                {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                <span className="hidden sm:inline">{copied ? 'Copied Link' : 'Copy Registration Link'}</span>
               </button>
             )}
             
-            <button className="px-4 py-2 bg-card border border-border text-foreground rounded-lg hover:bg-secondary font-medium transition-colors text-sm">
+            <button className="px-3 py-1.5 bg-card border border-border text-foreground rounded-lg hover:bg-secondary font-medium transition-colors text-xs">
               Edit Details
             </button>
+            
             {cfg.nextAction && (
               <button
                 onClick={handleLifecycle}
                 disabled={transitioning}
-                className="px-5 py-2.5 bg-primary text-primary-foreground rounded-lg font-bold transition-all flex items-center gap-2 shadow-sm hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0 text-sm"
+                className="px-4 py-1.5 bg-primary text-primary-foreground rounded-lg font-bold transition-all flex items-center gap-1.5 shadow-sm hover:bg-primary/90 disabled:opacity-60 text-sm"
               >
                 {transitioning
-                  ? <><Loader2 size={16} className="animate-spin" /> Processing...</>
+                  ? <><Loader2 size={14} className="animate-spin" /> Processing...</>
                   : <>{cfg.nextIcon} {cfg.nextAction}</>
                 }
               </button>
@@ -182,9 +189,11 @@ export default function DriveDetail() {
       {/* Tabs */}
       <div className="flex border-b border-border mb-6">
         {[
-          { key: 'shortlist', label: 'Shortlist (XLSX)', icon: <Users size={15} /> },
+          { key: 'registrations', label: 'Registrations', icon: <Users size={15} /> },
+          { key: 'shortlist', label: 'Shortlist (XLSX)', icon: <FileText size={15} /> },
           { key: 'form',      label: 'Registration Form', icon: <FileText size={15} /> },
           { key: 'godview',   label: 'Logistics (God View)', icon: <Map size={15} /> },
+          { key: 'communications', label: 'Communications', icon: <MessageSquare size={15} /> },
           { key: 'settings',  label: 'Settings',             icon: <Settings size={15} /> },
         ].map(tab => (
           <button
@@ -202,12 +211,14 @@ export default function DriveDetail() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-auto">
+        {activeTab === 'registrations' && <RegistrationsTab />}
         {activeTab === 'shortlist' && <ShortlistTab />}
-        {activeTab === 'form'      && <FormBuilderTab />}
-        {activeTab === 'godview'   && <GodViewTab />}
-        {activeTab === 'settings'  && (
-          <div className="p-8 text-center text-muted-foreground bg-card rounded-xl border border-border">
-            Settings panel coming soon.
+        { activeTab === 'form'      && <FormBuilderTab /> }
+        { activeTab === 'godview'   && <GodViewTab /> }
+        { activeTab === 'communications' && <CommunicationsTab /> }
+        { activeTab === 'settings'  && (
+          <div className="p-6">
+            <DriveSettingsTab drive={drive} onUpdate={setDrive} />
           </div>
         )}
       </div>
