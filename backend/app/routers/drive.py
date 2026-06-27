@@ -191,6 +191,23 @@ async def start_event_day(drive_id: str):
     return {**drive.model_dump(), "id": str(drive.id)}
 
 
+@router.post("/{drive_id}/rotate-qr")
+async def rotate_qr(drive_id: str):
+    """Rotate the dynamic QR code secret"""
+    drive = await DriveModel.get(drive_id)
+    if not drive:
+        raise HTTPException(status_code=404, detail="Drive not found")
+    if drive.status != "event_day":
+        raise HTTPException(status_code=400, detail="Drive must be in event_day status to rotate QR")
+    if drive.qr_type != "dynamic":
+        raise HTTPException(status_code=400, detail="Drive is not using dynamic QR codes")
+
+    import secrets
+    new_secret = secrets.token_hex(16)
+    await drive.set({"current_qr_secret": new_secret})
+    return {"current_qr_secret": new_secret}
+
+
 @router.post("/{drive_id}/complete")
 async def complete_drive(drive_id: str):
     """Mark drive as completed"""

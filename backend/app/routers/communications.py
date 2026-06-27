@@ -13,8 +13,22 @@ class CustomBlastRequest(BaseModel):
     message: str
     target_status: str
 
+class CallLetterRequest(BaseModel):
+    email_subject: str = None
+    email_body: str = None
+    whatsapp_message: str = None
+
+@router.get("/send-call-letters/template")
+async def get_call_letter_template():
+    from app.services.notification_service import DEFAULT_CALL_LETTER_SUBJECT, DEFAULT_CALL_LETTER_BODY, DEFAULT_WHATSAPP_MESSAGE
+    return {
+        "email_subject": DEFAULT_CALL_LETTER_SUBJECT,
+        "email_body": DEFAULT_CALL_LETTER_BODY,
+        "whatsapp_message": DEFAULT_WHATSAPP_MESSAGE
+    }
+
 @router.post("/send-call-letters")
-async def send_call_letters(drive_id: str, background_tasks: BackgroundTasks):
+async def send_call_letters(drive_id: str, background_tasks: BackgroundTasks, payload: CallLetterRequest = None):
     """
     Manually triggers Call Letters for all shortlisted students in this drive.
     """
@@ -27,7 +41,17 @@ async def send_call_letters(drive_id: str, background_tasks: BackgroundTasks):
     if not shortlisted_students:
         raise HTTPException(status_code=400, detail="No shortlisted students found.")
 
-    background_tasks.add_task(NotificationService.process_shortlist_notifications, shortlisted_students, drive)
+    if payload:
+        background_tasks.add_task(
+            NotificationService.process_shortlist_notifications, 
+            shortlisted_students, 
+            drive, 
+            payload.email_subject, 
+            payload.email_body, 
+            payload.whatsapp_message
+        )
+    else:
+        background_tasks.add_task(NotificationService.process_shortlist_notifications, shortlisted_students, drive)
     
     return {
         "status": "success", 

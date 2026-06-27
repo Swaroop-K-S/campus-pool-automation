@@ -47,39 +47,34 @@ async def process_student_shortlist(file_content: bytes, drive: DriveModel, back
     # 1. Parse the XLSX file
     parsed_data = await parse_xlsx_file(file_content)
     
-    # 2. Extract and create Student models
-    students_to_insert = []
+    # 2. Extract emails from the uploaded XLSX
+    emails_to_shortlist = []
     for row in parsed_data:
-        # Try to find standard columns, fallback to empty string if missing
-        full_name = row.get("Name", row.get("Full Name", row.get("Student Name", "Unknown")))
-        email = row.get("Email", row.get("Email ID", "unknown@example.com"))
-        phone = str(row.get("Phone", row.get("Mobile", row.get("Contact", "0000000000"))))
-        
-        # Generate a unique ID (e.g. USN or UUID)
-        unique_id = str(row.get("USN", row.get("Roll Number", row.get("ID", str(uuid.uuid4())[:8]))))
-        
-        student = StudentModel(
-            drive_id=str(drive.id),
-            unique_id=unique_id,
-            full_name=full_name,
-            email=email,
-            phone=phone,
-            status="shortlisted"
-        )
-        students_to_insert.append(student)
-        
-    # 3. Bulk insert to MongoDB via Beanie
-    if students_to_insert:
-        await StudentModel.insert_many(students_to_insert)
+        email = row.get("Email", row.get("Email ID", "")).strip()
+        if email:
+            emails_to_shortlist.append(email)
+            
+    if not emails_to_shortlist:
+        return {"status": "error", "message": "No valid emails found in the uploaded file."}
+
+    # 3. Find and update existing students in the database
+    students_to_update = await StudentModel.find(
+        {"drive_id": str(drive.id), "email": {"$in": emails_to_shortlist}}
+    ).to_list()
+    
+    # Update their status to 'shortlisted'
+    for student in students_to_update:
+        student.status = "shortlisted"
+        await student.save()
     
     # 4. Trigger NotificationService to send Call Letters and WhatsApp
-    if students_to_insert:
-        background_tasks.add_task(NotificationService.process_shortlist_notifications, students_to_insert, drive)
+    if students_to_update:
+        background_tasks.add_task(NotificationService.process_shortlist_notifications, students_to_update, drive)
     
     return {
         "status": "success",
-        "students_added": len(students_to_insert),
-        "message": f"{len(students_to_insert)} students shortlisted successfully."
+        "students_added": len(students_to_update),
+        "message": f"{len(students_to_update)} students successfully shortlisted and notified."
     }
 
 from app.models.room import RoomModel

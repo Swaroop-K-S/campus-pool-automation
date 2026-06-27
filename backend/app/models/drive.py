@@ -20,6 +20,8 @@ class DriveModel(Document):
     locations: Optional[List[str]] = Field(default_factory=list)
     drive_date: Optional[datetime] = None
     reporting_time: Optional[str] = None
+    venue_name: Optional[str] = None
+    venue_maps_link: Optional[str] = None
 
     # Form registration window
     form_start_date: Optional[datetime] = None

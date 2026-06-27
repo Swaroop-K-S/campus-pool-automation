@@ -12,11 +12,32 @@ from app.models.drive import DriveModel
 logger = logging.getLogger("NotificationService")
 logger.setLevel(logging.INFO)
 
+DEFAULT_CALL_LETTER_SUBJECT = "Call Letter: Placement Drive at {{company_name}}"
+
+DEFAULT_CALL_LETTER_BODY = """Dear {{full_name}},
+
+Congratulations! You have been shortlisted for the upcoming placement drive.
+
+Drive Details:
+🏢 Company: {{company_name}}
+💰 Package: {{package_offered}}
+📅 Reporting Time: {{reporting_time}}
+📍 Venue: {{venue_name}}
+🗺️ Maps Link: {{venue_maps_link}}
+
+Your Registration ID is: {{unique_id}}
+Please present this ID or your QR code at the campus front desk upon arrival.
+
+Best of luck,
+Campus Placement Cell"""
+
+DEFAULT_WHATSAPP_MESSAGE = "CampusPool Alert!\nHi {{full_name}}, you've been shortlisted for {{company_name}}! Please check your email ({{email}}) for your official Call Letter and reporting time. Good luck!"
+
 class NotificationService:
     @staticmethod
     def _send_mock_email(to_email: str, subject: str, body: str):
         print(f"\n{'='*50}")
-        print(f"📧 MOCK EMAIL SENT")
+        print(f"MOCK EMAIL SENT")
         print(f"To: {to_email}")
         print(f"Subject: {subject}")
         print(f"Body:\n{body}")
@@ -25,14 +46,32 @@ class NotificationService:
     @staticmethod
     def _send_mock_whatsapp(phone: str, message: str):
         print(f"\n{'='*50}")
-        print(f"💬 MOCK WHATSAPP SENT")
+        print(f"MOCK WHATSAPP SENT")
         print(f"To: {phone}")
         print(f"Message: {message}")
         print(f"{'='*50}\n")
 
     @classmethod
-    async def send_call_letter_email(cls, student: StudentModel, drive: DriveModel):
-        subject = f"Call Letter: Placement Drive at {drive.company_name}"
+    def format_template(cls, template: str, student: StudentModel, drive: DriveModel) -> str:
+        return template.replace("{{full_name}}", student.full_name) \
+                       .replace("{{company_name}}", drive.company_name) \
+                       .replace("{{package_offered}}", str(drive.package_offered or 'TBD')) \
+                       .replace("{{reporting_time}}", str(drive.reporting_time or '09:00 AM')) \
+                       .replace("{{venue_name}}", str(drive.venue_name or 'TBA')) \
+                       .replace("{{venue_maps_link}}", str(drive.venue_maps_link or 'TBA')) \
+                       .replace("{{unique_id}}", student.unique_id) \
+                       .replace("{{email}}", student.email)
+
+    @classmethod
+    async def send_call_letter_email(cls, student: StudentModel, drive: DriveModel, custom_subject: str = None, custom_body: str = None):
+        subject_template = custom_subject if custom_subject else DEFAULT_CALL_LETTER_SUBJECT
+        subject = cls.format_template(subject_template, student, drive)
+        
+        body_content_template = custom_body if custom_body else DEFAULT_CALL_LETTER_BODY
+        body_content = cls.format_template(body_content_template, student, drive)
+        
+        # Convert plain text to HTML with <br> tags
+        html_body_content = body_content.replace("\n", "<br>")
         
         # HTML formatting for a beautiful email
         body = f"""
@@ -43,22 +82,7 @@ class NotificationService:
                         <h1 style="margin: 0; font-size: 24px;">CampusPool Hall Ticket</h1>
                     </div>
                     <div style="padding: 30px;">
-                        <p>Dear <strong>{student.full_name}</strong>,</p>
-                        <p>Congratulations! You have been shortlisted for the upcoming placement drive.</p>
-                        
-                        <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                            <h3 style="margin-top: 0; color: #4F46E5;">Drive Details</h3>
-                            <ul style="list-style-type: none; padding-left: 0; margin: 0;">
-                                <li style="margin-bottom: 8px;">🏢 <strong>Company:</strong> {drive.company_name}</li>
-                                <li style="margin-bottom: 8px;">💰 <strong>Package:</strong> {drive.package_offered if drive.package_offered else 'TBD'}</li>
-                                <li style="margin-bottom: 8px;">📅 <strong>Reporting Time:</strong> {drive.reporting_time if drive.reporting_time else '09:00 AM'}</li>
-                            </ul>
-                        </div>
-                        
-                        <p style="margin-top: 30px;">Your Registration ID is: <strong>{student.unique_id}</strong></p>
-                        <p>Please present this ID or your QR code at the campus front desk upon arrival.</p>
-                        
-                        <p style="margin-top: 40px; font-size: 14px; color: #6b7280;">Best of luck,<br>Campus Placement Cell</p>
+                        {html_body_content}
                     </div>
                 </div>
             </body>
@@ -94,8 +118,9 @@ class NotificationService:
             return True
 
     @classmethod
-    async def send_whatsapp_alert(cls, student: StudentModel, drive: DriveModel):
-        message = f"📢 CampusPool Alert!\nHi {student.full_name}, you've been shortlisted for {drive.company_name}! Please check your email ({student.email}) for your official Call Letter and reporting time. Good luck!"
+    async def send_whatsapp_alert(cls, student: StudentModel, drive: DriveModel, custom_message: str = None):
+        msg_template = custom_message if custom_message else DEFAULT_WHATSAPP_MESSAGE
+        message = cls.format_template(msg_template, student, drive)
 
         if settings.WHATSAPP_API_KEY:
             # Example Twilio integration placeholder
@@ -113,7 +138,7 @@ class NotificationService:
         return True
 
     @classmethod
-    async def process_shortlist_notifications(cls, students: list[StudentModel], drive: DriveModel):
+    async def process_shortlist_notifications(cls, students: list[StudentModel], drive: DriveModel, custom_subject: str = None, custom_email: str = None, custom_whatsapp: str = None):
         """
         Takes a batch of students and sends them both an Email and a WhatsApp message.
         This function should be called via FastAPI BackgroundTasks.
@@ -121,8 +146,8 @@ class NotificationService:
         for student in students:
             # We use asyncio.gather to send both concurrently for each student
             await asyncio.gather(
-                cls.send_call_letter_email(student, drive),
-                cls.send_whatsapp_alert(student, drive)
+                cls.send_call_letter_email(student, drive, custom_subject, custom_email),
+                cls.send_whatsapp_alert(student, drive, custom_whatsapp)
             )
             # Add a small delay to avoid rate limiting
             await asyncio.sleep(0.1)

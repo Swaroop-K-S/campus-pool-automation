@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Calendar, MapPin, Plus, ChevronRight, Clock, Loader2 } from 'lucide-react';
+import { Building2, Calendar, MapPin, Plus, ChevronRight, Clock, Loader2, QrCode } from 'lucide-react';
+import QRDisplayModal from '../../components/QRDisplayModal';
 
 interface Drive {
   id: string;
@@ -10,6 +11,8 @@ interface Drive {
   drive_date: string | null;
   status: 'draft' | 'active' | 'event_day' | 'completed';
   created_at: string;
+  qr_type: string;
+  current_qr_secret: string | null;
 }
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
@@ -23,6 +26,7 @@ export default function DrivesList() {
   const [drives, setDrives] = useState<Drive[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeQRDrive, setActiveQRDrive] = useState<Drive | null>(null);
 
   useEffect(() => {
     fetch('/api/v1/drives/')
@@ -105,9 +109,24 @@ export default function DrivesList() {
                   <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center">
                     <Building2 size={22} className="text-primary" />
                   </div>
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${style.className}`}>
-                    {style.label}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {drive.status === 'event_day' && (
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setActiveQRDrive(drive);
+                        }}
+                        className="w-8 h-8 flex items-center justify-center bg-background border border-border text-foreground hover:text-primary rounded-full shadow-sm hover:scale-105 transition-all"
+                        title="Show QR"
+                      >
+                        <QrCode size={14} />
+                      </button>
+                    )}
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${style.className}`}>
+                      {style.label}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Company name */}
@@ -144,6 +163,16 @@ export default function DrivesList() {
             );
           })}
         </div>
+      )}
+
+      {activeQRDrive && (
+        <QRDisplayModal
+          driveId={activeQRDrive.id}
+          driveName={activeQRDrive.company_name}
+          qrType={activeQRDrive.qr_type}
+          initialSecret={activeQRDrive.current_qr_secret || activeQRDrive.id}
+          onClose={() => setActiveQRDrive(null)}
+        />
       )}
     </div>
   );

@@ -14,6 +14,8 @@ export default function DriveSettingsTab({ drive, onUpdate }: DriveSettingsTabPr
     locations: drive.locations?.join(', ') || '',
     drive_date: drive.drive_date ? drive.drive_date.substring(0, 10) : '',
     reporting_time: drive.reporting_time || '',
+    venue_name: drive.venue_name || '',
+    venue_maps_link: drive.venue_maps_link || '',
     form_start_date: drive.form_start_date ? drive.form_start_date.substring(0, 16) : '',
     form_end_date: drive.form_end_date ? drive.form_end_date.substring(0, 16) : '',
   });
@@ -158,6 +160,26 @@ export default function DriveSettingsTab({ drive, onUpdate }: DriveSettingsTabPr
               value={formData.reporting_time}
               onChange={(e) => setFormData({ ...formData, reporting_time: e.target.value })}
               className="w-full px-3 py-2 bg-background border border-input rounded-md text-foreground focus:ring-2 focus:ring-primary outline-none transition"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Venue Name</label>
+            <input
+              type="text"
+              value={formData.venue_name}
+              onChange={(e) => setFormData({ ...formData, venue_name: e.target.value })}
+              className="w-full px-3 py-2 bg-background border border-input rounded-md text-foreground focus:ring-2 focus:ring-primary outline-none transition"
+              placeholder="e.g. Main Auditorium, Block A"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Google Maps Link</label>
+            <input
+              type="url"
+              value={formData.venue_maps_link}
+              onChange={(e) => setFormData({ ...formData, venue_maps_link: e.target.value })}
+              className="w-full px-3 py-2 bg-background border border-input rounded-md text-foreground focus:ring-2 focus:ring-primary outline-none transition"
+              placeholder="https://maps.app.goo.gl/..."
             />
           </div>
         </div>

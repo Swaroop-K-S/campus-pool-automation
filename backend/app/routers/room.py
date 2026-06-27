@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from typing import List, Optional
 import math
+import io
+import openpyxl
+from fastapi.responses import StreamingResponse
 
 from app.models.room import RoomModel
 from app.models.student import StudentModel
@@ -175,3 +178,103 @@ async def god_view_stats(drive_id: str):
         "checked_in": checked_in,
         "pending_arrival": total_shortlisted - checked_in
     }
+
+@router.get("/{drive_id}/rooms/export")
+async def export_room_data(drive_id: str, export_type: str, room_id: Optional[str] = None):
+    """
+    Export student lists to Excel.
+    export_type can be:
+    - qr_checkin: all students who have scanned QR and checked in
+    - room_wise: all students allocated, separated by room (sheets)
+    - specific_room: all students allocated to a specific room
+    """
+    wb = openpyxl.Workbook()
+    
+    # helper function to write data
+    def write_sheet(ws, title, students):
+        # Sheet names cannot contain invalid characters and are limited to 31 chars
+        safe_title = "".join([c for c in title if c.isalnum() or c in " -_"])[:31]
+        ws.title = safe_title
+        headers = ["Unique ID", "Full Name", "Email", "Phone", "Status", "Check-In Time"]
+        ws.append(headers)
+        for s in students:
+            check_in_str = s.check_in_time.strftime("%Y-%m-%d %H:%M:%S") if s.check_in_time else "N/A"
+            ws.append([s.unique_id, s.full_name, s.email, s.phone, s.status, check_in_str])
+
+    if export_type == "qr_checkin":
+        # Get students who have checked in (have check_in_time)
+        students = await StudentModel.find(
+            StudentModel.drive_id == drive_id,
+            StudentModel.check_in_time != None
+        ).to_list()
+        
+        ws = wb.active
+        write_sheet(ws, "QR Check-ins", students)
+        filename = f"QR_Checkins.xlsx"
+        
+    elif export_type == "room_wise":
+        # Get all rooms
+        rooms = await RoomModel.find(RoomModel.drive_id == drive_id).to_list()
+        
+        # Get all allocated students
+        students = await StudentModel.find(
+            StudentModel.drive_id == drive_id,
+            StudentModel.current_room_id != None
+        ).to_list()
+        
+        # Group by room
+        wb.remove(wb.active) # remove default sheet
+        
+        room_map = {str(r.id): r.name for r in rooms}
+        
+        grouped_students = {}
+        for s in students:
+            rid = str(s.current_room_id)
+            if rid not in grouped_students:
+                grouped_students[rid] = []
+            grouped_students[rid].append(s)
+            
+        for rid, room_students in grouped_students.items():
+            room_name = room_map.get(rid, f"Room_{rid}")
+            ws = wb.create_sheet(title=room_name)
+            write_sheet(ws, room_name, room_students)
+            
+        if not wb.sheetnames:
+            wb.create_sheet("Empty")
+            
+        filename = f"Room_Wise_Allocation.xlsx"
+
+    elif export_type == "specific_room":
+        if not room_id:
+            raise HTTPException(status_code=400, detail="room_id is required for specific_room export")
+            
+        room = await RoomModel.get(room_id)
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+            
+        students = await StudentModel.find(
+            StudentModel.drive_id == drive_id,
+            StudentModel.current_room_id == room_id
+        ).to_list()
+        
+        ws = wb.active
+        write_sheet(ws, room.name, students)
+        filename = f"{room.name}_Allocation.xlsx"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid export_type")
+
+    # Save to stream
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    headers = {
+        'Content-Disposition': f'attachment; filename="{filename}"'
+    }
+    
+    return StreamingResponse(
+        output,
+        headers=headers,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+

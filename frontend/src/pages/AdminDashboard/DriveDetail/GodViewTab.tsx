@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { PlayCircle, Users, CheckCircle, Clock, Plus, X, UploadCloud } from 'lucide-react';
+import { PlayCircle, Users, CheckCircle, Clock, Plus, X, UploadCloud, Download } from 'lucide-react';
 
 export default function GodViewTab() {
   const { id } = useParams();
@@ -124,6 +124,37 @@ export default function GodViewTab() {
     }
   };
 
+  const downloadExcel = async (exportType: 'qr_checkin' | 'room_wise' | 'specific_room', roomId?: string) => {
+    try {
+      let url = `/api/v1/drives/${id}/rooms/export?export_type=${exportType}`;
+      if (roomId) url += `&room_id=${roomId}`;
+      
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to download report');
+      
+      const contentDisposition = res.headers.get('Content-Disposition');
+      let filename = 'report.xlsx';
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="(.+)"/);
+        if (match && match[1]) filename = match[1];
+      }
+      
+      const blob = await res.blob();
+      const windowUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = windowUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(windowUrl);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to download report');
+    }
+  };
+
+
   const inputCls = 'w-full bg-background border border-border text-foreground rounded-lg p-2.5 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none transition-all text-sm';
   const labelCls = 'block text-sm font-semibold text-foreground mb-1.5';
 
@@ -169,7 +200,23 @@ export default function GodViewTab() {
             <h2 className="text-lg font-bold text-foreground">Round Logistics</h2>
             <p className="text-sm text-muted-foreground">Manage room allocation and tracking</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3 justify-end">
+            <button
+              onClick={() => downloadExcel('qr_checkin')}
+              className="px-4 py-2.5 rounded-lg font-medium flex items-center transition-colors bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 text-sm"
+              title="Download list of students who scanned QR"
+            >
+              <Download size={18} className="mr-2" />
+              QR Scans
+            </button>
+            <button
+              onClick={() => downloadExcel('room_wise')}
+              className="px-4 py-2.5 rounded-lg font-medium flex items-center transition-colors bg-purple-500/10 text-purple-500 hover:bg-purple-500/20 text-sm"
+              title="Download room-wise allocated students"
+            >
+              <Download size={18} className="mr-2" />
+              Allocations
+            </button>
             <button
               onClick={() => setShowClearModal(true)}
               className="px-4 py-2.5 rounded-lg font-medium flex items-center transition-colors bg-destructive/10 text-destructive hover:bg-destructive/20 text-sm"
@@ -220,7 +267,16 @@ export default function GodViewTab() {
                         <span className="font-bold text-foreground block">{room.name}</span>
                         <span className="text-[10px] uppercase font-bold text-primary tracking-wider">{room.purpose || 'General'}</span>
                       </div>
-                      <span className="text-xs font-medium px-2 py-1 bg-card text-muted-foreground rounded border border-border mt-1">Cap: {room.capacity}</span>
+                      <div className="flex flex-col items-end gap-2">
+                        <span className="text-xs font-medium px-2 py-1 bg-card text-muted-foreground rounded border border-border mt-1">Cap: {room.capacity}</span>
+                        <button 
+                          onClick={() => downloadExcel('specific_room', room.id)}
+                          className="text-[10px] font-medium flex items-center bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 transition-colors"
+                          title="Download Student List for this Room"
+                        >
+                          <Download size={12} className="mr-1" /> List
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="w-full bg-card rounded-full h-2 mb-2 border border-border/50 overflow-hidden">

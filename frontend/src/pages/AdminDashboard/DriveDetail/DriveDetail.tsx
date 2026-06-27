@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft, Play, Zap, CheckCircle2, Users, Map, Settings, Loader2, AlertCircle, FileText, Copy, Check, Calendar, MessageSquare } from 'lucide-react';
+import { ChevronLeft, Play, Zap, CheckCircle2, Users, Map, Settings, Loader2, AlertCircle, FileText, Copy, Check, Calendar, MessageSquare, QrCode } from 'lucide-react';
 import ShortlistTab from './ShortlistTab';
 import GodViewTab from './GodViewTab';
 import FormBuilderTab from './FormBuilderTab';
 import RegistrationsTab from './RegistrationsTab';
 import DriveSettingsTab from './DriveSettingsTab';
 import CommunicationsTab from './CommunicationsTab';
+import QRDisplayModal from '../../../components/QRDisplayModal';
 
 interface Drive {
   id: string;
@@ -16,6 +17,8 @@ interface Drive {
   package_offered: string | null;
   locations: string[];
   created_at: string;
+  qr_type: string;
+  current_qr_secret: string | null;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string; nextAction: string | null; nextEndpoint: string | null; nextIcon: React.ReactNode }> = {
@@ -57,6 +60,7 @@ export default function DriveDetail() {
   const [transitioning, setTransitioning] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -166,6 +170,17 @@ export default function DriveDetail() {
               </button>
             )}
             
+            {drive.status === 'event_day' && (
+              <button
+                onClick={() => setShowQRModal(true)}
+                className="px-3 py-1.5 bg-secondary text-secondary-foreground border border-border rounded-lg hover:bg-secondary/80 font-bold transition-colors text-xs flex items-center gap-1.5"
+                title="Show Check-in QR"
+              >
+                <QrCode size={14} />
+                <span className="hidden sm:inline">Show QR</span>
+              </button>
+            )}
+            
             <button className="px-3 py-1.5 bg-card border border-border text-foreground rounded-lg hover:bg-secondary font-medium transition-colors text-xs">
               Edit Details
             </button>
@@ -222,6 +237,16 @@ export default function DriveDetail() {
           </div>
         )}
       </div>
+
+      {showQRModal && (
+        <QRDisplayModal
+          driveId={drive.id}
+          driveName={drive.company_name}
+          qrType={drive.qr_type}
+          initialSecret={drive.current_qr_secret || drive.id}
+          onClose={() => setShowQRModal(false)}
+        />
+      )}
     </div>
   );
 }
