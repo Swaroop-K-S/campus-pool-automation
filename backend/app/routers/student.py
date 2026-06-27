@@ -37,6 +37,39 @@ async def register_student(drive_id: str, payload: StudentRegistrationRequest):
     if existing:
         raise HTTPException(status_code=400, detail="A student with this email is already registered.")
 
+    # Validate Eligibility Criteria
+    if drive.eligibility_criteria:
+        criteria = drive.eligibility_criteria
+        cgpa_str = payload.custom_data.get("cgpa")
+        backlogs_str = payload.custom_data.get("backlogs")
+        branch = payload.custom_data.get("branch")
+        
+        if criteria.min_cgpa is not None:
+            if not cgpa_str:
+                raise HTTPException(status_code=400, detail="CGPA is required to verify eligibility for this drive.")
+            try:
+                if float(cgpa_str) < criteria.min_cgpa:
+                    raise HTTPException(status_code=400, detail=f"Sorry, you do not meet the minimum CGPA requirement of {criteria.min_cgpa} for this drive.")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid CGPA format.")
+                
+        if criteria.max_backlogs is not None:
+            if backlogs_str is None:
+                raise HTTPException(status_code=400, detail="Active Backlogs count is required to verify eligibility.")
+            try:
+                if int(backlogs_str) > criteria.max_backlogs:
+                    raise HTTPException(status_code=400, detail=f"Sorry, this drive allows a maximum of {criteria.max_backlogs} active backlogs.")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid backlogs format.")
+                
+        if criteria.allowed_branches:
+            if not branch:
+                raise HTTPException(status_code=400, detail="Branch is required to verify eligibility.")
+            # Normalize branch names for comparison
+            normalized_allowed = [b.lower().strip() for b in criteria.allowed_branches]
+            if branch.lower().strip() not in normalized_allowed:
+                raise HTTPException(status_code=400, detail="Sorry, your branch is not eligible for this drive.")
+
     # Generate a unique ID (e.g. USN or just an increment, here we use a short hash or hex)
     import uuid
     unique_id = uuid.uuid4().hex[:8].upper()

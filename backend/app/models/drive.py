@@ -1,7 +1,12 @@
 from beanie import Document
-from pydantic import Field
+from pydantic import Field, BaseModel
 from typing import Optional, List
 from datetime import datetime
+
+class EligibilityCriteria(BaseModel):
+    min_cgpa: Optional[float] = None
+    max_backlogs: Optional[int] = None
+    allowed_branches: Optional[List[str]] = None
 
 class RoundModel(Document):
     drive_id: str
@@ -26,6 +31,8 @@ class DriveModel(Document):
     # Form registration window
     form_start_date: Optional[datetime] = None
     form_end_date: Optional[datetime] = None
+    
+    eligibility_criteria: Optional[EligibilityCriteria] = None
 
     # Event day settings
     qr_type: str = "static"  # 'static' or 'dynamic'

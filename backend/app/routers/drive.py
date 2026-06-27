@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, UploadFile, File, BackgroundTasks
 from typing import List, Optional
 from pydantic import BaseModel
-from app.models.drive import DriveModel, RoundModel
+from app.models.drive import DriveModel, RoundModel, EligibilityCriteria
 from app.services.xlsx_parser import process_student_shortlist
 from app.services.logistics_engine import LogisticsEngine
 from datetime import datetime
@@ -22,6 +22,7 @@ class CreateDriveRequest(BaseModel):
     form_start_date: Optional[datetime] = None
     form_end_date: Optional[datetime] = None
     qr_type: str = "static"
+    eligibility_criteria: Optional[EligibilityCriteria] = None
 
 
 class UpdateDriveRequest(BaseModel):
@@ -34,6 +35,7 @@ class UpdateDriveRequest(BaseModel):
     form_end_date: Optional[datetime] = None
     qr_type: Optional[str] = None
     status: Optional[str] = None
+    eligibility_criteria: Optional[EligibilityCriteria] = None
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -48,6 +50,7 @@ async def create_drive(payload: CreateDriveRequest):
         form_start_date=payload.form_start_date,
         form_end_date=payload.form_end_date,
         qr_type=payload.qr_type,
+        eligibility_criteria=payload.eligibility_criteria,
     )
     await drive.insert()
     # Return the drive with its MongoDB _id serialised as a string

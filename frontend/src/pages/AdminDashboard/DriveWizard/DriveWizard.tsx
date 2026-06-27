@@ -20,6 +20,10 @@ interface FormData {
   qr_type: 'static' | 'dynamic';
   // Form Builder
   form_type: 'template' | 'custom' | 'skip';
+  // Eligibility
+  min_cgpa: string;
+  max_backlogs: string;
+  allowed_branches: string[];
 }
 
 const ROUND_OPTIONS = [
@@ -50,6 +54,9 @@ export default function DriveWizard() {
     ],
     qr_type: 'static',
     form_type: 'template',
+    min_cgpa: '',
+    max_backlogs: '',
+    allowed_branches: [],
   });
 
   const totalSteps = 4;
@@ -106,6 +113,11 @@ export default function DriveWizard() {
         form_start_date: form.form_start_date ? new Date(form.form_start_date).toISOString() : null,
         form_end_date: form.form_end_date ? new Date(form.form_end_date).toISOString() : null,
         qr_type: form.qr_type,
+        eligibility_criteria: (form.min_cgpa || form.max_backlogs || form.allowed_branches.length > 0) ? {
+          min_cgpa: form.min_cgpa ? parseFloat(form.min_cgpa) : null,
+          max_backlogs: form.max_backlogs ? parseInt(form.max_backlogs) : null,
+          allowed_branches: form.allowed_branches.length > 0 ? form.allowed_branches : null,
+        } : null
       };
 
       const res = await fetch('/api/v1/drives/', {
@@ -144,6 +156,7 @@ export default function DriveWizard() {
           { name: 'usn', label: 'USN / Roll Number', type: 'text', required: true },
           { name: 'branch', label: 'Branch / Specialization', type: 'text', required: true },
           { name: 'cgpa', label: 'CGPA', type: 'number', required: true },
+          { name: 'backlogs', label: 'Active Backlogs', type: 'number', required: true },
           { name: 'resume', label: 'Upload Resume (PDF)', type: 'file', required: true },
           { name: 'photo', label: 'Upload Photo (JPG/PNG)', type: 'file', required: false },
         ];
@@ -298,6 +311,39 @@ export default function DriveWizard() {
                   </div>
                 </div>
               </div>
+
+              {/* Eligibility Rules */}
+              <div className="pt-6 mt-6 border-t border-border">
+                <h3 className="text-lg font-semibold text-foreground mb-1">Eligibility Rules (Optional)</h3>
+                <p className="text-muted-foreground text-sm mb-4">Set automated filters to reject students who do not meet company criteria.</p>
+                
+                <div className="grid grid-cols-2 gap-5 mb-4">
+                  <div>
+                    <label className={labelCls}>Minimum CGPA</label>
+                    <input type="number" step="0.01" className={inputCls} placeholder="e.g. 7.0" value={form.min_cgpa} onChange={e => set('min_cgpa', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Max Active Backlogs</label>
+                    <input type="number" className={inputCls} placeholder="e.g. 0" value={form.max_backlogs} onChange={e => set('max_backlogs', e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className={labelCls}>Allowed Branches</label>
+                    <MultiSelect
+                      options={[
+                        'Computer Science (CSE)',
+                        'Information Science (ISE)',
+                        'Electronics (ECE)',
+                        'Mechanical (ME)',
+                        'Civil (CE)',
+                      ]}
+                      selected={form.allowed_branches}
+                      onChange={val => set('allowed_branches', val)}
+                      placeholder="Leave empty to allow all branches…"
+                    />
+                  </div>
+                </div>
+              </div>
+
             </div>
           )}
 
