@@ -22,6 +22,9 @@ class StudentModel(Document):
     # Dynamic Form Data
     custom_data: dict = Field(default_factory=dict) # Stores form responses like branch, cgpa, and file URLs
     
+    # Web Push Notification token payload
+    push_subscription: Optional[dict] = None
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:

@@ -271,3 +271,35 @@ async def export_global_students(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=global_students_directory.xlsx"}
     )
+
+from app.models.room import RoomModel
+
+@global_router.get("/{unique_id}/live-status")
+async def get_student_live_status(unique_id: str):
+    """
+    Fetch the live status and room allocation for a specific student.
+    Used by the Student Hub PWA to provide a live "Food Delivery" style tracker.
+    """
+    student = await StudentModel.find_one(StudentModel.unique_id == unique_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+        
+    response = {
+        "status": student.status,
+        "current_room_id": student.current_room_id,
+        "room_name": None,
+        "queue_position": None,
+        "push_enabled": bool(student.push_subscription)
+    }
+    
+    # If allocated to a room, fetch the room name
+    if student.current_room_id:
+        room = await RoomModel.get(student.current_room_id)
+        if room:
+            response["room_name"] = room.name
+            
+    # If they are in a waiting status (e.g., 'present' but no room assigned)
+    # the frontend can display a generic "In Queue" message since
+    # random allocation is used instead of FIFO queue.
+            
+    return response

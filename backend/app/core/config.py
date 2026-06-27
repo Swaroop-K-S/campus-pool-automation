@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str = ""
     CLOUDINARY_API_SECRET: str = ""
 
+    # Web Push (VAPID)
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_SUBJECT: str = "mailto:swaroopkudlurs@gmail.com"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 settings = Settings()

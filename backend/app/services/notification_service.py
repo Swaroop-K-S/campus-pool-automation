@@ -138,6 +138,42 @@ class NotificationService:
         return True
 
     @classmethod
+    async def send_web_push(cls, student: StudentModel, message: str):
+        """Send a Web Push Notification using pywebpush"""
+        if not student.push_subscription:
+            return False
+            
+        if not settings.VAPID_PRIVATE_KEY:
+            logger.warning("VAPID keys not configured, skipping web push")
+            return False
+            
+        try:
+            # We import pywebpush here to avoid crashing if it's not installed
+            from pywebpush import webpush, WebPushException
+            import json
+            
+            payload = json.dumps({
+                "title": "CampusPool Alert",
+                "body": message,
+                "icon": "/icons/pwa-192x192.png",
+                "badge": "/icons/pwa-192x192.png"
+            })
+            
+            def _push():
+                webpush(
+                    subscription_info=student.push_subscription,
+                    data=payload,
+                    vapid_private_key=settings.VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": settings.VAPID_SUBJECT}
+                )
+                
+            await asyncio.to_thread(_push)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send web push to {student.email}: {str(e)}")
+            return False
+
+    @classmethod
     async def process_shortlist_notifications(cls, students: list[StudentModel], drive: DriveModel, custom_subject: str = None, custom_email: str = None, custom_whatsapp: str = None):
         """
         Takes a batch of students and sends them both an Email and a WhatsApp message.
@@ -145,9 +181,15 @@ class NotificationService:
         """
         for student in students:
             # We use asyncio.gather to send both concurrently for each student
+            
+            # Format push notification message
+            push_message = custom_whatsapp if custom_whatsapp else cls.format_template(DEFAULT_WHATSAPP_MESSAGE, student, drive)
+            # Remove any html or complex formatting for push
+            
             await asyncio.gather(
                 cls.send_call_letter_email(student, drive, custom_subject, custom_email),
-                cls.send_whatsapp_alert(student, drive, custom_whatsapp)
+                cls.send_whatsapp_alert(student, drive, custom_whatsapp),
+                cls.send_web_push(student, push_message)
             )
             # Add a small delay to avoid rate limiting
             await asyncio.sleep(0.1)

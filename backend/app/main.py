@@ -29,7 +29,7 @@ app.add_middleware(
 )
 
 from fastapi.staticfiles import StaticFiles
-from app.routers import auth, drive, checkin, room, form, upload, student, calendar, settings, communications
+from app.routers import auth, drive, checkin, room, form, upload, student, calendar, settings, communications, push, analytics
 
 # Mount local uploads directory for PDFs and other files blocked by Cloudinary
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -45,6 +45,8 @@ app.include_router(student.global_router, prefix="/api/v1")
 app.include_router(calendar.router, prefix="/api/v1")
 app.include_router(settings.router, prefix="/api/v1")
 app.include_router(communications.router, prefix="/api/v1")
+app.include_router(push.router, prefix="/api/v1")
+app.include_router(analytics.router, prefix="/api/v1")
 
 @app.get("/api/v1/health")
 async def health_check():
